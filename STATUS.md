@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-19 19-59 GMT-3
+Last updated: 2026-06-19 20-05 GMT-3
 
 ## Project purpose
 
@@ -123,6 +123,8 @@ repository.
   because the sandbox returned no Metal device.
 - `codesign --verify --deep --strict`: passed for all three ad-hoc-signed bundles.
 - Bundle metadata identifies AU type `aumi`, subtype `Tbs1`, manufacturer `Krhd`.
+- GitHub Actions run `27852219185`: native core tests and the complete arm64
+  Release bundle build passed.
 - `auval -v aumi Tbs1 Krhd`: attempted and failed discovery because the local
   component was not installed in the Audio Unit search path.
 - Standalone launch, installed `auval`, pluginval, Logic, Ableton, and 60 fps
@@ -175,4 +177,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-19 19-59 GMT-3
+Last updated: 2026-06-19 20-05 GMT-3

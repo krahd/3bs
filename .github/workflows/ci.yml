@@ -11,7 +11,7 @@ jobs:
   core-tests:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
       - name: Configure native core tests
@@ -29,7 +29,7 @@ jobs:
   arm64-bundles:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
       - name: Configure arm64 bundles
