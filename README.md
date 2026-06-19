@@ -13,9 +13,10 @@ The project targets Apple Silicon Macs and will produce:
 
 ## Status
 
-The repository is at the implementation stage. The original concept and agent
-policy templates are retained in [`doc/`](doc/). See [`STATUS.md`](STATUS.md)
-for the exact current state and verification record.
+The deterministic core, AU, VST3, standalone application, Metal presentation,
+24 factory presets, and automated test targets are implemented. The original
+concept and policy templates remain in [`doc/`](doc/). See
+[`STATUS.md`](STATUS.md) for exact verification results and remaining host tests.
 
 The repository remains private until a deterministic three-format vertical
 slice works in standalone, Logic AU, and Ableton VST3. It will then become
@@ -40,8 +41,32 @@ Rendering is isolated from the real-time MIDI engine.
 - CMake 3.22 or newer
 - Git with submodule support
 
-Build commands will be added when the JUCE target scaffold is committed. The
-pinned JUCE source will live in `external/JUCE` as a Git submodule.
+JUCE 8.0.13 is pinned as a Git submodule. Clone and build the core tests:
+
+```bash
+git clone --recurse-submodules https://github.com/krahd/3bs.git
+cd 3bs
+cmake --preset dev
+cmake --build --preset dev -j 8
+ctest --preset dev --output-on-failure
+```
+
+Build all macOS formats and integration tests:
+
+```bash
+cmake --preset plugin-debug
+cmake --build --preset plugin-debug -j 8
+ctest --preset plugin-debug --output-on-failure
+```
+
+Artifacts are written below `build/plugin-debug`:
+
+- `src/plugin/ThreeBSAU_artefacts/Debug/AU/`: Audio Unit MIDI effect;
+- `src/plugin/ThreeBSVST3_artefacts/Debug/VST3/`: VST3 instrument;
+- `src/standalone/ThreeBSStandalone_artefacts/Debug/`: standalone app.
+
+Local bundles are ad-hoc signed after build. Set `THREEBS_ADHOC_SIGN=OFF` when
+performing a Developer ID release-signing workflow.
 
 ## Host Routing
 
@@ -49,6 +74,28 @@ Logic uses `3bs` as an AU MIDI effect before a software instrument. Ableton
 uses the VST3 on one MIDI track and receives its MIDI output on another track.
 Ableton merges internally routed MIDI channels, so separate instruments require
 multiple plugin instances, a multitimbral destination, or standalone routing.
+
+For local AU validation, copy the component to
+`~/Library/Audio/Plug-Ins/Components`, refresh the Audio Unit cache, and run:
+
+```bash
+auval -v aumi Tbs1 Krhd
+```
+
+The standalone creates a virtual CoreMIDI output named “The Three Body
+Solution” by default and can select an existing output from the control deck.
+Press `P` for the clean presentation view and `F` to toggle standalone
+fullscreen.
+
+## Controls And Presets
+
+The shared control deck exposes run/sync, speed, gravity, softening, chaos,
+density, trail, bloom, body masses, deterministic randomization, reset, and the
+24-scene factory catalog. `ADVANCED STATE` opens a nonmodal numerical editor
+for every mass and initial position/velocity vector. Host state stores schema version, parameters, seed,
+initial mass/position/velocity vectors, preset mapping configuration, and loop
+policy. Rendering consumes immutable snapshots and never runs on the MIDI
+processing thread.
 
 ## Licensing
 

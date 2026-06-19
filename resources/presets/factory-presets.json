@@ -1,0 +1,293 @@
+{
+  "schemaVersion": 1,
+  "presets": [
+    {
+      "id": "eightfold-dawn", "name": "Eightfold Dawn", "description": "The classic figure-eight choreography, voiced as a patient minor pentatonic canon.",
+      "system": "figureEight", "seed": 33425301, "chaos": 0.02,
+      "physics": { "gravity": 1.0, "softening": 0.02, "speed": 1.0, "escapePolicy": "leave", "loopPolicy": "restart" },
+      "voices": [
+        { "channel": 1, "root": 0, "scale": "minorPentatonic", "pitch": "radius", "trigger": "clock", "minimum": 36, "maximum": 72, "division": 0.5, "probability": 0.90, "duration": 0.42 },
+        { "channel": 2, "root": 0, "scale": "minorPentatonic", "pitch": "nearest", "trigger": "plane", "minimum": 48, "maximum": 84, "division": 0.25, "probability": 0.85, "duration": 0.32 },
+        { "channel": 3, "root": 7, "scale": "minorPentatonic", "pitch": "phase", "trigger": "turning", "minimum": 31, "maximum": 67, "division": 0.25, "probability": 1.0, "duration": 0.75 }
+      ],
+      "visual": { "palette": "eclipse", "trailLength": 0.82, "trailWidth": 1.2, "extrusion": 0.12, "bloom": 0.34, "stars": 0.62 },
+      "camera": { "focus": "barycenter", "distance": 6.2, "autoOrbit": 0.035 }
+    },
+    {
+      "id": "lagrange-glass", "name": "Lagrange Glass", "description": "Near-equilateral motion with bright Lydian intervals and long transparent arcs.",
+      "system": "stable", "seed": 33425302, "chaos": 0.05,
+      "physics": { "gravity": 0.72, "softening": 0.05, "speed": 0.72, "escapePolicy": "leave", "loopPolicy": "continue" },
+      "voices": [
+        { "channel": 1, "root": 2, "scale": "lydian", "pitch": "phase", "trigger": "clock", "minimum": 38, "maximum": 74, "division": 0.75, "probability": 0.82, "duration": 0.68 },
+        { "channel": 2, "root": 9, "scale": "lydian", "pitch": "radius", "trigger": "clock", "minimum": 45, "maximum": 81, "division": 0.5, "probability": 0.68, "duration": 0.44 },
+        { "channel": 3, "root": 4, "scale": "majorPentatonic", "pitch": "nearest", "trigger": "plane", "minimum": 52, "maximum": 88, "division": 0.25, "probability": 0.76, "duration": 0.28 }
+      ],
+      "visual": { "palette": "glass", "trailLength": 0.94, "trailWidth": 0.8, "extrusion": 0.05, "bloom": 0.22, "stars": 0.48 },
+      "camera": { "focus": "barycenter", "distance": 7.0, "autoOrbit": 0.018 }
+    },
+    {
+      "id": "twin-moon-relay", "name": "Twin Moon Relay", "description": "A heavy primary and nested satellites exchange syncopated blues fragments.",
+      "system": "hierarchical", "seed": 33425303, "chaos": 0.12,
+      "physics": { "gravity": 0.65, "softening": 0.04, "speed": 1.15, "escapePolicy": "prompt", "loopPolicy": "continue" },
+      "voices": [
+        { "channel": 1, "root": 5, "scale": "blues", "pitch": "radius", "trigger": "clock", "minimum": 29, "maximum": 53, "division": 1.0, "probability": 1.0, "duration": 0.8 },
+        { "channel": 2, "root": 5, "scale": "blues", "pitch": "nearest", "trigger": "clock", "minimum": 41, "maximum": 77, "division": 0.25, "probability": 0.78, "duration": 0.18 },
+        { "channel": 3, "root": 0, "scale": "blues", "pitch": "speed", "trigger": "plane", "minimum": 53, "maximum": 89, "division": 0.125, "probability": 0.66, "duration": 0.12 }
+      ],
+      "visual": { "palette": "ember", "trailLength": 0.72, "trailWidth": 1.5, "extrusion": 0.18, "bloom": 0.42, "stars": 0.55 },
+      "camera": { "focus": "body0", "distance": 5.4, "autoOrbit": 0.028 }
+    },
+    {
+      "id": "quiet-periapsis", "name": "Quiet Periapsis", "description": "Sparse close approaches sound as low Phrygian bells.",
+      "system": "hierarchical", "seed": 33425304, "chaos": 0.08,
+      "physics": { "gravity": 0.52, "softening": 0.06, "speed": 0.46, "escapePolicy": "leave", "loopPolicy": "continue" },
+      "voices": [
+        { "channel": 1, "root": 1, "scale": "phrygian", "pitch": "nearest", "trigger": "close", "minimum": 25, "maximum": 61, "division": 1.0, "probability": 0.92, "duration": 1.5 },
+        { "channel": 2, "root": 8, "scale": "phrygian", "pitch": "speed", "trigger": "turning", "minimum": 37, "maximum": 73, "division": 0.5, "probability": 0.72, "duration": 0.9 },
+        { "channel": 3, "root": 3, "scale": "minorPentatonic", "pitch": "plane", "trigger": "plane", "minimum": 49, "maximum": 85, "division": 0.25, "probability": 0.58, "duration": 0.55 }
+      ],
+      "visual": { "palette": "nocturne", "trailLength": 0.96, "trailWidth": 0.65, "extrusion": 0.08, "bloom": 0.18, "stars": 0.72 },
+      "camera": { "focus": "body0", "distance": 8.0, "autoOrbit": 0.012 }
+    },
+    {
+      "id": "cyan-transit", "name": "Cyan Transit", "description": "Plane crossings become a brisk whole-tone lattice.",
+      "system": "stable", "seed": 33425305, "chaos": 0.18,
+      "physics": { "gravity": 0.84, "softening": 0.035, "speed": 1.62, "escapePolicy": "leave", "loopPolicy": "restart" },
+      "voices": [
+        { "channel": 1, "root": 0, "scale": "wholeTone", "pitch": "plane", "trigger": "plane", "minimum": 36, "maximum": 84, "division": 0.25, "probability": 1.0, "duration": 0.22 },
+        { "channel": 2, "root": 1, "scale": "wholeTone", "pitch": "phase", "trigger": "clock", "minimum": 43, "maximum": 91, "division": 0.25, "probability": 0.74, "duration": 0.16 },
+        { "channel": 3, "root": 0, "scale": "wholeTone", "pitch": "speed", "trigger": "clock", "minimum": 31, "maximum": 79, "division": 0.5, "probability": 0.64, "duration": 0.31 }
+      ],
+      "visual": { "palette": "cyan", "trailLength": 0.68, "trailWidth": 1.0, "extrusion": 0.31, "bloom": 0.46, "stars": 0.44 },
+      "camera": { "focus": "barycenter", "distance": 5.8, "autoOrbit": 0.052 }
+    },
+    {
+      "id": "ember-conjunction", "name": "Ember Conjunction", "description": "Close bodies strike a compact Hungarian-minor ostinato.",
+      "system": "controlledChaos", "seed": 33425306, "chaos": 0.34,
+      "physics": { "gravity": 1.18, "softening": 0.055, "speed": 1.08, "escapePolicy": "respawn", "loopPolicy": "continue" },
+      "voices": [
+        { "channel": 1, "root": 4, "scale": "hungarianMinor", "pitch": "nearest", "trigger": "close", "minimum": 28, "maximum": 64, "division": 0.5, "probability": 1.0, "duration": 0.38 },
+        { "channel": 2, "root": 11, "scale": "hungarianMinor", "pitch": "speed", "trigger": "clock", "minimum": 40, "maximum": 76, "division": 0.375, "probability": 0.72, "duration": 0.28 },
+        { "channel": 3, "root": 4, "scale": "diminished", "pitch": "phase", "trigger": "turning", "minimum": 52, "maximum": 88, "division": 0.25, "probability": 0.83, "duration": 0.2 }
+      ],
+      "visual": { "palette": "ember", "trailLength": 0.74, "trailWidth": 1.7, "extrusion": 0.22, "bloom": 0.58, "stars": 0.36 },
+      "camera": { "focus": "body1", "distance": 5.0, "autoOrbit": 0.044 }
+    },
+    {
+      "id": "violet-aphelion", "name": "Violet Aphelion", "description": "Long arcs and widely spaced Dorian tones.",
+      "system": "stable", "seed": 33425307, "chaos": 0.10,
+      "physics": { "gravity": 0.46, "softening": 0.04, "speed": 0.54, "escapePolicy": "prompt", "loopPolicy": "continue" },
+      "voices": [
+        { "channel": 1, "root": 9, "scale": "dorian", "pitch": "radius", "trigger": "turning", "minimum": 33, "maximum": 69, "division": 1.0, "probability": 1.0, "duration": 1.2 },
+        { "channel": 2, "root": 4, "scale": "dorian", "pitch": "nearest", "trigger": "clock", "minimum": 45, "maximum": 81, "division": 1.5, "probability": 0.88, "duration": 0.95 },
+        { "channel": 3, "root": 11, "scale": "majorPentatonic", "pitch": "phase", "trigger": "plane", "minimum": 57, "maximum": 93, "division": 0.5, "probability": 0.64, "duration": 0.62 }
+      ],
+      "visual": { "palette": "violet", "trailLength": 1.0, "trailWidth": 0.7, "extrusion": 0.26, "bloom": 0.3, "stars": 0.84 },
+      "camera": { "focus": "barycenter", "distance": 9.2, "autoOrbit": 0.01 }
+    },
+    {
+      "id": "red-shift-study", "name": "Red Shift Study", "description": "Velocity maps directly into a restless chromatic climb.",
+      "system": "controlledChaos", "seed": 33425308, "chaos": 0.52,
+      "physics": { "gravity": 1.3, "softening": 0.07, "speed": 1.35, "escapePolicy": "respawn", "loopPolicy": "continue" },
+      "voices": [
+        { "channel": 1, "root": 0, "scale": "chromatic", "pitch": "speed", "trigger": "clock", "minimum": 24, "maximum": 72, "division": 0.25, "probability": 0.82, "duration": 0.18 },
+        { "channel": 2, "root": 0, "scale": "chromatic", "pitch": "speed", "trigger": "plane", "minimum": 36, "maximum": 84, "division": 0.25, "probability": 0.78, "duration": 0.16 },
+        { "channel": 3, "root": 0, "scale": "chromatic", "pitch": "speed", "trigger": "close", "minimum": 48, "maximum": 96, "division": 0.125, "probability": 0.92, "duration": 0.12 }
+      ],
+      "visual": { "palette": "redshift", "trailLength": 0.62, "trailWidth": 1.4, "extrusion": 0.42, "bloom": 0.64, "stars": 0.3 },
+      "camera": { "focus": "body2", "distance": 4.8, "autoOrbit": 0.065 }
+    },
+    {
+      "id": "golden-barycenter", "name": "Golden Barycenter", "description": "A centered major-pentatonic constellation with measured clockwork.",
+      "system": "figureEight", "seed": 33425309, "chaos": 0.06,
+      "physics": { "gravity": 0.96, "softening": 0.025, "speed": 0.88, "escapePolicy": "leave", "loopPolicy": "restart" },
+      "voices": [
+        { "channel": 1, "root": 7, "scale": "majorPentatonic", "pitch": "radius", "trigger": "clock", "minimum": 31, "maximum": 67, "division": 1.0, "probability": 1.0, "duration": 0.72 },
+        { "channel": 2, "root": 2, "scale": "majorPentatonic", "pitch": "phase", "trigger": "clock", "minimum": 43, "maximum": 79, "division": 0.5, "probability": 0.86, "duration": 0.38 },
+        { "channel": 3, "root": 9, "scale": "majorPentatonic", "pitch": "nearest", "trigger": "clock", "minimum": 55, "maximum": 91, "division": 0.25, "probability": 0.68, "duration": 0.21 }
+      ],
+      "visual": { "palette": "gold", "trailLength": 0.88, "trailWidth": 1.1, "extrusion": 0.14, "bloom": 0.38, "stars": 0.58 },
+      "camera": { "focus": "barycenter", "distance": 6.5, "autoOrbit": 0.026 }
+    },
+    {
+      "id": "black-sun-threads", "name": "Black Sun Threads", "description": "Low Locrian voices orbit a nearly absent center.",
+      "system": "hierarchical", "seed": 33425310, "chaos": 0.24,
+      "physics": { "gravity": 0.78, "softening": 0.045, "speed": 0.64, "escapePolicy": "prompt", "loopPolicy": "continue" },
+      "voices": [
+        { "channel": 1, "root": 6, "scale": "locrian", "pitch": "nearest", "trigger": "close", "minimum": 18, "maximum": 54, "division": 1.0, "probability": 0.88, "duration": 1.1 },
+        { "channel": 2, "root": 1, "scale": "locrian", "pitch": "plane", "trigger": "plane", "minimum": 30, "maximum": 66, "division": 0.5, "probability": 0.72, "duration": 0.66 },
+        { "channel": 3, "root": 8, "scale": "diminished", "pitch": "phase", "trigger": "turning", "minimum": 42, "maximum": 78, "division": 0.25, "probability": 0.62, "duration": 0.44 }
+      ],
+      "visual": { "palette": "blackSun", "trailLength": 0.92, "trailWidth": 0.55, "extrusion": 0.38, "bloom": 0.12, "stars": 0.24 },
+      "camera": { "focus": "body0", "distance": 7.6, "autoOrbit": 0.016 }
+    },
+    {
+      "id": "orbital-ink", "name": "Orbital Ink", "description": "Fine dark-blue filaments trace a restrained natural-minor study.",
+      "system": "stable", "seed": 33425311, "chaos": 0.14,
+      "physics": { "gravity": 0.68, "softening": 0.03, "speed": 0.82, "escapePolicy": "leave", "loopPolicy": "restart" },
+      "voices": [
+        { "channel": 1, "root": 3, "scale": "naturalMinor", "pitch": "radius", "trigger": "clock", "minimum": 27, "maximum": 63, "division": 0.75, "probability": 0.92, "duration": 0.58 },
+        { "channel": 2, "root": 10, "scale": "naturalMinor", "pitch": "nearest", "trigger": "plane", "minimum": 39, "maximum": 75, "division": 0.5, "probability": 0.68, "duration": 0.42 },
+        { "channel": 3, "root": 5, "scale": "minorPentatonic", "pitch": "phase", "trigger": "turning", "minimum": 51, "maximum": 87, "division": 0.25, "probability": 0.74, "duration": 0.28 }
+      ],
+      "visual": { "palette": "ink", "trailLength": 0.98, "trailWidth": 0.48, "extrusion": 0.1, "bloom": 0.16, "stars": 0.66 },
+      "camera": { "focus": "barycenter", "distance": 7.8, "autoOrbit": 0.014 }
+    },
+    {
+      "id": "slingshot-cadence", "name": "Slingshot Cadence", "description": "Fast encounters throw notes through a wide diminished register.",
+      "system": "controlledChaos", "seed": 33425312, "chaos": 0.68,
+      "physics": { "gravity": 1.46, "softening": 0.08, "speed": 1.82, "escapePolicy": "respawn", "loopPolicy": "continue" },
+      "voices": [
+        { "channel": 1, "root": 0, "scale": "diminished", "pitch": "nearest", "trigger": "close", "minimum": 24, "maximum": 72, "division": 0.25, "probability": 1.0, "duration": 0.24 },
+        { "channel": 2, "root": 3, "scale": "diminished", "pitch": "speed", "trigger": "clock", "minimum": 36, "maximum": 84, "division": 0.1875, "probability": 0.75, "duration": 0.14 },
+        { "channel": 3, "root": 6, "scale": "diminished", "pitch": "phase", "trigger": "plane", "minimum": 48, "maximum": 96, "division": 0.125, "probability": 0.70, "duration": 0.1 }
+      ],
+      "visual": { "palette": "impact", "trailLength": 0.5, "trailWidth": 2.0, "extrusion": 0.55, "bloom": 0.72, "stars": 0.4 },
+      "camera": { "focus": "body1", "distance": 4.2, "autoOrbit": 0.085 }
+    },
+    {
+      "id": "pale-resonance", "name": "Pale Resonance", "description": "Slow Mixolydian cycles settle into overlapping resonances.",
+      "system": "figureEight", "seed": 33425313, "chaos": 0.03,
+      "physics": { "gravity": 0.88, "softening": 0.03, "speed": 0.38, "escapePolicy": "leave", "loopPolicy": "restart" },
+      "voices": [
+        { "channel": 1, "root": 5, "scale": "mixolydian", "pitch": "phase", "trigger": "turning", "minimum": 29, "maximum": 65, "division": 1.0, "probability": 1.0, "duration": 1.8 },
+        { "channel": 2, "root": 0, "scale": "mixolydian", "pitch": "radius", "trigger": "plane", "minimum": 41, "maximum": 77, "division": 0.5, "probability": 0.82, "duration": 1.2 },
+        { "channel": 3, "root": 7, "scale": "majorPentatonic", "pitch": "nearest", "trigger": "clock", "minimum": 53, "maximum": 89, "division": 1.0, "probability": 0.54, "duration": 0.9 }
+      ],
+      "visual": { "palette": "pale", "trailLength": 1.0, "trailWidth": 0.9, "extrusion": 0.06, "bloom": 0.24, "stars": 0.76 },
+      "camera": { "focus": "barycenter", "distance": 8.4, "autoOrbit": 0.008 }
+    },
+    {
+      "id": "magenta-eclipse", "name": "Magenta Eclipse", "description": "A saturated minor-pentatonic pulse behind a dark primary.",
+      "system": "hierarchical", "seed": 33425314, "chaos": 0.3,
+      "physics": { "gravity": 1.05, "softening": 0.05, "speed": 1.24, "escapePolicy": "respawn", "loopPolicy": "continue" },
+      "voices": [
+        { "channel": 1, "root": 10, "scale": "minorPentatonic", "pitch": "radius", "trigger": "clock", "minimum": 22, "maximum": 58, "division": 0.5, "probability": 1.0, "duration": 0.42 },
+        { "channel": 2, "root": 5, "scale": "minorPentatonic", "pitch": "nearest", "trigger": "clock", "minimum": 46, "maximum": 82, "division": 0.25, "probability": 0.82, "duration": 0.2 },
+        { "channel": 3, "root": 0, "scale": "blues", "pitch": "speed", "trigger": "plane", "minimum": 58, "maximum": 94, "division": 0.125, "probability": 0.66, "duration": 0.13 }
+      ],
+      "visual": { "palette": "magenta", "trailLength": 0.76, "trailWidth": 1.55, "extrusion": 0.34, "bloom": 0.66, "stars": 0.32 },
+      "camera": { "focus": "body0", "distance": 5.2, "autoOrbit": 0.056 }
+    },
+    {
+      "id": "three-cold-lights", "name": "Three Cold Lights", "description": "Separated Lydian voices in a clean observatory field.",
+      "system": "stable", "seed": 33425315, "chaos": 0.07,
+      "physics": { "gravity": 0.6, "softening": 0.035, "speed": 0.76, "escapePolicy": "leave", "loopPolicy": "restart" },
+      "voices": [
+        { "channel": 1, "root": 0, "scale": "lydian", "pitch": "phase", "trigger": "clock", "minimum": 36, "maximum": 72, "division": 0.75, "probability": 0.86, "duration": 0.54 },
+        { "channel": 2, "root": 4, "scale": "lydian", "pitch": "phase", "trigger": "clock", "minimum": 43, "maximum": 79, "division": 0.5, "probability": 0.78, "duration": 0.38 },
+        { "channel": 3, "root": 8, "scale": "lydian", "pitch": "phase", "trigger": "clock", "minimum": 50, "maximum": 86, "division": 0.375, "probability": 0.7, "duration": 0.27 }
+      ],
+      "visual": { "palette": "cold", "trailLength": 0.84, "trailWidth": 0.75, "extrusion": 0.16, "bloom": 0.28, "stars": 0.88 },
+      "camera": { "focus": "barycenter", "distance": 7.2, "autoOrbit": 0.02 }
+    },
+    {
+      "id": "blue-giant-clock", "name": "Blue Giant Clock", "description": "A massive center anchors precise polymetric pentatonic ticks.",
+      "system": "hierarchical", "seed": 33425316, "chaos": 0.04,
+      "physics": { "gravity": 0.92, "softening": 0.025, "speed": 0.96, "escapePolicy": "leave", "loopPolicy": "restart" },
+      "voices": [
+        { "channel": 1, "root": 2, "scale": "minorPentatonic", "pitch": "radius", "trigger": "clock", "minimum": 26, "maximum": 50, "division": 1.0, "probability": 1.0, "duration": 0.74 },
+        { "channel": 2, "root": 9, "scale": "minorPentatonic", "pitch": "nearest", "trigger": "clock", "minimum": 38, "maximum": 74, "division": 0.375, "probability": 0.84, "duration": 0.24 },
+        { "channel": 3, "root": 4, "scale": "majorPentatonic", "pitch": "speed", "trigger": "clock", "minimum": 50, "maximum": 86, "division": 0.3125, "probability": 0.68, "duration": 0.19 }
+      ],
+      "visual": { "palette": "blueGiant", "trailLength": 0.8, "trailWidth": 1.25, "extrusion": 0.2, "bloom": 0.52, "stars": 0.7 },
+      "camera": { "focus": "body0", "distance": 6.0, "autoOrbit": 0.03 }
+    },
+    {
+      "id": "perihelion-dust", "name": "Perihelion Dust", "description": "Dry, brief chromatic grains gather near close encounters.",
+      "system": "controlledChaos", "seed": 33425317, "chaos": 0.46,
+      "physics": { "gravity": 1.12, "softening": 0.09, "speed": 1.48, "escapePolicy": "respawn", "loopPolicy": "continue" },
+      "voices": [
+        { "channel": 1, "root": 0, "scale": "chromatic", "pitch": "nearest", "trigger": "close", "minimum": 30, "maximum": 66, "division": 0.25, "probability": 0.94, "duration": 0.12 },
+        { "channel": 2, "root": 0, "scale": "chromatic", "pitch": "plane", "trigger": "plane", "minimum": 42, "maximum": 78, "division": 0.25, "probability": 0.72, "duration": 0.09 },
+        { "channel": 3, "root": 0, "scale": "chromatic", "pitch": "speed", "trigger": "clock", "minimum": 54, "maximum": 90, "division": 0.125, "probability": 0.48, "duration": 0.07 }
+      ],
+      "visual": { "palette": "dust", "trailLength": 0.36, "trailWidth": 0.4, "extrusion": 0.62, "bloom": 0.26, "stars": 0.5 },
+      "camera": { "focus": "body2", "distance": 4.6, "autoOrbit": 0.074 }
+    },
+    {
+      "id": "silent-conjunction", "name": "Silent Conjunction", "description": "Very sparse blues events leave room for the orbital image.",
+      "system": "figureEight", "seed": 33425318, "chaos": 0.09,
+      "physics": { "gravity": 0.74, "softening": 0.04, "speed": 0.5, "escapePolicy": "leave", "loopPolicy": "continue" },
+      "voices": [
+        { "channel": 1, "root": 0, "scale": "blues", "pitch": "nearest", "trigger": "close", "minimum": 24, "maximum": 60, "division": 2.0, "probability": 0.62, "duration": 1.4 },
+        { "channel": 2, "root": 7, "scale": "minorPentatonic", "pitch": "radius", "trigger": "turning", "minimum": 36, "maximum": 72, "division": 1.0, "probability": 0.52, "duration": 1.0 },
+        { "channel": 3, "root": 5, "scale": "minorPentatonic", "pitch": "plane", "trigger": "plane", "minimum": 48, "maximum": 84, "division": 0.5, "probability": 0.38, "duration": 0.7 }
+      ],
+      "visual": { "palette": "eclipse", "trailLength": 1.0, "trailWidth": 0.6, "extrusion": 0.04, "bloom": 0.2, "stars": 0.92 },
+      "camera": { "focus": "barycenter", "distance": 9.5, "autoOrbit": 0.006 }
+    },
+    {
+      "id": "iron-triangle", "name": "Iron Triangle", "description": "A hard-edged Phrygian pulse from a perturbed triangular system.",
+      "system": "stable", "seed": 33425319, "chaos": 0.38,
+      "physics": { "gravity": 1.0, "softening": 0.06, "speed": 1.3, "escapePolicy": "prompt", "loopPolicy": "restart" },
+      "voices": [
+        { "channel": 1, "root": 4, "scale": "phrygian", "pitch": "radius", "trigger": "clock", "minimum": 28, "maximum": 64, "division": 0.5, "probability": 1.0, "duration": 0.32 },
+        { "channel": 2, "root": 11, "scale": "phrygian", "pitch": "nearest", "trigger": "clock", "minimum": 40, "maximum": 76, "division": 0.375, "probability": 0.8, "duration": 0.22 },
+        { "channel": 3, "root": 6, "scale": "diminished", "pitch": "speed", "trigger": "plane", "minimum": 52, "maximum": 88, "division": 0.25, "probability": 0.7, "duration": 0.16 }
+      ],
+      "visual": { "palette": "iron", "trailLength": 0.58, "trailWidth": 1.3, "extrusion": 0.28, "bloom": 0.32, "stars": 0.4 },
+      "camera": { "focus": "barycenter", "distance": 5.6, "autoOrbit": 0.048 }
+    },
+    {
+      "id": "solar-kite", "name": "Solar Kite", "description": "Wide major intervals ride a tilted hierarchical orbit.",
+      "system": "hierarchical", "seed": 33425320, "chaos": 0.2,
+      "physics": { "gravity": 0.7, "softening": 0.045, "speed": 0.9, "escapePolicy": "leave", "loopPolicy": "restart" },
+      "voices": [
+        { "channel": 1, "root": 0, "scale": "major", "pitch": "plane", "trigger": "plane", "minimum": 24, "maximum": 60, "division": 1.0, "probability": 0.94, "duration": 0.64 },
+        { "channel": 2, "root": 7, "scale": "major", "pitch": "phase", "trigger": "clock", "minimum": 43, "maximum": 79, "division": 0.5, "probability": 0.76, "duration": 0.36 },
+        { "channel": 3, "root": 2, "scale": "lydian", "pitch": "speed", "trigger": "turning", "minimum": 55, "maximum": 91, "division": 0.25, "probability": 0.7, "duration": 0.3 }
+      ],
+      "visual": { "palette": "solar", "trailLength": 0.86, "trailWidth": 1.0, "extrusion": 0.45, "bloom": 0.5, "stars": 0.52 },
+      "camera": { "focus": "body0", "distance": 6.8, "autoOrbit": 0.032 }
+    },
+    {
+      "id": "gravity-well", "name": "Gravity Well", "description": "Heavy, slow masses pull a compact minor sequence downward.",
+      "system": "controlledChaos", "seed": 33425321, "chaos": 0.28,
+      "physics": { "gravity": 1.72, "softening": 0.12, "speed": 0.58, "escapePolicy": "respawn", "loopPolicy": "continue" },
+      "voices": [
+        { "channel": 1, "root": 1, "scale": "naturalMinor", "pitch": "radius", "trigger": "close", "minimum": 16, "maximum": 52, "division": 1.0, "probability": 1.0, "duration": 1.2 },
+        { "channel": 2, "root": 8, "scale": "naturalMinor", "pitch": "nearest", "trigger": "turning", "minimum": 28, "maximum": 64, "division": 0.5, "probability": 0.82, "duration": 0.78 },
+        { "channel": 3, "root": 3, "scale": "minorPentatonic", "pitch": "speed", "trigger": "plane", "minimum": 40, "maximum": 76, "division": 0.25, "probability": 0.68, "duration": 0.48 }
+      ],
+      "visual": { "palette": "gravity", "trailLength": 0.7, "trailWidth": 1.8, "extrusion": 0.18, "bloom": 0.4, "stars": 0.22 },
+      "camera": { "focus": "barycenter", "distance": 4.9, "autoOrbit": 0.022 }
+    },
+    {
+      "id": "spiral-archive", "name": "Spiral Archive", "description": "Long extruded trails preserve a calm Dorian history.",
+      "system": "figureEight", "seed": 33425322, "chaos": 0.12,
+      "physics": { "gravity": 0.9, "softening": 0.03, "speed": 0.66, "escapePolicy": "leave", "loopPolicy": "continue" },
+      "voices": [
+        { "channel": 1, "root": 2, "scale": "dorian", "pitch": "phase", "trigger": "clock", "minimum": 26, "maximum": 62, "division": 1.0, "probability": 0.9, "duration": 0.82 },
+        { "channel": 2, "root": 9, "scale": "dorian", "pitch": "radius", "trigger": "plane", "minimum": 38, "maximum": 74, "division": 0.5, "probability": 0.72, "duration": 0.56 },
+        { "channel": 3, "root": 4, "scale": "majorPentatonic", "pitch": "nearest", "trigger": "turning", "minimum": 50, "maximum": 86, "division": 0.25, "probability": 0.64, "duration": 0.38 }
+      ],
+      "visual": { "palette": "archive", "trailLength": 1.0, "trailWidth": 0.75, "extrusion": 0.82, "bloom": 0.28, "stars": 0.64 },
+      "camera": { "focus": "barycenter", "distance": 8.6, "autoOrbit": 0.012 }
+    },
+    {
+      "id": "unstable-crown", "name": "Unstable Crown", "description": "A volatile Hungarian-minor crown that renews escaped bodies.",
+      "system": "controlledChaos", "seed": 33425323, "chaos": 0.82,
+      "physics": { "gravity": 1.38, "softening": 0.1, "speed": 1.56, "escapePolicy": "respawn", "loopPolicy": "continue" },
+      "voices": [
+        { "channel": 1, "root": 6, "scale": "hungarianMinor", "pitch": "nearest", "trigger": "close", "minimum": 24, "maximum": 72, "division": 0.375, "probability": 1.0, "duration": 0.3 },
+        { "channel": 2, "root": 1, "scale": "hungarianMinor", "pitch": "speed", "trigger": "clock", "minimum": 36, "maximum": 84, "division": 0.25, "probability": 0.8, "duration": 0.2 },
+        { "channel": 3, "root": 8, "scale": "diminished", "pitch": "plane", "trigger": "plane", "minimum": 48, "maximum": 96, "division": 0.1875, "probability": 0.72, "duration": 0.14 }
+      ],
+      "visual": { "palette": "crown", "trailLength": 0.64, "trailWidth": 1.65, "extrusion": 0.48, "bloom": 0.7, "stars": 0.46 },
+      "camera": { "focus": "body1", "distance": 4.4, "autoOrbit": 0.09 }
+    },
+    {
+      "id": "white-noon", "name": "White Noon", "description": "A high, clear whole-tone mechanism in a bright sparse field.",
+      "system": "stable", "seed": 33425324, "chaos": 0.02,
+      "physics": { "gravity": 0.58, "softening": 0.025, "speed": 1.0, "escapePolicy": "leave", "loopPolicy": "restart" },
+      "voices": [
+        { "channel": 1, "root": 0, "scale": "wholeTone", "pitch": "radius", "trigger": "clock", "minimum": 48, "maximum": 84, "division": 0.5, "probability": 0.92, "duration": 0.36 },
+        { "channel": 2, "root": 1, "scale": "wholeTone", "pitch": "phase", "trigger": "clock", "minimum": 55, "maximum": 91, "division": 0.375, "probability": 0.78, "duration": 0.26 },
+        { "channel": 3, "root": 0, "scale": "wholeTone", "pitch": "nearest", "trigger": "plane", "minimum": 60, "maximum": 96, "division": 0.25, "probability": 0.64, "duration": 0.18 }
+      ],
+      "visual": { "palette": "white", "trailLength": 0.78, "trailWidth": 0.7, "extrusion": 0.12, "bloom": 0.36, "stars": 0.28 },
+      "camera": { "focus": "barycenter", "distance": 6.4, "autoOrbit": 0.024 }
+    }
+  ]
+}

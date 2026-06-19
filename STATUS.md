@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-19 19-15 GMT-3
+Last updated: 2026-06-19 19-59 GMT-3
 
 ## Project purpose
 
@@ -9,32 +9,84 @@ standalone artwork driven by a normalized three-body gravitational simulation.
 
 ## Current implementation state
 
-The repository contains the initial concept and repository documentation. No
-simulation, MIDI engine, plugin target, standalone application, renderer,
-factory preset, automated test, or CI workflow has been implemented yet.
+The repository builds a deterministic core library, Logic AU MIDI effect,
+Ableton-oriented VST3 instrument, and standalone CoreMIDI application. It has a
+native Metal presentation layer, shared control deck, 24 schema-validated
+factory presets, host state serialization, automated tests, and macOS CI.
 
 ## Active focus
 
-Bootstrap the private repository, then implement and verify a deterministic
-standalone/AU/VST3 vertical slice before making the repository public.
+Complete external Metal, Logic, and Ableton runtime validation for the existing
+three-format vertical slice before making the repository public.
 
 ## Architecture overview
 
-No runtime architecture currently exists. The approved design separates a
-framework-independent deterministic core from JUCE host adapters, standalone
-CoreMIDI handling, shared UI, and an isolated Metal renderer. Architecture and
-data-flow SVGs will be added after those components exist; placeholder diagrams
-would inaccurately describe the current repository.
+The framework-independent core owns physics, measurements, mapping, MIDI event
+scheduling, deterministic random state, and fixed-capacity queues. Thin JUCE
+adapters translate host transport and MIDI. The Metal renderer consumes
+immutable snapshots without touching real-time processing.
+
+### Architecture diagram
+
+The same engine is shared by all three runtime surfaces.
+
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="380" viewBox="0 0 960 380" role="img" aria-labelledby="architecture-title architecture-desc">
+  <title id="architecture-title">Three Body Solution architecture</title>
+  <desc id="architecture-desc">AU, VST3, and standalone adapters use one deterministic engine, which feeds MIDI outputs and a separate Metal presentation layer.</desc>
+  <defs><marker id="arch-arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker></defs>
+  <rect width="960" height="380" rx="18" fill="#080d18"/>
+  <g fill="#111b2d" stroke="#34506f" stroke-width="2">
+    <rect x="40" y="58" width="190" height="62" rx="10"/><rect x="40" y="158" width="190" height="62" rx="10"/><rect x="40" y="258" width="190" height="62" rx="10"/>
+    <rect x="330" y="115" width="250" height="150" rx="12"/><rect x="680" y="48" width="230" height="90" rx="12"/><rect x="680" y="205" width="230" height="115" rx="12"/>
+  </g>
+  <g fill="#d9e7f2" font-family="system-ui, sans-serif" text-anchor="middle">
+    <text x="135" y="85" font-size="17">Logic AU MIDI FX</text><text x="135" y="106" font-size="12" fill="#7f9bb4">host adapter</text>
+    <text x="135" y="185" font-size="17">VST3 Instrument</text><text x="135" y="206" font-size="12" fill="#7f9bb4">silent audio + MIDI out</text>
+    <text x="135" y="285" font-size="17">Standalone</text><text x="135" y="306" font-size="12" fill="#7f9bb4">CoreMIDI adapter</text>
+    <text x="455" y="150" font-size="19">Deterministic Engine</text><text x="455" y="182" font-size="13" fill="#9cb4c8">Verlet physics · measurements</text><text x="455" y="204" font-size="13" fill="#9cb4c8">pitch/trigger mapping · state</text><text x="455" y="226" font-size="13" fill="#9cb4c8">fixed MIDI event buffers</text>
+    <text x="795" y="82" font-size="18">MIDI Destination</text><text x="795" y="106" font-size="12" fill="#7f9bb4">host events or CoreMIDI</text>
+    <text x="795" y="238" font-size="18">Presentation</text><text x="795" y="264" font-size="13" fill="#9cb4c8">JUCE control deck</text><text x="795" y="286" font-size="13" fill="#9cb4c8">NSView + MetalKit renderer</text>
+  </g>
+  <g stroke="#64748b" stroke-width="2" fill="none" marker-end="url(#arch-arrow)">
+    <path d="M230 89 C275 89 285 145 330 145"/><path d="M230 189 L330 189"/><path d="M230 289 C275 289 285 235 330 235"/><path d="M580 155 C625 155 635 93 680 93"/><path d="M580 228 C625 228 635 260 680 260"/>
+  </g>
+</svg>
+
+### Data-flow diagram
+
+Commands and render snapshots use fixed-capacity queues; MIDI stays on the
+processing path.
+
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="330" viewBox="0 0 960 330" role="img" aria-labelledby="flow-title flow-desc">
+  <title id="flow-title">Real-time data flow</title><desc id="flow-desc">Host transport and parameters enter processing, simulation produces mappings and MIDI, while snapshots go independently to Metal.</desc>
+  <defs><marker id="flow-arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker></defs>
+  <rect width="960" height="330" rx="18" fill="#080d18"/>
+  <g fill="#111b2d" stroke="#34506f" stroke-width="2">
+    <rect x="35" y="52" width="170" height="66" rx="10"/><rect x="35" y="215" width="170" height="66" rx="10"/><rect x="280" y="105" width="190" height="92" rx="10"/><rect x="545" y="55" width="170" height="70" rx="10"/><rect x="545" y="207" width="170" height="70" rx="10"/><rect x="790" y="55" width="135" height="70" rx="10"/><rect x="790" y="207" width="135" height="70" rx="10"/>
+  </g>
+  <g fill="#d9e7f2" font-family="system-ui, sans-serif" text-anchor="middle">
+    <text x="120" y="80" font-size="16">Transport</text><text x="120" y="101" font-size="12" fill="#8ba3b8">parameters + MIDI in</text><text x="120" y="243" font-size="16">Control Deck</text><text x="120" y="264" font-size="12" fill="#8ba3b8">preset/reset commands</text>
+    <text x="375" y="139" font-size="17">processBlock</text><text x="375" y="162" font-size="12" fill="#8ba3b8">consume · advance · schedule</text>
+    <text x="630" y="85" font-size="16">MIDI Events</text><text x="630" y="106" font-size="12" fill="#8ba3b8">sample offsets</text><text x="630" y="235" font-size="16">Render Snapshot</text><text x="630" y="256" font-size="12" fill="#8ba3b8">immutable body state</text>
+    <text x="857" y="86" font-size="16">Host / MIDI</text><text x="857" y="238" font-size="16">Metal 60 fps</text><text x="857" y="259" font-size="12" fill="#8ba3b8">when available</text>
+  </g>
+  <g stroke="#64748b" stroke-width="2" fill="none" marker-end="url(#flow-arrow)">
+    <path d="M205 85 C245 85 245 135 280 135"/><path d="M205 248 C245 248 245 172 280 172"/><path d="M470 136 C505 136 510 90 545 90"/><path d="M715 90 L790 90"/><path d="M470 170 C505 170 510 242 545 242"/><path d="M715 242 L790 242"/>
+  </g>
+</svg>
 
 ## Setup and run instructions
 
-There is no buildable target yet. Planned requirements are Apple Silicon macOS
-13+, Xcode, CMake 3.22+, and the pinned JUCE submodule.
+Requirements are Apple Silicon macOS 13+, Xcode, CMake 3.22+, and recursive Git
+submodules. Use `cmake --preset dev` for core tests or
+`cmake --preset plugin-debug` for all formats, then the matching build and test
+presets. Detailed commands and artifact paths are in `README.md`.
 
 ## Configuration and environment variables
 
-No runtime configuration or environment variables exist. Signing credentials
-must never be stored in the repository.
+No environment variables are required. CMake options control plugin/test builds
+and local ad-hoc signing. Signing credentials must never be stored in the
+repository.
 
 ## Important files and directories
 
@@ -43,40 +95,63 @@ must never be stored in the repository.
 - `doc/project-initial-description.md`: original concept.
 - `doc/AGENTS.md`: source agent-policy template.
 - `doc/STATUS.md`: source status template.
-- `src/`: currently empty implementation root.
+- `src/core/`: deterministic simulation, scales, MIDI mapping, and queues.
+- `src/plugin/`: AU/VST3 processors, state, and shared editor adapter.
+- `src/standalone/`: CoreMIDI application.
+- `src/render/` and `src/ui/`: Metal scene, controls, and preset parsing.
+- `resources/presets/`: 24 factory artwork states using schema version 1.
+- `tests/`: deterministic, preset, Metal, and processor tests.
 - `ignore/`: deliberately ignored local material.
 
 ## Recent changes
 
-- Defined the AGPL-3.0-only project policy and initial documentation.
-- Selected JUCE 8.0.13, C++20, CMake, and an isolated native Metal renderer.
+- Added fixed-step double-precision Verlet physics and deterministic PCG state.
+- Added five pitch mappings, four trigger mappings, scale quantization, three
+  monophonic voices, CC lanes, note cleanup, and escape policies.
+- Added AU, VST3, standalone, Metal scene, shared controls, state recall, 24
+  factory presets, ad-hoc signing, tests, and CI.
+- Added a nonmodal advanced editor for all masses and initial position/velocity
+  vectors, shared by plugin and standalone.
 
 ## Tests and verification status
 
-No executable code exists, so no build or runtime checks are available. The
-documentation has not yet been committed or pushed at this status point.
+- `cmake --preset dev`: passed.
+- `cmake --build --preset dev -j 8`: passed.
+- `ctest --preset dev --output-on-failure`: 2/2 passed.
+- Full plugin configure/build: passed for arm64 AU, VST3, and standalone.
+- Full CTest: core, preset, and processor tests passed; Metal smoke test skipped
+  because the sandbox returned no Metal device.
+- `codesign --verify --deep --strict`: passed for all three ad-hoc-signed bundles.
+- Bundle metadata identifies AU type `aumi`, subtype `Tbs1`, manufacturer `Krhd`.
+- `auval -v aumi Tbs1 Krhd`: attempted and failed discovery because the local
+  component was not installed in the Audio Unit search path.
+- Standalone launch, installed `auval`, pluginval, Logic, Ableton, and 60 fps
+  profiling remain unverified.
 
 ## Known issues, risks, and limitations
 
-- GitHub authentication must be valid before the private remote can be created.
-- AU MIDI effects and VST3 MIDI-generating instruments require different host
-  behavior and separate manual validation.
+- GitHub repository `krahd/3bs` exists and was verified private on `main`.
+- AU MIDI effects and VST3 MIDI generation still require real host validation.
 - Apple signing and notarization are blocked until Developer credentials exist.
-- The Metal renderer must remain isolated from real-time MIDI processing.
+- This sandbox exposes no Metal device, so shader execution and visual quality
+  need validation in the launched app.
+- User preset file import/export, detailed per-voice mapping UI, and full
+  graphics/camera controls are not yet exposed.
+- Allocation/lock instrumentation and baseline 60 fps profiling have not run.
 
 ## Pending tasks
 
-- Initialize Git and create the private GitHub repository.
-- Add the pinned JUCE submodule and CMake targets.
-- Implement deterministic simulation, mapping, MIDI, state, presets, and tests.
-- Implement the Metal scene and shared controls.
-- Verify the vertical slice in standalone, Logic, and Ableton.
+- Launch and visually inspect the standalone Metal scene on Apple Silicon.
+- Install and validate AU with `auval`, then test it in Logic.
+- Run plugin validation and test VST3 MIDI routing in Ableton.
+- Complete advanced editing, voice, camera, and user-preset controls.
+- Profile processing allocation/locking and renderer frame time.
 
 ## Next steps
 
-1. Commit and publish the repository bootstrap privately.
-2. Implement the framework-independent engine with automated tests.
-3. Add host wrappers, standalone routing, and the Metal presentation layer.
+1. Perform external Metal and host validation.
+2. Close the remaining control-surface gaps and rerun the full suite.
+3. Audit licences/secrets, tag `v0.1.0-alpha.1`, and make the repository public.
 
 ## Longer-term steps
 
@@ -100,4 +175,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-19 19-15 GMT-3
+Last updated: 2026-06-19 19-59 GMT-3

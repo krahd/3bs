@@ -1,0 +1,52 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 22,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "dev",
+      "displayName": "Core development",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/dev",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "13.0",
+        "THREEBS_BUILD_PLUGINS": "OFF",
+        "THREEBS_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "plugin-debug",
+      "displayName": "Plugin development",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/plugin-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "13.0",
+        "THREEBS_BUILD_PLUGINS": "ON",
+        "THREEBS_BUILD_TESTS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "dev", "configurePreset": "dev" },
+    { "name": "plugin-debug", "configurePreset": "plugin-debug" }
+  ],
+  "testPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "plugin-debug",
+      "configurePreset": "plugin-debug",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 Tomas Laurenzo
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  core-tests:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure native core tests
+        run: >-
+          cmake -S . -B build/ci-core
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_OSX_ARCHITECTURES=$(uname -m)
+          -DTHREEBS_BUILD_PLUGINS=OFF
+          -DTHREEBS_BUILD_TESTS=ON
+      - name: Build
+        run: cmake --build build/ci-core --parallel 4
+      - name: Test
+        run: ctest --test-dir build/ci-core --output-on-failure
+
+  arm64-bundles:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure arm64 bundles
+        run: >-
+          cmake -S . -B build/ci-plugin
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_OSX_ARCHITECTURES=arm64
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
+          -DTHREEBS_BUILD_PLUGINS=ON
+          -DTHREEBS_BUILD_TESTS=OFF
+          -DTHREEBS_ADHOC_SIGN=ON
+      - name: Build AU, VST3, and standalone
+        run: cmake --build build/ci-plugin --parallel 4

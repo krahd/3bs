@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Tomas Laurenzo
+
+#pragma once
+
+#include "plugin/PluginProcessor.h"
+#include "ui/ArtworkPanel.h"
+
+#include <juce_audio_processors/juce_audio_processors.h>
+
+#include <array>
+#include <memory>
+
+namespace threebs {
+
+class ThreeBSEditor final : public juce::AudioProcessorEditor, private juce::Timer {
+public:
+    explicit ThreeBSEditor(ThreeBSProcessor& owner);
+    ~ThreeBSEditor() override;
+    void resized() override;
+
+private:
+    void timerCallback() override;
+    void applySelectedPreset();
+
+    ThreeBSProcessor& processor_;
+    ArtworkPanel panel_;
+    PresetCatalog presets_;
+    VisualSettings visual_{};
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> runAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncAttachment_;
+    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>, 10> sliderAttachments_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> presetAttachment_;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ThreeBSEditor)
+};
+
+} // namespace threebs
