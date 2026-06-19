@@ -1,0 +1,39 @@
+ignore/
+
+# macOS
+.DS_Store
+._*
+
+# Editors
+.idea/
+.vscode/
+*.swp
+
+# CMake and build products
+build/
+build-*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+
+# Xcode
+DerivedData/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcuserstate
+
+# Plugin and application artifacts
+artifacts/
+dist/
+*.app/
+*.component/
+*.vst3/
+*.dSYM/
+
+# Generated Metal artifacts
+*.air
+*.metallib
