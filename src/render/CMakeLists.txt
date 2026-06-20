@@ -12,6 +12,7 @@ target_compile_features(threebs_presentation PUBLIC cxx_std_20)
 target_link_libraries(threebs_presentation
     PUBLIC
         threebs_core
+        threebs_presentation_model
         ThreeBSAssets
         juce::juce_gui_extra
         juce::juce_data_structures

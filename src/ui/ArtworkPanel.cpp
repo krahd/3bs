@@ -44,12 +44,17 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots)
     setWantsKeyboardFocus(true);
     setOpaque(true);
     addAndMakeVisible(scene_);
+    scene_.onCameraInteractionComplete = [this](const CameraState& camera) {
+        presentation_.camera = camera;
+        if (onCameraChanged)
+            onCameraChanged(camera);
+    };
 
     title_.setText("THE THREE BODY SOLUTION", juce::dontSendNotification);
     title_.setFont(juce::Font(juce::FontOptions(22.0F).withStyle("Light")));
     title_.setColour(juce::Label::textColourId, juce::Colour(0xffecf2f6));
     addAndMakeVisible(title_);
-    subtitle_.setText("DETERMINISTIC ORBITAL MIDI", juce::dontSendNotification);
+    subtitle_.setText("DRAG ORBIT  /  CLICK FOCUS  /  SCROLL ZOOM", juce::dontSendNotification);
     subtitle_.setFont(juce::Font(juce::FontOptions(10.0F).withStyle("Bold")));
     subtitle_.setColour(juce::Label::textColourId, juce::Colour(0xff70859b));
     addAndMakeVisible(subtitle_);
@@ -68,7 +73,7 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots)
     configureKnob(softening_);
     configureKnob(chaos_, "%");
     configureKnob(density_, "%");
-    configureKnob(trail_, "%");
+    configureKnob(trail_, " s");
     configureKnob(bloom_, "%");
     configureKnob(massOne_);
     configureKnob(massTwo_);
@@ -79,7 +84,7 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots)
     softening_.setRange(0.001, 0.25, 0.001); softening_.setValue(0.04);
     chaos_.setRange(0.0, 100.0, 0.1); chaos_.setValue(20.0);
     density_.setRange(0.0, 100.0, 0.1); density_.setValue(80.0);
-    trail_.setRange(5.0, 100.0, 0.1); trail_.setValue(82.0);
+    trail_.setRange(5.0, 60.0, 0.1); trail_.setValue(30.0);
     bloom_.setRange(0.0, 100.0, 0.1); bloom_.setValue(34.0);
     for (auto* mass : massSliders()) { mass->setRange(0.05, 8.0, 0.001); mass->setValue(1.0); }
 
@@ -194,11 +199,11 @@ void ArtworkPanel::togglePresentation() {
     grabKeyboardFocus();
 }
 
-void ArtworkPanel::setVisualSettings(const VisualSettings& settings) {
-    visual_ = settings;
-    scene_.setVisualSettings(visual_);
-    trail_.setValue(visual_.trailLength * 100.0, juce::dontSendNotification);
-    bloom_.setValue(visual_.bloom * 100.0, juce::dontSendNotification);
+void ArtworkPanel::setPresentationState(const PresentationState& state) {
+    presentation_ = state;
+    scene_.setPresentationState(presentation_);
+    trail_.setValue(presentation_.visual.trailSeconds, juce::dontSendNotification);
+    bloom_.setValue(presentation_.visual.bloom * 100.0, juce::dontSendNotification);
 }
 
 void ArtworkPanel::setPresetNames(const juce::StringArray& names) {

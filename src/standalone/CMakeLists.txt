@@ -13,7 +13,6 @@ target_compile_features(ThreeBSStandalone PRIVATE cxx_std_20)
 target_compile_definitions(ThreeBSStandalone PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
 target_link_libraries(ThreeBSStandalone
     PRIVATE
-        threebs_core
         threebs_presentation
         juce::juce_audio_devices
         juce::juce_gui_extra

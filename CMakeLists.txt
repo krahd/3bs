@@ -18,15 +18,24 @@ add_library(threebs_core STATIC
     src/core/Scale.cpp
     src/core/ThreeBodySimulation.cpp)
 
+add_library(threebs_presentation_model STATIC
+    src/render/CameraController.cpp
+    src/render/PresentationState.cpp)
+
 target_include_directories(threebs_core PUBLIC src)
 target_compile_features(threebs_core PUBLIC cxx_std_20)
 target_compile_options(threebs_core PRIVATE
     $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-Wpedantic;-Wconversion;-Wshadow>)
 
+target_include_directories(threebs_presentation_model PUBLIC src)
+target_compile_features(threebs_presentation_model PUBLIC cxx_std_20)
+target_compile_options(threebs_presentation_model PRIVATE
+    $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-Wpedantic;-Wconversion;-Wshadow>)
+
 if(THREEBS_BUILD_TESTS)
     enable_testing()
     add_executable(threebs_core_tests tests/CoreTests.cpp)
-    target_link_libraries(threebs_core_tests PRIVATE threebs_core)
+    target_link_libraries(threebs_core_tests PRIVATE threebs_core threebs_presentation_model)
     add_test(NAME threebs_core_tests COMMAND threebs_core_tests)
     add_test(
         NAME threebs_factory_presets
@@ -48,7 +57,11 @@ if(THREEBS_BUILD_PLUGINS)
     add_subdirectory(external/JUCE EXCLUDE_FROM_ALL)
     juce_add_binary_data(ThreeBSAssets
         NAMESPACE ThreeBSAssets
-        SOURCES resources/presets/factory-presets.json)
+        SOURCES
+            resources/presets/factory-presets.json
+            resources/metal/SceneShaders.metal
+            resources/stars/bright-stars.csv
+            resources/stars/hyg-v41-mag65.csv)
     add_subdirectory(src/render)
     add_subdirectory(src/plugin)
     add_subdirectory(src/standalone)

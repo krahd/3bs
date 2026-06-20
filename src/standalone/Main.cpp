@@ -24,13 +24,20 @@ public:
         panel_.onRandomize = [this] {
             initial_ = makeInitialState(InitialSystem::ControlledChaos, ++seed_, panel_.chaosSlider().getValue() / 100.0);
             engine_.reset(initial_);
+            presentation_.visualSeed = initial_.seed;
+            panel_.setPresentationState(presentation_);
+            ++trajectoryRevision_;
         };
-        panel_.onReset = [this] { engine_.reset(initial_); };
+        panel_.onReset = [this] { engine_.reset(initial_); ++trajectoryRevision_; };
+        panel_.onCameraChanged = [this](const CameraState& camera) { presentation_.camera = camera; };
         panel_.onAdvanced = [this] {
             const auto target = panel_.getLocalArea(&panel_.advancedButton(), panel_.advancedButton().getLocalBounds());
             showAdvancedStateEditor(initial_, target, panel_, [this](const SimulationState& state) {
                 initial_ = state;
                 engine_.reset(initial_);
+                presentation_.visualSeed = initial_.seed;
+                panel_.setPresentationState(presentation_);
+                ++trajectoryRevision_;
                 const auto masses = panel_.massSliders();
                 for (std::size_t body = 0; body < bodyCount; ++body)
                     masses[body]->setValue(initial_.bodies[body].mass, juce::dontSendNotification);
@@ -44,6 +51,7 @@ public:
         panel_.midiOutputSelector().setSelectedId(1, juce::sendNotificationSync);
         initial_ = engine_.simulation().initialState();
         engine_.prepare(sampleRate_);
+        applyPreset();
         startTimerHz(timerRate_);
     }
 
@@ -99,8 +107,9 @@ private:
         config_.voices = preset.voices;
         engine_.setConfig(config_);
         engine_.reset(initial_);
-        visual_ = preset.visual;
-        panel_.setVisualSettings(visual_);
+        presentation_ = preset.presentation;
+        panel_.setPresentationState(presentation_);
+        ++trajectoryRevision_;
         panel_.gravitySlider().setValue(preset.simulation.gravitationalConstant, juce::dontSendNotification);
         panel_.softeningSlider().setValue(preset.simulation.softening, juce::dontSendNotification);
         panel_.speedSlider().setValue(preset.simulation.speed, juce::dontSendNotification);
@@ -129,6 +138,8 @@ private:
         context.beatsPerSample = tempo_ / (60.0 * sampleRate_);
         context.playing = panel_.runButton().getToggleState();
         context.transportStarted = context.playing && !wasRunning_;
+        if (context.transportStarted)
+            ++trajectoryRevision_;
         MusicEngine::EventBuffer events;
         engine_.process(context, events);
         beat_ += context.beatsPerSample * static_cast<double>(blockSize);
@@ -153,6 +164,12 @@ private:
         snapshot.bodies = engine_.simulation().state().bodies;
         snapshot.escaped = engine_.simulation().state().escaped;
         snapshot.sequence = ++sequence_;
+        const auto& respawns = engine_.simulation().state().respawnCount;
+        if (respawns != lastRespawnCounts_) {
+            lastRespawnCounts_ = respawns;
+            ++trajectoryRevision_;
+        }
+        snapshot.trajectoryRevision = trajectoryRevision_;
         snapshot.interpolationAlpha = engine_.simulation().interpolationAlpha();
         if (!snapshots_.push(snapshot)) {
             RenderSnapshot discarded;
@@ -160,9 +177,9 @@ private:
             snapshots_.push(snapshot);
         }
 
-        visual_.trailLength = static_cast<float>(panel_.trailSlider().getValue() / 100.0);
-        visual_.bloom = static_cast<float>(panel_.bloomSlider().getValue() / 100.0);
-        panel_.setVisualSettings(visual_);
+        presentation_.visual.trailSeconds = static_cast<float>(panel_.trailSlider().getValue());
+        presentation_.visual.bloom = static_cast<float>(panel_.bloomSlider().getValue() / 100.0);
+        panel_.setPresentationState(presentation_);
         if (config_.simulation.escapePolicy == EscapePolicy::Prompt) {
             for (const auto escaped : engine_.simulation().state().escaped) {
                 if (escaped) {
@@ -184,9 +201,11 @@ private:
     SimulationState initial_{};
     juce::Array<juce::MidiDeviceInfo> devices_;
     std::unique_ptr<juce::MidiOutput> midiOutput_;
-    VisualSettings visual_{};
+    PresentationState presentation_{};
     std::uint64_t seed_{0x33425320ULL};
     std::uint64_t sequence_{};
+    std::uint64_t trajectoryRevision_{1};
+    std::array<std::uint32_t, bodyCount> lastRespawnCounts_{};
     double beat_{};
     bool wasRunning_{};
 };

@@ -4,30 +4,25 @@
 #pragma once
 
 #include "core/SnapshotQueue.h"
+#include "render/PresentationState.h"
 
 #include <juce_gui_extra/juce_gui_extra.h>
 
+#include <functional>
 #include <memory>
 
 namespace threebs {
-
-struct VisualSettings {
-    float trailLength{0.82F};
-    float trailWidth{1.2F};
-    float extrusion{0.12F};
-    float bloom{0.34F};
-    float starDensity{0.62F};
-    float autoOrbit{0.035F};
-    int focusBody{-1};
-};
 
 class MetalSceneComponent final : public juce::NSViewComponent {
 public:
     explicit MetalSceneComponent(SpscQueue<RenderSnapshot, 64>& snapshots);
     ~MetalSceneComponent() override;
 
-    void setVisualSettings(const VisualSettings& settings) noexcept;
+    void setPresentationState(const PresentationState& state) noexcept;
+    PresentationState presentationState() const noexcept;
     bool rendererAvailable() const noexcept;
+
+    std::function<void(const CameraState&)> onCameraInteractionComplete;
 
 private:
     class Impl;

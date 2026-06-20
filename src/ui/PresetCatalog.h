@@ -22,7 +22,7 @@ struct ArtworkPreset {
     SimulationConfig simulation{};
     LoopPolicy loopPolicy{LoopPolicy::Restart};
     std::array<VoiceConfig, bodyCount> voices{};
-    VisualSettings visual{};
+    PresentationState presentation{};
 };
 
 class PresetCatalog {

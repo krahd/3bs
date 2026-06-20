@@ -3,6 +3,8 @@
 
 #include "core/MusicEngine.h"
 #include "core/SnapshotQueue.h"
+#include "render/CameraController.h"
+#include "render/TrailHistory.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -185,6 +187,87 @@ void testSnapshotQueue() {
     check(queue.pop(output) && output.sequence == 42, "snapshot queue preserves value");
 }
 
+void testCameraTargetAndHitTesting() {
+    std::array<threebs::BodyState, threebs::bodyCount> bodies{{
+        {2.0, {-1.0, 0.0, 0.0}, {}},
+        {1.0, {2.0, 0.0, 0.0}, {}},
+        {1.0, {0.0, 2.0, 0.0}, {}},
+    }};
+    const auto barycenter = threebs::CameraController::barycenter(bodies);
+    check(near(barycenter.x, 0.0) && near(barycenter.y, 0.5), "camera uses mass-weighted barycenter");
+
+    threebs::CameraController camera;
+    threebs::CameraState state;
+    state.yaw = 0.0F;
+    state.pitch = 0.0F;
+    state.distance = 7.0F;
+    state.autoOrbit = 0.0F;
+    camera.setState(state, bodies, 0.0);
+
+    std::array<threebs::BodyState, threebs::bodyCount> overlapping{{
+        {1.0, {0.0, 0.0, 0.0}, {}},
+        {1.0, {0.0, 0.0, -2.0}, {}},
+        {1.0, {20.0, 20.0, 20.0}, {}},
+    }};
+    state.focusBody = 0;
+    camera.setState(state, overlapping, 0.0);
+    check(camera.hitTest(600.0, 380.0, 1200.0, 760.0, overlapping) == 0,
+          "camera selects nearest overlapping planet");
+    check(camera.hitTest(10.0, 10.0, 1200.0, 760.0, overlapping) == -1,
+          "camera background hit returns barycenter target");
+    check(threebs::CameraController::isClick(2.0, 2.0)
+              && !threebs::CameraController::isClick(4.0, 0.0),
+          "camera click threshold is four pixels");
+}
+
+void testCameraMotion() {
+    std::array<threebs::BodyState, threebs::bodyCount> bodies{};
+    bodies[0].mass = bodies[1].mass = bodies[2].mass = 1.0;
+    bodies[0].position = {1.0, 0.0, 0.0};
+    threebs::CameraController camera;
+    threebs::CameraState state;
+    state.autoOrbit = 1.0F;
+    camera.setState(state, bodies, 0.0);
+    camera.beginInteraction(0.0);
+    camera.update(2.9, bodies);
+    check(near(camera.state().yaw, 0.0, 1.0e-6), "auto orbit pauses after interaction");
+    camera.update(3.5, bodies);
+    check(camera.state().yaw > 0.0F, "auto orbit resumes after idle delay");
+
+    camera.orbit(0.0, 100000.0, 1000.0, 4.0);
+    check(camera.state().pitch < 1.49F, "camera pitch is clamped");
+    camera.zoom(1000.0, 4.0);
+    check(near(camera.state().distance, 2.5, 1.0e-6), "camera zoom has a near bound");
+    camera.zoom(-1000.0, 4.0);
+    check(near(camera.state().distance, 20.0, 1.0e-6), "camera zoom has a far bound");
+
+    camera.selectFocus(0, bodies, 5.0);
+    camera.update(5.35, bodies);
+    const auto halfway = camera.basis().target.x;
+    check(halfway > 0.0 && halfway < 1.0, "camera focus transition eases between targets");
+    camera.update(5.8, bodies);
+    check(near(camera.basis().target.x, 1.0, 1.0e-6), "camera focus transition completes");
+}
+
+void testTrailHistory() {
+    threebs::TrailHistory<4> trail;
+    for (int i = 0; i < 6; ++i)
+        trail.append({static_cast<double>(i), 0.0, 0.0}, static_cast<double>(i), 1);
+    check(trail.size() == 4 && near(trail[0].position.x, 2.0), "trail ring preserves newest samples");
+    trail.prune(6.0, 2.5);
+    check(trail.size() == 2 && near(trail[0].position.x, 4.0), "trail prunes samples by age");
+    trail.append({10.0, 0.0, 0.0}, 7.0, 2);
+    check(trail.size() == 1 && near(trail[0].position.x, 10.0), "trail revision clears old trajectory");
+}
+
+void testPresentationMigration() {
+    check(near(threebs::migrateV1TrailLength(0.82F), 29.6, 1.0e-5),
+          "schema-v1 trail length migrates to seconds");
+    check(near(threebs::migrateV1TrailLength(-1.0F), 5.0)
+              && near(threebs::migrateV1TrailLength(2.0F), 35.0),
+          "schema-v1 trail migration clamps malformed values");
+}
+
 } // namespace
 
 int main() {
@@ -197,6 +280,10 @@ int main() {
     testBlockSizeIndependentMidi();
     testNoteCleanup();
     testSnapshotQueue();
+    testCameraTargetAndHitTesting();
+    testCameraMotion();
+    testTrailHistory();
+    testPresentationMigration();
     if (failures == 0)
         std::cout << "All core tests passed\n";
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;

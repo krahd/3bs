@@ -4,6 +4,7 @@
 #include "plugin/PluginProcessor.h"
 
 #include <cstdlib>
+#include <cmath>
 #include <iostream>
 #include <vector>
 
@@ -74,6 +75,16 @@ int main() {
         noteOff = noteOff || metadata.getMessage().isNoteOff();
     check(noteOff, "bypass must emit active note-offs");
 
+    auto presentation = processor.presentationState();
+    presentation.camera.focusBody = 2;
+    presentation.camera.yaw = 1.125F;
+    presentation.camera.pitch = -0.42F;
+    presentation.camera.distance = 9.5F;
+    presentation.visual.trailSeconds = 30.0F;
+    presentation.visual.palette = threebs::PaletteId::Violet;
+    presentation.visualSeed = 20260620;
+    processor.setPresentationState(presentation);
+
     juce::MemoryBlock state;
     processor.getStateInformation(state);
     check(state.getSize() > 0, "processor state must serialize");
@@ -81,6 +92,15 @@ int main() {
     restored.setPlayConfigDetails(0, 2, 48000.0, 512);
     restored.prepareToPlay(48000.0, 512);
     restored.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+    const auto restoredPresentation = restored.presentationState();
+    check(restoredPresentation.camera.focusBody == 2, "camera focus must survive state recall");
+    check(std::abs(restoredPresentation.camera.yaw - 1.125F) < 1.0e-6F
+              && std::abs(restoredPresentation.camera.pitch + 0.42F) < 1.0e-6F
+              && std::abs(restoredPresentation.camera.distance - 9.5F) < 1.0e-6F,
+          "camera orbit and zoom must survive state recall");
+    check(restoredPresentation.visual.palette == threebs::PaletteId::Violet
+              && restoredPresentation.visualSeed == 20260620,
+          "planet appearance must survive state recall");
     juce::MemoryBlock roundTrip;
     restored.getStateInformation(roundTrip);
     check(roundTrip.getSize() > 0, "processor state must deserialize and serialize again");

@@ -21,7 +21,8 @@ public:
     void resized() override;
     bool keyPressed(const juce::KeyPress& key) override;
 
-    void setVisualSettings(const VisualSettings& settings);
+    void setPresentationState(const PresentationState& state);
+    PresentationState presentationState() const noexcept { return presentation_; }
     void setPresetNames(const juce::StringArray& names);
     void setStatus(const juce::String& status);
 
@@ -46,6 +47,7 @@ public:
     std::function<void()> onRandomize;
     std::function<void()> onReset;
     std::function<void()> onAdvanced;
+    std::function<void(const CameraState&)> onCameraChanged;
 
 private:
     class DeckLookAndFeel final : public juce::LookAndFeel_V4 {
@@ -85,7 +87,7 @@ private:
         juce::TextButton{"PRESETS"}, juce::TextButton{"SETTINGS"}};
     std::array<juce::Label, 10> knobLabels_;
     bool presentationMode_{};
-    VisualSettings visual_{};
+    PresentationState presentation_{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ArtworkPanel)
 };

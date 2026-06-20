@@ -71,13 +71,36 @@ TriggerMapping triggerMapping(const juce::String& value) {
     return TriggerMapping::Clock;
 }
 
+PaletteId palette(const juce::String& value) {
+    if (value == "glass" || value == "cold" || value == "pale" || value == "white")
+        return PaletteId::Glass;
+    if (value == "ember" || value == "blackSun" || value == "dust" || value == "impact"
+        || value == "iron" || value == "redshift")
+        return PaletteId::Ember;
+    if (value == "nocturne" || value == "archive" || value == "gravity" || value == "ink")
+        return PaletteId::Nocturne;
+    if (value == "cyan" || value == "blueGiant")
+        return PaletteId::Cyan;
+    if (value == "violet" || value == "crown" || value == "magenta")
+        return PaletteId::Violet;
+    return PaletteId::Eclipse;
+}
+
+int focusBody(const juce::String& value) {
+    if (value == "body0") return 0;
+    if (value == "body1") return 1;
+    if (value == "body2") return 2;
+    return -1;
+}
+
 } // namespace
 
 PresetCatalog::PresetCatalog() {
     const auto source = juce::String::fromUTF8(
         ThreeBSAssets::factorypresets_json, ThreeBSAssets::factorypresets_jsonSize);
     const auto root = juce::JSON::parse(source);
-    if (static_cast<int>(property(root, "schemaVersion")) != 1)
+    const auto schema = static_cast<int>(property(root, "schemaVersion"));
+    if (schema != 1 && schema != 2)
         return;
     auto* array = property(root, "presets").getArray();
     if (array == nullptr || array->size() != 24)
@@ -120,12 +143,22 @@ PresetCatalog::PresetCatalog() {
         }
 
         const auto visual = property(item, "visual");
-        preset.visual.trailLength = static_cast<float>(number(visual, "trailLength", 0.82));
-        preset.visual.trailWidth = static_cast<float>(number(visual, "trailWidth", 1.2));
-        preset.visual.extrusion = static_cast<float>(number(visual, "extrusion", 0.12));
-        preset.visual.bloom = static_cast<float>(number(visual, "bloom", 0.34));
-        preset.visual.starDensity = static_cast<float>(number(visual, "stars", 0.62));
-        preset.visual.autoOrbit = static_cast<float>(number(property(item, "camera"), "autoOrbit", 0.035));
+        auto& presentation = preset.presentation;
+        presentation.visual.trailSeconds = schema == 1
+            ? migrateV1TrailLength(static_cast<float>(number(visual, "trailLength", 0.82)))
+            : static_cast<float>(number(visual, "trailSeconds", 30.0));
+        presentation.visual.trailWidth = static_cast<float>(number(visual, "trailWidth", 1.2));
+        presentation.visual.extrusion = static_cast<float>(number(visual, "extrusion", 0.12));
+        presentation.visual.bloom = static_cast<float>(number(visual, "bloom", 0.34));
+        presentation.visual.starDensity = static_cast<float>(number(visual, "stars", 0.62));
+        presentation.visual.palette = palette(text(visual, "palette"));
+        const auto camera = property(item, "camera");
+        presentation.camera.focusBody = focusBody(text(camera, "focus"));
+        presentation.camera.distance = static_cast<float>(number(camera, "distance", 7.0));
+        presentation.camera.yaw = static_cast<float>(number(camera, "yaw", 0.0));
+        presentation.camera.pitch = static_cast<float>(number(camera, "pitch", -0.34));
+        presentation.camera.autoOrbit = static_cast<float>(number(camera, "autoOrbit", 0.035));
+        presentation.visualSeed = preset.seed;
         presets_.push_back(std::move(preset));
     }
     valid_ = presets_.size() == 24;

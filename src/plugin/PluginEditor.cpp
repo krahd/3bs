@@ -35,17 +35,19 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
     panel_.presetSelector().onChange = [this] { applySelectedPreset(); };
     panel_.onRandomize = [this] { processor_.requestRandomize(panel_.chaosSlider().getValue() / 100.0); };
     panel_.onReset = [this] { processor_.requestReset(); };
+    panel_.onCameraChanged = [this](const CameraState& camera) {
+        presentation_.camera = camera;
+        processor_.setPresentationState(presentation_);
+        processor_.updateHostDisplay(juce::AudioProcessorListener::ChangeDetails{}.withNonParameterStateChanged(true));
+    };
     panel_.onAdvanced = [this] {
         const auto target = panel_.getLocalArea(&panel_.advancedButton(), panel_.advancedButton().getLocalBounds());
         showAdvancedStateEditor(processor_.currentInitialState(), target, panel_,
             [this](const SimulationState& editedState) { processor_.requestExactState(editedState); });
     };
     panel_.midiOutputSelector().setVisible(false);
-    const auto initialPreset = static_cast<int>(state.getRawParameterValue("preset")->load());
-    if (presets_.valid() && initialPreset >= 0 && static_cast<std::size_t>(initialPreset) < presets_.size()) {
-        visual_ = presets_[static_cast<std::size_t>(initialPreset)].visual;
-        panel_.setVisualSettings(visual_);
-    }
+    presentation_ = processor_.presentationState();
+    panel_.setPresentationState(presentation_);
     startTimerHz(30);
 }
 
@@ -58,9 +60,10 @@ void ThreeBSEditor::resized() {
 }
 
 void ThreeBSEditor::timerCallback() {
-    visual_.trailLength = static_cast<float>(panel_.trailSlider().getValue() / 100.0);
-    visual_.bloom = static_cast<float>(panel_.bloomSlider().getValue() / 100.0);
-    panel_.setVisualSettings(visual_);
+    presentation_.visual.trailSeconds = static_cast<float>(panel_.trailSlider().getValue());
+    presentation_.visual.bloom = static_cast<float>(panel_.bloomSlider().getValue() / 100.0);
+    panel_.setPresentationState(presentation_);
+    processor_.setPresentationState(presentation_);
     if (processor_.escapePromptMask() != 0)
         panel_.setStatus("BODY ESCAPED / RESET OR NEW SYSTEM");
 }
@@ -70,8 +73,8 @@ void ThreeBSEditor::applySelectedPreset() {
     if (!presets_.valid() || index < 0 || static_cast<std::size_t>(index) >= presets_.size())
         return;
     const auto& preset = presets_[static_cast<std::size_t>(index)];
-    visual_ = preset.visual;
-    panel_.setVisualSettings(visual_);
+    presentation_ = preset.presentation;
+    panel_.setPresentationState(presentation_);
     processor_.requestPreset(preset, index);
 }
 

@@ -48,6 +48,8 @@ public:
     void requestReset();
     void requestExactState(const SimulationState& state);
     SimulationState currentInitialState() const noexcept { return storedInitial_.load(); }
+    void setPresentationState(const PresentationState& state) noexcept { storedPresentation_.store(state); }
+    PresentationState presentationState() const noexcept { return storedPresentation_.load(); }
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
@@ -67,6 +69,24 @@ private:
         void store(const SimulationState& state) noexcept;
         SimulationState load() const noexcept;
     } storedInitial_;
+
+    struct AtomicPresentationState {
+        std::atomic<float> trailSeconds{30.0F};
+        std::atomic<float> trailWidth{1.2F};
+        std::atomic<float> extrusion{0.12F};
+        std::atomic<float> bloom{0.34F};
+        std::atomic<float> starDensity{0.62F};
+        std::atomic<int> palette{static_cast<int>(PaletteId::Eclipse)};
+        std::atomic<int> quality{static_cast<int>(GraphicsQuality::High)};
+        std::atomic<float> yaw{};
+        std::atomic<float> pitch{-0.34F};
+        std::atomic<float> distance{7.0F};
+        std::atomic<float> autoOrbit{0.035F};
+        std::atomic<int> focusBody{-1};
+        std::atomic<std::uint64_t> visualSeed{0x334253ULL};
+        void store(const PresentationState& state) noexcept;
+        PresentationState load() const noexcept;
+    } storedPresentation_;
 
     struct ParameterRefs {
         std::atomic<float>* run{};
@@ -107,6 +127,8 @@ private:
     bool hostWasPlaying_{};
     bool haveHostPosition_{};
     std::uint64_t snapshotSequence_{};
+    std::uint64_t trajectoryRevision_{1};
+    std::array<std::uint32_t, bodyCount> lastRespawnCounts_{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ThreeBSProcessor)
 };

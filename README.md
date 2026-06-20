@@ -13,8 +13,8 @@ The project targets Apple Silicon Macs and will produce:
 
 ## Status
 
-The deterministic core, AU, VST3, standalone application, Metal presentation,
-24 factory presets, and automated test targets are implemented. The original
+The deterministic core, AU, VST3, standalone application, interactive HDR Metal
+presentation, 24 factory presets, and automated test targets are implemented. The original
 concept and policy templates remain in [`doc/`](doc/). See
 [`STATUS.md`](STATUS.md) for exact verification results and remaining host tests.
 
@@ -30,8 +30,9 @@ velocity, duration, and optional continuous-controller mappings. Host-synced
 operation follows musical beat time; standalone and free-run operation follow
 elapsed time.
 
-The visual identity is an eclipse-like gallery scene: procedural planets,
-atmospheres, distant light, restrained stars, and fading luminous trajectories.
+The visual identity is an eclipse-like gallery scene: seeded procedural planet
+surfaces, independently moving cloud layers, atmospheres, distant light, a
+catalogue-aware celestial sphere, HDR bloom, and fading luminous trajectories.
 Rendering is isolated from the real-time MIDI engine.
 
 ## Build Requirements
@@ -90,12 +91,26 @@ fullscreen.
 ## Controls And Presets
 
 The shared control deck exposes run/sync, speed, gravity, softening, chaos,
-density, trail, bloom, body masses, deterministic randomization, reset, and the
-24-scene factory catalog. `ADVANCED STATE` opens a nonmodal numerical editor
-for every mass and initial position/velocity vector. Host state stores schema version, parameters, seed,
-initial mass/position/velocity vectors, preset mapping configuration, and loop
-policy. Rendering consumes immutable snapshots and never runs on the MIDI
-processing thread.
+density, trail duration, bloom, body masses, deterministic randomization,
+reset, and the 24-scene factory catalog. Drag the scene to orbit around the
+active target, scroll to zoom, click a planet to follow it, and click the
+background to return to the mass-weighted barycenter. Manual input pauses
+cinematic auto-orbit for three seconds before it eases back in.
+
+`ADVANCED STATE` opens a nonmodal numerical editor for every mass and initial
+position/velocity vector. Schema-v2 host state stores parameters, simulation
+seed and vectors, mappings, loop policy, palette, camera target, orbit angle,
+and zoom. Rendering consumes revisioned immutable snapshots and never runs on
+the MIDI processing thread.
+
+The renderer embeds a small real bright-star fallback plus a deterministic
+faint field. To populate the pinned HYG v4.1 magnitude-6.5 catalogue, obtain
+`hygdata_v41.csv` from HYG commit
+`c7f7f883fe678cc7680169a50ccd7dcc49b060ce` and run:
+
+```bash
+python3 scripts/generate_star_catalog.py hygdata_v41.csv resources/stars/hyg-v41-mag65.csv
+```
 
 ## Licensing
 

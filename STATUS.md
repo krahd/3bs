@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-19 22-12 GMT-3
+Last updated: 2026-06-20 00-33 GMT-3
 
 ## Project purpose
 
@@ -11,8 +11,9 @@ standalone artwork driven by a normalized three-body gravitational simulation.
 
 The repository builds a deterministic core library, Logic AU MIDI effect,
 Ableton-oriented VST3 instrument, and standalone CoreMIDI application. It has a
-native Metal presentation layer, shared control deck, 24 schema-validated
-factory presets, host state serialization, automated tests, and macOS CI.
+native interactive HDR Metal presentation layer, shared control deck, 24
+schema-v2 factory presets, host state serialization, automated tests, and macOS
+CI.
 
 ## Active focus
 
@@ -101,7 +102,8 @@ repository.
 - `src/plugin/`: AU/VST3 processors, state, and shared editor adapter.
 - `src/standalone/`: CoreMIDI application.
 - `src/render/` and `src/ui/`: Metal scene, controls, and preset parsing.
-- `resources/presets/`: 24 factory artwork states using schema version 1.
+- `resources/presets/`: 24 factory artwork states using schema version 2.
+- `resources/metal/` and `resources/stars/`: embedded Metal shaders and star data.
 - `tests/`: deterministic, preset, Metal, and processor tests.
 - `ignore/`: deliberately ignored local material.
 
@@ -115,6 +117,13 @@ repository.
 - Added a nonmodal advanced editor for all masses and initial position/velocity
   vectors, shared by plugin and standalone.
 - Added tracked VS Code build and run tasks for the standalone application.
+- Added mouse orbit/zoom, click-to-focus body tracking, smooth barycenter return,
+  delayed auto-orbit resumption, and full camera state recall.
+- Replaced point planets and line trails with procedural icospheres, moving
+  clouds, atmospheres, 30-second tapered ribbons, deterministic star layers,
+  HDR bloom, dithering, and tone mapping.
+- Added trajectory revisions so reset, seek, loop restart, preset changes, and
+  respawns clear disconnected visual history.
 
 ## Tests and verification status
 
@@ -122,8 +131,11 @@ repository.
 - `cmake --build --preset dev -j 8`: passed.
 - `ctest --preset dev --output-on-failure`: 2/2 passed.
 - Full plugin configure/build: passed for arm64 AU, VST3, and standalone.
-- Full CTest: core, preset, and processor tests passed; Metal smoke test skipped
-  because the sandbox returned no Metal device.
+- Full CTest: core, schema-v2 preset, and processor/state tests passed; Metal
+  smoke test skipped because the sandbox returned no Metal device.
+- Standalone was launched externally on Apple Silicon; runtime Metal shader
+  compilation passed and the procedural planets, atmosphere, trails, deep-sky
+  background, bloom, and tone mapping rendered successfully.
 - `codesign --verify --deep --strict`: passed for all three ad-hoc-signed bundles.
 - Bundle metadata identifies AU type `aumi`, subtype `Tbs1`, manufacturer `Krhd`.
 - GitHub Actions run `27852219185`: native core tests and the complete arm64
@@ -138,15 +150,17 @@ repository.
 - GitHub repository `krahd/3bs` exists and was verified private on `main`.
 - AU MIDI effects and VST3 MIDI generation still require real host validation.
 - Apple signing and notarization are blocked until Developer credentials exist.
-- This sandbox exposes no Metal device, so shader execution and visual quality
-  need validation in the launched app.
-- User preset file import/export, detailed per-voice mapping UI, and full
-  graphics/camera controls are not yet exposed.
+- The pinned full HYG v4.1 payload could not be downloaded in this environment;
+  the generator, provenance, optional embedded target, real bright-star fallback,
+  and deterministic faint field are present.
+- User preset file import/export, detailed per-voice mapping UI, and advanced
+  graphics controls are not yet exposed.
 - Allocation/lock instrumentation and baseline 60 fps profiling have not run.
 
 ## Pending tasks
 
-- Launch and visually inspect the standalone Metal scene on Apple Silicon.
+- Populate and verify the pinned compact HYG catalogue.
+- Complete hands-on mouse/trackpad interaction and 60 fps profiling.
 - Install and validate AU with `auval`, then test it in Logic.
 - Run plugin validation and test VST3 MIDI routing in Ableton.
 - Complete advanced editing, voice, camera, and user-preset controls.
@@ -154,7 +168,7 @@ repository.
 
 ## Next steps
 
-1. Perform external Metal and host validation.
+1. Complete interaction/performance and host validation.
 2. Close the remaining control-surface gaps and rerun the full suite.
 3. Audit licences/secrets, tag `v0.1.0-alpha.1`, and make the repository public.
 
@@ -180,4 +194,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-19 22-12 GMT-3
+Last updated: 2026-06-20 00-33 GMT-3

@@ -17,6 +17,7 @@ struct RenderSnapshot {
     std::array<BodyState, bodyCount> bodies{};
     std::array<bool, bodyCount> escaped{};
     std::uint64_t sequence{};
+    std::uint64_t trajectoryRevision{};
     double interpolationAlpha{};
 };
 

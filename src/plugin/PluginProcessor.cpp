@@ -19,6 +19,31 @@ float parameterValue(const juce::AudioProcessorValueTreeState& state, const juce
     return 0.0F;
 }
 
+float stateParameterValue(const juce::ValueTree& state, const juce::String& id, float fallback) {
+    if (state.hasProperty(id))
+        return static_cast<float>(state.getProperty(id));
+    for (int index = 0; index < state.getNumChildren(); ++index) {
+        const auto child = state.getChild(index);
+        if (child.getProperty("id").toString() == id)
+            return static_cast<float>(child.getProperty("value", fallback));
+    }
+    return fallback;
+}
+
+void setStateParameterValue(juce::ValueTree& state, const juce::String& id, float value) {
+    if (state.hasProperty(id)) {
+        state.setProperty(id, value, nullptr);
+        return;
+    }
+    for (int index = 0; index < state.getNumChildren(); ++index) {
+        auto child = state.getChild(index);
+        if (child.getProperty("id").toString() == id) {
+            child.setProperty("value", value, nullptr);
+            return;
+        }
+    }
+}
+
 } // namespace
 
 void ThreeBSProcessor::AtomicState::store(const SimulationState& state) noexcept {
@@ -47,6 +72,40 @@ SimulationState ThreeBSProcessor::AtomicState::load() const noexcept {
     return state;
 }
 
+void ThreeBSProcessor::AtomicPresentationState::store(const PresentationState& state) noexcept {
+    trailSeconds.store(state.visual.trailSeconds, std::memory_order_relaxed);
+    trailWidth.store(state.visual.trailWidth, std::memory_order_relaxed);
+    extrusion.store(state.visual.extrusion, std::memory_order_relaxed);
+    bloom.store(state.visual.bloom, std::memory_order_relaxed);
+    starDensity.store(state.visual.starDensity, std::memory_order_relaxed);
+    palette.store(static_cast<int>(state.visual.palette), std::memory_order_relaxed);
+    quality.store(static_cast<int>(state.visual.quality), std::memory_order_relaxed);
+    yaw.store(state.camera.yaw, std::memory_order_relaxed);
+    pitch.store(state.camera.pitch, std::memory_order_relaxed);
+    distance.store(state.camera.distance, std::memory_order_relaxed);
+    autoOrbit.store(state.camera.autoOrbit, std::memory_order_relaxed);
+    focusBody.store(state.camera.focusBody, std::memory_order_relaxed);
+    visualSeed.store(state.visualSeed, std::memory_order_relaxed);
+}
+
+PresentationState ThreeBSProcessor::AtomicPresentationState::load() const noexcept {
+    PresentationState state;
+    state.visual.trailSeconds = trailSeconds.load(std::memory_order_relaxed);
+    state.visual.trailWidth = trailWidth.load(std::memory_order_relaxed);
+    state.visual.extrusion = extrusion.load(std::memory_order_relaxed);
+    state.visual.bloom = bloom.load(std::memory_order_relaxed);
+    state.visual.starDensity = starDensity.load(std::memory_order_relaxed);
+    state.visual.palette = static_cast<PaletteId>(palette.load(std::memory_order_relaxed));
+    state.visual.quality = static_cast<GraphicsQuality>(quality.load(std::memory_order_relaxed));
+    state.camera.yaw = yaw.load(std::memory_order_relaxed);
+    state.camera.pitch = pitch.load(std::memory_order_relaxed);
+    state.camera.distance = distance.load(std::memory_order_relaxed);
+    state.camera.autoOrbit = autoOrbit.load(std::memory_order_relaxed);
+    state.camera.focusBody = focusBody.load(std::memory_order_relaxed);
+    state.visualSeed = visualSeed.load(std::memory_order_relaxed);
+    return state;
+}
+
 juce::AudioProcessorValueTreeState::ParameterLayout ThreeBSProcessor::createParameterLayout() {
     using Parameter = std::unique_ptr<juce::RangedAudioParameter>;
     std::vector<Parameter> values;
@@ -60,7 +119,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout ThreeBSProcessor::createPara
         juce::NormalisableRange<float>(0.001F, 0.25F, 0.001F, 0.6F), 0.04F));
     values.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"chaos", 1}, "Chaos", 0.0F, 100.0F, 20.0F));
     values.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"density", 1}, "Density", 0.0F, 100.0F, 80.0F));
-    values.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"trail", 1}, "Trail", 5.0F, 100.0F, 82.0F));
+    values.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"trail", 1}, "Trail Seconds", 5.0F, 60.0F, 30.0F));
     values.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"bloom", 1}, "Bloom", 0.0F, 100.0F, 34.0F));
     for (int i = 0; i < 3; ++i)
         values.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -106,6 +165,9 @@ ThreeBSProcessor::ThreeBSProcessor()
         engine_.reset(initial);
         loopPolicy_.store(static_cast<int>(preset.loopPolicy), std::memory_order_relaxed);
         storedInitial_.store(initial);
+        storedPresentation_.store(preset.presentation);
+        setParameterValue("trail", preset.presentation.visual.trailSeconds);
+        setParameterValue("bloom", preset.presentation.visual.bloom * 100.0F);
         setParameterValue("gravity", static_cast<float>(preset.simulation.gravitationalConstant));
         setParameterValue("softening", static_cast<float>(preset.simulation.softening));
         setParameterValue("speed", static_cast<float>(preset.simulation.speed));
@@ -113,6 +175,7 @@ ThreeBSProcessor::ThreeBSProcessor()
             setParameterValue("mass" + juce::String(body + 1), static_cast<float>(initial.bodies[body].mass));
     } else {
         storedInitial_.store(engine_.simulation().initialState());
+        storedPresentation_.store(PresentationState{});
     }
 }
 
@@ -148,6 +211,7 @@ void ThreeBSProcessor::consumeCommands(MusicEngine::EventBuffer& eventBuffer) no
         freeBeat_ = 0.0;
         hostWasPlaying_ = false;
         haveHostPosition_ = false;
+        ++trajectoryRevision_;
     }
 }
 
@@ -241,6 +305,10 @@ void ThreeBSProcessor::processBlock(juce::AudioBuffer<float>& audio, juce::MidiB
     context.loopWrapped = sync && loopWrapped;
     context.loopPolicy = static_cast<LoopPolicy>(loopPolicy_.load(std::memory_order_relaxed));
 
+    if (context.transportStarted || context.seeked
+        || (context.loopWrapped && context.loopPolicy == LoopPolicy::Restart))
+        ++trajectoryRevision_;
+
     engine_.process(context, generated);
     addEvents(generated, midi);
     freeBeat_ += beatsPerSample * static_cast<double>(sampleCount);
@@ -248,6 +316,11 @@ void ThreeBSProcessor::processBlock(juce::AudioBuffer<float>& audio, juce::MidiB
     lastPpq_ = ppq;
     lastBeatsPerSample_ = beatsPerSample;
     lastBlockSize_ = static_cast<int>(sampleCount);
+    const auto& respawns = engine_.simulation().state().respawnCount;
+    if (respawns != lastRespawnCounts_) {
+        lastRespawnCounts_ = respawns;
+        ++trajectoryRevision_;
+    }
     publishSnapshot();
 }
 
@@ -265,6 +338,7 @@ void ThreeBSProcessor::publishSnapshot() noexcept {
     snapshot.bodies = engine_.simulation().state().bodies;
     snapshot.escaped = engine_.simulation().state().escaped;
     snapshot.sequence = ++snapshotSequence_;
+    snapshot.trajectoryRevision = trajectoryRevision_;
     snapshot.interpolationAlpha = engine_.simulation().interpolationAlpha();
     std::uint32_t escapeMask{};
     if (engineConfig_.simulation.escapePolicy == EscapePolicy::Prompt) {
@@ -298,10 +372,13 @@ void ThreeBSProcessor::requestPreset(const ArtworkPreset& preset, int presetInde
     command.config.voices = preset.voices;
     command.loopPolicy = preset.loopPolicy;
     commands_.push(command);
+    storedPresentation_.store(preset.presentation);
     setParameterValue("preset", static_cast<float>(presetIndex));
     setParameterValue("gravity", static_cast<float>(preset.simulation.gravitationalConstant));
     setParameterValue("softening", static_cast<float>(preset.simulation.softening));
     setParameterValue("speed", static_cast<float>(preset.simulation.speed));
+    setParameterValue("trail", preset.presentation.visual.trailSeconds);
+    setParameterValue("bloom", preset.presentation.visual.bloom * 100.0F);
     float averageProbability{};
     for (std::size_t i = 0; i < bodyCount; ++i) {
         setParameterValue("mass" + juce::String(i + 1), static_cast<float>(command.state.bodies[i].mass));
@@ -315,6 +392,9 @@ void ThreeBSProcessor::requestRandomize(double chaos) {
     command.type = CommandType::Replace;
     const auto seed = nextSeed_.fetch_add(1, std::memory_order_relaxed);
     command.state = makeInitialState(InitialSystem::ControlledChaos, seed, chaos);
+    auto presentation = storedPresentation_.load();
+    presentation.visualSeed = seed;
+    storedPresentation_.store(presentation);
     PresetCatalog catalog;
     const auto selected = static_cast<int>(parameterValue(parameters_, "preset"));
     if (catalog.valid() && selected >= 0 && static_cast<std::size_t>(selected) < catalog.size()) {
@@ -345,6 +425,9 @@ void ThreeBSProcessor::requestExactState(const SimulationState& state) {
         command.loopPolicy = catalog[static_cast<std::size_t>(selected)].loopPolicy;
     }
     commands_.push(command);
+    auto presentation = storedPresentation_.load();
+    presentation.visualSeed = state.seed;
+    storedPresentation_.store(presentation);
     for (std::size_t body = 0; body < bodyCount; ++body)
         setParameterValue("mass" + juce::String(body + 1), static_cast<float>(state.bodies[body].mass));
 }
@@ -352,6 +435,20 @@ void ThreeBSProcessor::requestExactState(const SimulationState& state) {
 void ThreeBSProcessor::getStateInformation(juce::MemoryBlock& destination) {
     auto state = parameters_.copyState();
     state.setProperty("schemaVersion", static_cast<int>(stateSchemaVersion), nullptr);
+    const auto presentation = storedPresentation_.load();
+    state.setProperty("visualTrailSeconds", presentation.visual.trailSeconds, nullptr);
+    state.setProperty("visualTrailWidth", presentation.visual.trailWidth, nullptr);
+    state.setProperty("visualExtrusion", presentation.visual.extrusion, nullptr);
+    state.setProperty("visualBloom", presentation.visual.bloom, nullptr);
+    state.setProperty("visualStarDensity", presentation.visual.starDensity, nullptr);
+    state.setProperty("visualPalette", static_cast<int>(presentation.visual.palette), nullptr);
+    state.setProperty("visualQuality", static_cast<int>(presentation.visual.quality), nullptr);
+    state.setProperty("cameraYaw", presentation.camera.yaw, nullptr);
+    state.setProperty("cameraPitch", presentation.camera.pitch, nullptr);
+    state.setProperty("cameraDistance", presentation.camera.distance, nullptr);
+    state.setProperty("cameraAutoOrbit", presentation.camera.autoOrbit, nullptr);
+    state.setProperty("cameraFocusBody", presentation.camera.focusBody, nullptr);
+    state.setProperty("visualSeed", juce::String(presentation.visualSeed), nullptr);
     const auto initial = storedInitial_.load();
     state.setProperty("seed", juce::String(initial.seed), nullptr);
     state.setProperty("loopPolicy", loopPolicy_.load(std::memory_order_relaxed), nullptr);
@@ -376,6 +473,12 @@ void ThreeBSProcessor::setStateInformation(const void* data, int size) {
     auto state = juce::ValueTree::fromXml(*xml);
     if (!state.isValid())
         return;
+    const auto schema = static_cast<int>(state.getProperty("schemaVersion", 1));
+    if (schema < 2) {
+        const auto oldTrail = stateParameterValue(state, "trail", 82.0F);
+        const auto normalized = oldTrail <= 1.0F ? oldTrail : oldTrail / 100.0F;
+        setStateParameterValue(state, "trail", migrateV1TrailLength(normalized));
+    }
     parameters_.replaceState(state);
     auto initial = storedInitial_.load();
     initial.seed = static_cast<std::uint64_t>(
@@ -404,6 +507,35 @@ void ThreeBSProcessor::setStateInformation(const void* data, int size) {
     }
     command.loopPolicy = static_cast<LoopPolicy>(static_cast<int>(
         state.getProperty("loopPolicy", static_cast<int>(command.loopPolicy))));
+    auto presentation = catalog.valid() && selected >= 0
+            && static_cast<std::size_t>(selected) < catalog.size()
+        ? catalog[static_cast<std::size_t>(selected)].presentation
+        : PresentationState{};
+    presentation.visual.trailSeconds = static_cast<float>(
+        state.getProperty("visualTrailSeconds", parameterValue(parameters_, "trail")));
+    presentation.visual.trailWidth = static_cast<float>(
+        state.getProperty("visualTrailWidth", presentation.visual.trailWidth));
+    presentation.visual.extrusion = static_cast<float>(
+        state.getProperty("visualExtrusion", presentation.visual.extrusion));
+    presentation.visual.bloom = static_cast<float>(
+        state.getProperty("visualBloom", parameterValue(parameters_, "bloom") / 100.0F));
+    presentation.visual.starDensity = static_cast<float>(
+        state.getProperty("visualStarDensity", presentation.visual.starDensity));
+    presentation.visual.palette = static_cast<PaletteId>(static_cast<int>(
+        state.getProperty("visualPalette", static_cast<int>(presentation.visual.palette))));
+    presentation.visual.quality = static_cast<GraphicsQuality>(static_cast<int>(
+        state.getProperty("visualQuality", static_cast<int>(presentation.visual.quality))));
+    presentation.camera.yaw = static_cast<float>(state.getProperty("cameraYaw", presentation.camera.yaw));
+    presentation.camera.pitch = static_cast<float>(state.getProperty("cameraPitch", presentation.camera.pitch));
+    presentation.camera.distance = static_cast<float>(
+        state.getProperty("cameraDistance", presentation.camera.distance));
+    presentation.camera.autoOrbit = static_cast<float>(
+        state.getProperty("cameraAutoOrbit", presentation.camera.autoOrbit));
+    presentation.camera.focusBody = static_cast<int>(
+        state.getProperty("cameraFocusBody", presentation.camera.focusBody));
+    presentation.visualSeed = static_cast<std::uint64_t>(state.getProperty(
+        "visualSeed", juce::String(initial.seed)).toString().getLargeIntValue());
+    storedPresentation_.store(presentation);
     commands_.push(command);
 }
 

@@ -26,7 +26,7 @@ private:
     ThreeBSProcessor& processor_;
     ArtworkPanel panel_;
     PresetCatalog presets_;
-    VisualSettings visual_{};
+    PresentationState presentation_{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> runAttachment_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncAttachment_;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>, 10> sliderAttachments_;
