@@ -84,6 +84,7 @@ int main() {
     presentation.visual.palette = threebs::PaletteId::Violet;
     presentation.visualSeed = 20260620;
     processor.setPresentationState(presentation);
+    processor.requestPlaneTilts({14.0, -18.0, 9.5});
 
     juce::MemoryBlock state;
     processor.getStateInformation(state);
@@ -101,6 +102,11 @@ int main() {
     check(restoredPresentation.visual.palette == threebs::PaletteId::Violet
               && restoredPresentation.visualSeed == 20260620,
           "planet appearance must survive state recall");
+    const auto restoredTilts = restored.initialPlaneTilts();
+    check(std::abs(restoredTilts[0] - 14.0) < 1.0e-6
+              && std::abs(restoredTilts[1] + 18.0) < 1.0e-6
+              && std::abs(restoredTilts[2] - 9.5) < 1.0e-6,
+          "initial plane tilt controls must survive state recall");
     juce::MemoryBlock roundTrip;
     restored.getStateInformation(roundTrip);
     check(roundTrip.getSize() > 0, "processor state must deserialize and serialize again");

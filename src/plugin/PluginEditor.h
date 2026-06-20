@@ -27,6 +27,7 @@ private:
     ArtworkPanel panel_;
     PresetCatalog presets_;
     PresentationState presentation_{};
+    std::array<double, bodyCount> lastPlaneTilts_{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> runAttachment_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncAttachment_;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>, 10> sliderAttachments_;

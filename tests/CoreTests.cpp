@@ -76,6 +76,35 @@ void testConstrainedSystems() {
     }
 }
 
+void testInitialPlaneTilts() {
+    const auto state = threebs::makeInitialState(threebs::InitialSystem::FigureEight, 123, 0.0);
+    double zExtent{};
+    double totalMass{};
+    threebs::Vec3 center{};
+    threebs::Vec3 velocity{};
+    for (const auto& body : state.bodies) {
+        zExtent += std::abs(body.position.z) + std::abs(body.velocity.z);
+        totalMass += body.mass;
+        center += body.position * body.mass;
+        velocity += body.velocity * body.mass;
+    }
+    check(zExtent > 0.05, "curated initial systems are not visually coplanar");
+    check(threebs::length(center / totalMass) < 1.0e-12
+              && threebs::length(velocity / totalMass) < 1.0e-12,
+          "initial plane tilts preserve center-of-mass frame");
+
+    const auto extraTilt = threebs::applyInitialPlaneTilts(state, {20.0, -25.0, 35.0});
+    for (const auto& body : extraTilt.bodies)
+        check(threebs::isFinite(body.position) && threebs::isFinite(body.velocity),
+              "configurable plane tilts preserve finite vectors");
+    const auto normalA = threebs::normalized(threebs::cross(extraTilt.bodies[0].position,
+                                                           extraTilt.bodies[0].velocity));
+    const auto normalB = threebs::normalized(threebs::cross(extraTilt.bodies[1].position,
+                                                           extraTilt.bodies[1].velocity));
+    check(std::abs(threebs::dot(normalA, normalB)) < 0.995,
+          "configurable tilts produce distinct orbital planes");
+}
+
 void testSingleBodyRespawn() {
     auto initial = threebs::makeInitialState(threebs::InitialSystem::Stable, 99, 0.0);
     const auto unchangedOne = initial.bodies[1];
@@ -275,6 +304,7 @@ int main() {
     testDeterministicSimulation();
     testEnergyAndSoftening();
     testConstrainedSystems();
+    testInitialPlaneTilts();
     testSingleBodyRespawn();
     testScales();
     testBlockSizeIndependentMidi();

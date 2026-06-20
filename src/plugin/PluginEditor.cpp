@@ -5,6 +5,8 @@
 
 #include "ui/AdvancedStateEditor.h"
 
+#include <cmath>
+
 namespace threebs {
 
 ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
@@ -43,11 +45,17 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
     panel_.onAdvanced = [this] {
         const auto target = panel_.getLocalArea(&panel_.advancedButton(), panel_.advancedButton().getLocalBounds());
         showAdvancedStateEditor(processor_.currentInitialState(), target, panel_,
-            [this](const SimulationState& editedState) { processor_.requestExactState(editedState); });
+            [this](const SimulationState& editedState) {
+                processor_.requestExactState(editedState);
+                lastPlaneTilts_.fill(0.0);
+                panel_.setPlaneTilts(lastPlaneTilts_);
+            });
     };
-    panel_.midiOutputSelector().setVisible(false);
+    panel_.setMidiOutputAvailable(false);
     presentation_ = processor_.presentationState();
     panel_.setPresentationState(presentation_);
+    lastPlaneTilts_ = processor_.initialPlaneTilts();
+    panel_.setPlaneTilts(lastPlaneTilts_);
     startTimerHz(30);
 }
 
@@ -64,6 +72,15 @@ void ThreeBSEditor::timerCallback() {
     presentation_.visual.bloom = static_cast<float>(panel_.bloomSlider().getValue() / 100.0);
     panel_.setPresentationState(presentation_);
     processor_.setPresentationState(presentation_);
+    const auto tilts = panel_.planeTilts();
+    bool tiltChanged{};
+    for (std::size_t body = 0; body < bodyCount; ++body)
+        tiltChanged = tiltChanged || std::abs(tilts[body] - lastPlaneTilts_[body]) > 0.05;
+    if (tiltChanged) {
+        lastPlaneTilts_ = tilts;
+        processor_.requestPlaneTilts(lastPlaneTilts_);
+        processor_.updateHostDisplay(juce::AudioProcessorListener::ChangeDetails{}.withNonParameterStateChanged(true));
+    }
     if (processor_.escapePromptMask() != 0)
         panel_.setStatus("BODY ESCAPED / RESET OR NEW SYSTEM");
 }
@@ -75,6 +92,8 @@ void ThreeBSEditor::applySelectedPreset() {
     const auto& preset = presets_[static_cast<std::size_t>(index)];
     presentation_ = preset.presentation;
     panel_.setPresentationState(presentation_);
+    lastPlaneTilts_.fill(0.0);
+    panel_.setPlaneTilts(lastPlaneTilts_);
     processor_.requestPreset(preset, index);
 }
 

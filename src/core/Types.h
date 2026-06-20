@@ -12,7 +12,7 @@
 namespace threebs {
 
 inline constexpr std::size_t bodyCount = 3;
-inline constexpr std::uint32_t stateSchemaVersion = 2;
+inline constexpr std::uint32_t stateSchemaVersion = 3;
 
 enum class InitialSystem : std::uint8_t {
     FigureEight,

@@ -612,7 +612,7 @@ std::vector<StarInstance> makeStars() {
                 auto& vertex = _trailStaging[trailVertexCount++];
                 vertex.previousSide = threebs::vector(previous, side);
                 vertex.currentAge = threebs::vector(current, age);
-                vertex.nextWidth = threebs::vector(next, _presentation.visual.trailWidth);
+                vertex.nextWidth = threebs::vector(next, std::min(_presentation.visual.trailWidth, 0.95F));
                 vertex.colour = threebs::colour(trailColour, 0.72F);
             }
         }

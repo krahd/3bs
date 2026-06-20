@@ -31,8 +31,8 @@ operation follows musical beat time; standalone and free-run operation follow
 elapsed time.
 
 The visual identity is an eclipse-like gallery scene: seeded procedural planet
-surfaces, independently moving cloud layers, atmospheres, distant light, a
-catalogue-aware celestial sphere, HDR bloom, and fading luminous trajectories.
+surfaces, subtle cloud layers, atmospheres, distant light, a catalogue-aware
+celestial sphere, restrained HDR bloom, and fading luminous trajectories.
 Rendering is isolated from the real-time MIDI engine.
 
 ## Build Requirements
@@ -90,18 +90,20 @@ fullscreen.
 
 ## Controls And Presets
 
-The shared control deck exposes run/sync, speed, gravity, softening, chaos,
-density, trail duration, bloom, body masses, deterministic randomization,
-reset, and the 24-scene factory catalog. Drag the scene to orbit around the
-active target, scroll to zoom, click a planet to follow it, and click the
-background to return to the mass-weighted barycenter. Manual input pauses
-cinematic auto-orbit for three seconds before it eases back in.
+The shared control deck is split into System, Voices, Space, Presets, and
+Settings pages. It exposes run/sync, speed, gravity, softening, chaos, density,
+trail duration, bloom, body masses, non-automatable initial orbital-plane tilt
+macros, deterministic randomization, reset, and the 24-scene factory catalog.
+Drag the scene to orbit around the active target, scroll to zoom, click a
+planet to follow it, and click the background to return to the mass-weighted
+barycenter. Manual input pauses cinematic auto-orbit for three seconds before
+it eases back in.
 
 `ADVANCED STATE` opens a nonmodal numerical editor for every mass and initial
-position/velocity vector. Schema-v2 host state stores parameters, simulation
-seed and vectors, mappings, loop policy, palette, camera target, orbit angle,
-and zoom. Rendering consumes revisioned immutable snapshots and never runs on
-the MIDI processing thread.
+position/velocity vector. Schema-v3 host state stores parameters, simulation
+seed and vectors, non-automatable plane-tilt macro state, mappings, loop policy,
+palette, camera target, orbit angle, and zoom. Rendering consumes revisioned
+immutable snapshots and never runs on the MIDI processing thread.
 
 The renderer embeds a small real bright-star fallback plus a deterministic
 faint field. To populate the pinned HYG v4.1 magnitude-6.5 catalogue, obtain

@@ -10,6 +10,8 @@
 namespace threebs {
 
 SimulationState makeInitialState(InitialSystem system, std::uint64_t seed, double chaos = 0.35) noexcept;
+SimulationState applyInitialPlaneTilts(SimulationState state,
+                                       const std::array<double, bodyCount>& tiltDegrees) noexcept;
 
 class ThreeBodySimulation {
 public:

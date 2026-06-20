@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-20 00-33 GMT-3
+Last updated: 2026-06-20 01-15 GMT-3
 
 ## Project purpose
 
@@ -12,8 +12,8 @@ standalone artwork driven by a normalized three-body gravitational simulation.
 The repository builds a deterministic core library, Logic AU MIDI effect,
 Ableton-oriented VST3 instrument, and standalone CoreMIDI application. It has a
 native interactive HDR Metal presentation layer, shared control deck, 24
-schema-v2 factory presets, host state serialization, automated tests, and macOS
-CI.
+schema-v2 factory presets, schema-v3 host state serialization, automated tests,
+and macOS CI.
 
 ## Active focus
 
@@ -124,18 +124,28 @@ repository.
   HDR bloom, dithering, and tone mapping.
 - Added trajectory revisions so reset, seek, loop restart, preset changes, and
   respawns clear disconnected visual history.
+- Added non-coplanar curated initial systems, non-automatable Space-page
+  initial orbital-plane tilt macros, and schema-v3 host recall for exact/base
+  vectors plus tilt values.
+- Wired the System, Voices, Space, Presets, and Settings deck tabs to switch
+  visible controls, with Space exposing trail, bloom, and plane-tilt controls.
+- Reduced catalogue-star size, background dust peaks, trail additive energy,
+  and cloud-shell opacity so visual effects do not read as extra planets.
 
 ## Tests and verification status
 
 - `cmake --preset dev`: passed.
-- `cmake --build --preset dev -j 8`: passed.
+- `cmake --build --preset dev -j4`: passed.
 - `ctest --preset dev --output-on-failure`: 2/2 passed.
-- Full plugin configure/build: passed for arm64 AU, VST3, and standalone.
-- Full CTest: core, schema-v2 preset, and processor/state tests passed; Metal
-  smoke test skipped because the sandbox returned no Metal device.
+- `cmake --build --preset plugin-debug -j4`: passed for arm64 AU, VST3, and
+  standalone.
+- `ctest --preset plugin-debug --output-on-failure`: core, schema-v2 preset, and
+  processor/schema-v3 state tests passed; Metal smoke test skipped because the
+  sandbox returned no Metal device.
 - Standalone was launched externally on Apple Silicon; runtime Metal shader
-  compilation passed and the procedural planets, atmosphere, trails, deep-sky
-  background, bloom, and tone mapping rendered successfully.
+  compilation passed. The tabbed deck was manually verified by switching to the
+  Presets page. The final cloud/trail attenuation build was compiled into all
+  targets but still needs a clean foreground visual recapture.
 - `codesign --verify --deep --strict`: passed for all three ad-hoc-signed bundles.
 - Bundle metadata identifies AU type `aumi`, subtype `Tbs1`, manufacturer `Krhd`.
 - GitHub Actions run `27852219185`: native core tests and the complete arm64
@@ -155,12 +165,15 @@ repository.
   and deterministic faint field are present.
 - User preset file import/export, detailed per-voice mapping UI, and advanced
   graphics controls are not yet exposed.
+- The final renderer attenuation pass needs one clean foreground screenshot or
+  hands-on visual check; desktop focus prevented a final capture in this run.
 - Allocation/lock instrumentation and baseline 60 fps profiling have not run.
 
 ## Pending tasks
 
 - Populate and verify the pinned compact HYG catalogue.
-- Complete hands-on mouse/trackpad interaction and 60 fps profiling.
+- Complete hands-on mouse/trackpad interaction, final foreground renderer
+  inspection, and 60 fps profiling.
 - Install and validate AU with `auval`, then test it in Logic.
 - Run plugin validation and test VST3 MIDI routing in Ableton.
 - Complete advanced editing, voice, camera, and user-preset controls.
@@ -194,4 +207,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-20 00-33 GMT-3
+Last updated: 2026-06-20 01-15 GMT-3

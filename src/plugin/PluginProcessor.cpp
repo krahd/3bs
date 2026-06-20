@@ -72,6 +72,18 @@ SimulationState ThreeBSProcessor::AtomicState::load() const noexcept {
     return state;
 }
 
+void ThreeBSProcessor::AtomicPlaneTilts::store(const std::array<double, bodyCount>& values) noexcept {
+    for (std::size_t body = 0; body < bodyCount; ++body)
+        degrees[body].store(std::clamp(values[body], -75.0, 75.0), std::memory_order_relaxed);
+}
+
+std::array<double, bodyCount> ThreeBSProcessor::AtomicPlaneTilts::load() const noexcept {
+    std::array<double, bodyCount> values{};
+    for (std::size_t body = 0; body < bodyCount; ++body)
+        values[body] = degrees[body].load(std::memory_order_relaxed);
+    return values;
+}
+
 void ThreeBSProcessor::AtomicPresentationState::store(const PresentationState& state) noexcept {
     trailSeconds.store(state.visual.trailSeconds, std::memory_order_relaxed);
     trailWidth.store(state.visual.trailWidth, std::memory_order_relaxed);
@@ -164,7 +176,9 @@ ThreeBSProcessor::ThreeBSProcessor()
         engine_.setConfig(engineConfig_);
         engine_.reset(initial);
         loopPolicy_.store(static_cast<int>(preset.loopPolicy), std::memory_order_relaxed);
+        storedBaseInitial_.store(initial);
         storedInitial_.store(initial);
+        storedPlaneTilts_.store({});
         storedPresentation_.store(preset.presentation);
         setParameterValue("trail", preset.presentation.visual.trailSeconds);
         setParameterValue("bloom", preset.presentation.visual.bloom * 100.0F);
@@ -175,6 +189,8 @@ ThreeBSProcessor::ThreeBSProcessor()
             setParameterValue("mass" + juce::String(body + 1), static_cast<float>(initial.bodies[body].mass));
     } else {
         storedInitial_.store(engine_.simulation().initialState());
+        storedBaseInitial_.store(engine_.simulation().initialState());
+        storedPlaneTilts_.store({});
         storedPresentation_.store(PresentationState{});
     }
 }
@@ -372,6 +388,8 @@ void ThreeBSProcessor::requestPreset(const ArtworkPreset& preset, int presetInde
     command.config.voices = preset.voices;
     command.loopPolicy = preset.loopPolicy;
     commands_.push(command);
+    storedBaseInitial_.store(command.state);
+    storedPlaneTilts_.store({});
     storedPresentation_.store(preset.presentation);
     setParameterValue("preset", static_cast<float>(presetIndex));
     setParameterValue("gravity", static_cast<float>(preset.simulation.gravitationalConstant));
@@ -391,7 +409,9 @@ void ThreeBSProcessor::requestRandomize(double chaos) {
     EngineCommand command;
     command.type = CommandType::Replace;
     const auto seed = nextSeed_.fetch_add(1, std::memory_order_relaxed);
-    command.state = makeInitialState(InitialSystem::ControlledChaos, seed, chaos);
+    auto base = makeInitialState(InitialSystem::ControlledChaos, seed, chaos);
+    command.state = applyInitialPlaneTilts(base, storedPlaneTilts_.load());
+    storedBaseInitial_.store(base);
     auto presentation = storedPresentation_.load();
     presentation.visualSeed = seed;
     storedPresentation_.store(presentation);
@@ -417,6 +437,8 @@ void ThreeBSProcessor::requestExactState(const SimulationState& state) {
     EngineCommand command;
     command.type = CommandType::Replace;
     command.state = state;
+    storedBaseInitial_.store(state);
+    storedPlaneTilts_.store({});
     PresetCatalog catalog;
     const auto selected = static_cast<int>(parameterValue(parameters_, "preset"));
     if (catalog.valid() && selected >= 0 && static_cast<std::size_t>(selected) < catalog.size()) {
@@ -430,6 +452,25 @@ void ThreeBSProcessor::requestExactState(const SimulationState& state) {
     storedPresentation_.store(presentation);
     for (std::size_t body = 0; body < bodyCount; ++body)
         setParameterValue("mass" + juce::String(body + 1), static_cast<float>(state.bodies[body].mass));
+}
+
+void ThreeBSProcessor::requestPlaneTilts(const std::array<double, bodyCount>& tiltDegrees) {
+    auto base = storedBaseInitial_.load();
+    const auto current = storedInitial_.load();
+    for (std::size_t body = 0; body < bodyCount; ++body)
+        base.bodies[body].mass = current.bodies[body].mass;
+    const auto tilted = applyInitialPlaneTilts(base, tiltDegrees);
+    EngineCommand command;
+    command.type = CommandType::Reset;
+    command.state = tilted;
+    storedBaseInitial_.store(base);
+    storedInitial_.store(tilted);
+    storedPlaneTilts_.store(tiltDegrees);
+    commands_.push(command);
+}
+
+std::array<double, bodyCount> ThreeBSProcessor::initialPlaneTilts() const noexcept {
+    return storedPlaneTilts_.load();
 }
 
 void ThreeBSProcessor::getStateInformation(juce::MemoryBlock& destination) {
@@ -450,10 +491,14 @@ void ThreeBSProcessor::getStateInformation(juce::MemoryBlock& destination) {
     state.setProperty("cameraFocusBody", presentation.camera.focusBody, nullptr);
     state.setProperty("visualSeed", juce::String(presentation.visualSeed), nullptr);
     const auto initial = storedInitial_.load();
+    const auto baseInitial = storedBaseInitial_.load();
+    const auto planeTilts = storedPlaneTilts_.load();
     state.setProperty("seed", juce::String(initial.seed), nullptr);
     state.setProperty("loopPolicy", loopPolicy_.load(std::memory_order_relaxed), nullptr);
     for (std::size_t i = 0; i < bodyCount; ++i) {
         const auto prefix = "body" + juce::String(i) + "_";
+        const auto basePrefix = "baseBody" + juce::String(i) + "_";
+        state.setProperty("initialTiltBody" + juce::String(i), planeTilts[i], nullptr);
         state.setProperty(prefix + "mass", initial.bodies[i].mass, nullptr);
         state.setProperty(prefix + "px", initial.bodies[i].position.x, nullptr);
         state.setProperty(prefix + "py", initial.bodies[i].position.y, nullptr);
@@ -461,6 +506,13 @@ void ThreeBSProcessor::getStateInformation(juce::MemoryBlock& destination) {
         state.setProperty(prefix + "vx", initial.bodies[i].velocity.x, nullptr);
         state.setProperty(prefix + "vy", initial.bodies[i].velocity.y, nullptr);
         state.setProperty(prefix + "vz", initial.bodies[i].velocity.z, nullptr);
+        state.setProperty(basePrefix + "mass", baseInitial.bodies[i].mass, nullptr);
+        state.setProperty(basePrefix + "px", baseInitial.bodies[i].position.x, nullptr);
+        state.setProperty(basePrefix + "py", baseInitial.bodies[i].position.y, nullptr);
+        state.setProperty(basePrefix + "pz", baseInitial.bodies[i].position.z, nullptr);
+        state.setProperty(basePrefix + "vx", baseInitial.bodies[i].velocity.x, nullptr);
+        state.setProperty(basePrefix + "vy", baseInitial.bodies[i].velocity.y, nullptr);
+        state.setProperty(basePrefix + "vz", baseInitial.bodies[i].velocity.z, nullptr);
     }
     if (auto xml = state.createXml())
         copyXmlToBinary(*xml, destination);
@@ -483,8 +535,11 @@ void ThreeBSProcessor::setStateInformation(const void* data, int size) {
     auto initial = storedInitial_.load();
     initial.seed = static_cast<std::uint64_t>(
         state.getProperty("seed", juce::String(initial.seed)).toString().getLargeIntValue());
+    auto baseInitial = initial;
+    std::array<double, bodyCount> planeTilts{};
     for (std::size_t i = 0; i < bodyCount; ++i) {
         const auto prefix = "body" + juce::String(i) + "_";
+        const auto basePrefix = "baseBody" + juce::String(i) + "_";
         initial.bodies[i].mass = static_cast<double>(state.getProperty(prefix + "mass", initial.bodies[i].mass));
         initial.bodies[i].position = {
             static_cast<double>(state.getProperty(prefix + "px", initial.bodies[i].position.x)),
@@ -494,7 +549,21 @@ void ThreeBSProcessor::setStateInformation(const void* data, int size) {
             static_cast<double>(state.getProperty(prefix + "vx", initial.bodies[i].velocity.x)),
             static_cast<double>(state.getProperty(prefix + "vy", initial.bodies[i].velocity.y)),
             static_cast<double>(state.getProperty(prefix + "vz", initial.bodies[i].velocity.z))};
+        baseInitial.bodies[i].mass = static_cast<double>(
+            state.getProperty(basePrefix + "mass", initial.bodies[i].mass));
+        baseInitial.bodies[i].position = {
+            static_cast<double>(state.getProperty(basePrefix + "px", initial.bodies[i].position.x)),
+            static_cast<double>(state.getProperty(basePrefix + "py", initial.bodies[i].position.y)),
+            static_cast<double>(state.getProperty(basePrefix + "pz", initial.bodies[i].position.z))};
+        baseInitial.bodies[i].velocity = {
+            static_cast<double>(state.getProperty(basePrefix + "vx", initial.bodies[i].velocity.x)),
+            static_cast<double>(state.getProperty(basePrefix + "vy", initial.bodies[i].velocity.y)),
+            static_cast<double>(state.getProperty(basePrefix + "vz", initial.bodies[i].velocity.z))};
+        planeTilts[i] = static_cast<double>(state.getProperty("initialTiltBody" + juce::String(i), 0.0));
     }
+    baseInitial.seed = initial.seed;
+    storedBaseInitial_.store(baseInitial);
+    storedPlaneTilts_.store(planeTilts);
     EngineCommand command;
     command.type = CommandType::Replace;
     command.state = initial;

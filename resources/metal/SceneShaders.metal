@@ -135,12 +135,12 @@ fragment float4 backgroundFragment(FullscreenOut in [[stage_in]],
     const float3 direction = normalize(u.cameraForward.xyz
         + u.cameraRight.xyz * ndc.x * aspect * tanHalfFov
         + u.cameraUp.xyz * ndc.y * tanHalfFov);
-    const float band = exp(-pow(abs(dot(direction, normalize(float3(0.21, 0.91, 0.35)))) * 5.2, 1.35));
-    const float dust = fbm(direction * 5.5 + float3(3.0, 9.0, 1.0));
-    const float lanes = smoothstep(0.38, 0.75, dust) * band;
+    const float band = exp(-pow(abs(dot(direction, normalize(float3(0.21, 0.91, 0.35)))) * 4.6, 1.5));
+    const float dust = fbm(direction * 2.2 + float3(3.0, 9.0, 1.0));
+    const float lanes = smoothstep(0.30, 0.82, dust) * band * 0.24;
     const float vignette = smoothstep(1.35, 0.18, length(ndc * float2(0.72, 1.0)));
     float3 colour = mix(float3(0.0007, 0.0012, 0.004), float3(0.004, 0.008, 0.018), vignette);
-    colour += lanes * mix(float3(0.006, 0.009, 0.018), float3(0.025, 0.018, 0.038), dust);
+    colour += lanes * mix(float3(0.003, 0.004, 0.009), float3(0.010, 0.007, 0.016), dust);
     return float4(colour, 1.0);
 }
 
@@ -162,9 +162,9 @@ vertex ColourOut starVertex(const device StarInstance* stars [[buffer(0)]],
                          cameraZ * 0.999, cameraZ);
     const float magnitude = star.directionMagnitude.w;
     const float catalogue = star.colourKind.w;
-    const float brightness = clamp(exp2(-0.4 * (magnitude - 5.0)) * 0.24, 0.08, 1.35);
+    const float brightness = clamp(exp2(-0.4 * (magnitude - 5.0)) * 0.12, 0.025, 0.72);
     const float faintScale = mix(u.renderSettings.y, 1.0, catalogue);
-    const float size = (0.58 + sqrt(brightness) * 0.92) * mix(0.72, 1.0, faintScale);
+    const float size = (0.42 + sqrt(brightness) * 0.62) * mix(0.68, 0.92, faintScale);
     const float2 corner = corners[vertexId];
     clip.xy += corner * float2(size * 2.0 / max(1.0, u.viewportTime.x),
                                size * 2.0 / max(1.0, u.viewportTime.y)) * clip.w;
@@ -179,10 +179,10 @@ vertex ColourOut starVertex(const device StarInstance* stars [[buffer(0)]],
 
 fragment float4 starFragment(ColourOut in [[stage_in]]) {
     const float radius = length(in.uv);
-    const float core = pow(saturate(1.0 - radius), 3.2);
+    const float core = pow(saturate(1.0 - radius), 5.8);
     const float spike = pow(saturate(1.0 - min(abs(in.uv.x), abs(in.uv.y)) * 6.0), 9.0)
-                        * saturate(1.0 - radius) * step(0.8, in.colour.a);
-    return float4(in.colour.rgb * (core + spike * 0.07), core);
+                        * saturate(1.0 - radius) * step(0.45, in.colour.a);
+    return float4(in.colour.rgb * (core + spike * 0.05), core);
 }
 
 vertex PlanetOut planetVertex(const device SphereVertex* vertices [[buffer(0)]],
@@ -255,8 +255,8 @@ fragment float4 cloudFragment(PlanetOut in [[stage_in]],
     const float light = 0.18 + 0.82 * smoothstep(-0.2, 0.65,
         dot(normal, normalize(float3(-0.58, 0.31, 0.75))));
     const float rim = pow(1.0 - saturate(dot(normal, viewDirection)), 2.0);
-    return float4(mix(in.colour3.rgb, float3(0.92, 0.96, 1.0), 0.65) * light,
-                  cloud * (0.17 + rim * 0.22));
+    return float4(mix(in.colour3.rgb, float3(0.92, 0.96, 1.0), 0.45) * light * 0.55,
+                  cloud * (0.035 + rim * 0.045));
 }
 
 fragment float4 atmosphereFragment(PlanetOut in [[stage_in]],
@@ -292,12 +292,12 @@ vertex ColourOut trailVertex(const device TrailVertex* vertices [[buffer(0)]],
     out.position = current;
     out.uv = float2(sample.previousSide.w, sample.currentAge.w);
     const float fade = sample.currentAge.w * sample.currentAge.w;
-    out.colour = float4(sample.colour.rgb * (0.55 + fade * 1.35), sample.colour.a * fade);
+    out.colour = float4(sample.colour.rgb * (0.28 + fade * 0.78), sample.colour.a * fade * 0.48);
     return out;
 }
 
 fragment float4 trailFragment(ColourOut in [[stage_in]]) {
-    const float edge = smoothstep(1.0, 0.25, abs(in.uv.x));
+    const float edge = smoothstep(1.0, 0.52, abs(in.uv.x));
     return float4(in.colour.rgb * edge, in.colour.a * edge);
 }
 

@@ -10,6 +10,7 @@
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_gui_extra/juce_gui_extra.h>
 
+#include <cmath>
 #include <memory>
 
 namespace threebs {
@@ -22,7 +23,9 @@ public:
         panel_.setPresetNames(presets_.names());
         panel_.presetSelector().onChange = [this] { applyPreset(); };
         panel_.onRandomize = [this] {
-            initial_ = makeInitialState(InitialSystem::ControlledChaos, ++seed_, panel_.chaosSlider().getValue() / 100.0);
+            baseInitial_ = makeInitialState(InitialSystem::ControlledChaos, ++seed_,
+                                            panel_.chaosSlider().getValue() / 100.0);
+            initial_ = applyInitialPlaneTilts(baseInitial_, planeTilts_);
             engine_.reset(initial_);
             presentation_.visualSeed = initial_.seed;
             panel_.setPresentationState(presentation_);
@@ -34,9 +37,12 @@ public:
             const auto target = panel_.getLocalArea(&panel_.advancedButton(), panel_.advancedButton().getLocalBounds());
             showAdvancedStateEditor(initial_, target, panel_, [this](const SimulationState& state) {
                 initial_ = state;
+                baseInitial_ = state;
+                planeTilts_.fill(0.0);
                 engine_.reset(initial_);
                 presentation_.visualSeed = initial_.seed;
                 panel_.setPresentationState(presentation_);
+                panel_.setPlaneTilts(planeTilts_);
                 ++trajectoryRevision_;
                 const auto masses = panel_.massSliders();
                 for (std::size_t body = 0; body < bodyCount; ++body)
@@ -45,7 +51,7 @@ public:
         };
         panel_.syncButton().setToggleState(false, juce::dontSendNotification);
         panel_.syncButton().setButtonText("FREE RUN");
-        panel_.midiOutputSelector().setVisible(true);
+        panel_.setMidiOutputAvailable(true);
         populateMidiOutputs();
         panel_.midiOutputSelector().onChange = [this] { openSelectedOutput(); };
         panel_.midiOutputSelector().setSelectedId(1, juce::sendNotificationSync);
@@ -102,7 +108,10 @@ private:
         if (!presets_.valid() || index < 0 || static_cast<std::size_t>(index) >= presets_.size())
             return;
         const auto& preset = presets_[static_cast<std::size_t>(index)];
-        initial_ = makeInitialState(preset.system, preset.seed, preset.chaos);
+        baseInitial_ = makeInitialState(preset.system, preset.seed, preset.chaos);
+        planeTilts_.fill(0.0);
+        panel_.setPlaneTilts(planeTilts_);
+        initial_ = baseInitial_;
         config_.simulation = preset.simulation;
         config_.voices = preset.voices;
         engine_.setConfig(config_);
@@ -127,8 +136,22 @@ private:
             voice.probability = density;
         engine_.setConfig(config_);
         const auto masses = panel_.massSliders();
-        for (std::size_t i = 0; i < bodyCount; ++i)
-            engine_.setBodyMass(i, masses[i]->getValue());
+        for (std::size_t i = 0; i < bodyCount; ++i) {
+            const auto mass = masses[i]->getValue();
+            baseInitial_.bodies[i].mass = mass;
+            initial_.bodies[i].mass = mass;
+            engine_.setBodyMass(i, mass);
+        }
+        const auto currentTilts = panel_.planeTilts();
+        bool tiltChanged{};
+        for (std::size_t body = 0; body < bodyCount; ++body)
+            tiltChanged = tiltChanged || std::abs(currentTilts[body] - planeTilts_[body]) > 0.05;
+        if (tiltChanged) {
+            planeTilts_ = currentTilts;
+            initial_ = applyInitialPlaneTilts(baseInitial_, planeTilts_);
+            engine_.reset(initial_);
+            ++trajectoryRevision_;
+        }
 
         constexpr auto blockSize = static_cast<std::uint32_t>(sampleRate_ / timerRate_);
         ProcessContext context;
@@ -198,6 +221,7 @@ private:
     PresetCatalog presets_;
     MusicEngine engine_;
     EngineConfig config_{engine_.config()};
+    SimulationState baseInitial_{};
     SimulationState initial_{};
     juce::Array<juce::MidiDeviceInfo> devices_;
     std::unique_ptr<juce::MidiOutput> midiOutput_;
@@ -206,6 +230,7 @@ private:
     std::uint64_t sequence_{};
     std::uint64_t trajectoryRevision_{1};
     std::array<std::uint32_t, bodyCount> lastRespawnCounts_{};
+    std::array<double, bodyCount> planeTilts_{};
     double beat_{};
     bool wasRunning_{};
 };

@@ -47,7 +47,9 @@ public:
     void requestRandomize(double chaos);
     void requestReset();
     void requestExactState(const SimulationState& state);
+    void requestPlaneTilts(const std::array<double, bodyCount>& tiltDegrees);
     SimulationState currentInitialState() const noexcept { return storedInitial_.load(); }
+    std::array<double, bodyCount> initialPlaneTilts() const noexcept;
     void setPresentationState(const PresentationState& state) noexcept { storedPresentation_.store(state); }
     PresentationState presentationState() const noexcept { return storedPresentation_.load(); }
 
@@ -69,6 +71,14 @@ private:
         void store(const SimulationState& state) noexcept;
         SimulationState load() const noexcept;
     } storedInitial_;
+
+    AtomicState storedBaseInitial_;
+
+    struct AtomicPlaneTilts {
+        std::array<std::atomic<double>, bodyCount> degrees{};
+        void store(const std::array<double, bodyCount>& values) noexcept;
+        std::array<double, bodyCount> load() const noexcept;
+    } storedPlaneTilts_;
 
     struct AtomicPresentationState {
         std::atomic<float> trailSeconds{30.0F};

@@ -25,6 +25,9 @@ public:
     PresentationState presentationState() const noexcept { return presentation_; }
     void setPresetNames(const juce::StringArray& names);
     void setStatus(const juce::String& status);
+    void setMidiOutputAvailable(bool available);
+    void setPlaneTilts(const std::array<double, bodyCount>& tiltDegrees);
+    std::array<double, bodyCount> planeTilts() const noexcept;
 
     juce::ToggleButton& runButton() noexcept { return run_; }
     juce::ToggleButton& syncButton() noexcept { return sync_; }
@@ -43,6 +46,9 @@ public:
     std::array<juce::Slider*, bodyCount> massSliders() noexcept {
         return {&massOne_, &massTwo_, &massThree_};
     }
+    std::array<juce::Slider*, bodyCount> planeTiltSliders() noexcept {
+        return {&tiltOne_, &tiltTwo_, &tiltThree_};
+    }
 
     std::function<void()> onRandomize;
     std::function<void()> onReset;
@@ -57,13 +63,19 @@ private:
                               float, float, juce::Slider&) override;
     } lookAndFeel_;
 
+    enum class DeckPage : std::size_t { System, Voices, Space, Presets, Settings };
+
     void configureKnob(juce::Slider& slider, const juce::String& suffix = {});
     void togglePresentation();
+    void selectDeckPage(DeckPage page);
+    void updateDeckVisibility();
 
     MetalSceneComponent scene_;
     juce::Label title_;
     juce::Label subtitle_;
     juce::Label status_;
+    juce::Label pageTitle_;
+    juce::Label pageHelp_;
     juce::ToggleButton run_{"RUN"};
     juce::ToggleButton sync_{"HOST SYNC"};
     juce::Slider speed_;
@@ -76,6 +88,9 @@ private:
     juce::Slider massOne_;
     juce::Slider massTwo_;
     juce::Slider massThree_;
+    juce::Slider tiltOne_;
+    juce::Slider tiltTwo_;
+    juce::Slider tiltThree_;
     juce::ComboBox presets_;
     juce::ComboBox midiOutput_;
     juce::TextButton randomize_{"NEW SYSTEM"};
@@ -85,7 +100,9 @@ private:
     std::array<juce::TextButton, 5> tabs_{
         juce::TextButton{"SYSTEM"}, juce::TextButton{"VOICES"}, juce::TextButton{"SPACE"},
         juce::TextButton{"PRESETS"}, juce::TextButton{"SETTINGS"}};
-    std::array<juce::Label, 10> knobLabels_;
+    std::array<juce::Label, 13> knobLabels_;
+    DeckPage deckPage_{DeckPage::System};
+    bool midiOutputAvailable_{};
     bool presentationMode_{};
     PresentationState presentation_{};
 

@@ -20,6 +20,16 @@ Vec3 randomDirection(Pcg32& random) noexcept {
     return {radial * std::cos(azimuth), radial * std::sin(azimuth), z};
 }
 
+Vec3 rotateAroundAxis(Vec3 value, Vec3 axis, double angle) noexcept {
+    const auto axisLength = length(axis);
+    if (axisLength <= 1.0e-12 || std::abs(angle) <= 1.0e-12)
+        return value;
+    axis = axis / axisLength;
+    const auto sine = std::sin(angle);
+    const auto cosine = std::cos(angle);
+    return value * cosine + cross(axis, value) * sine + axis * (dot(axis, value) * (1.0 - cosine));
+}
+
 void removeCenterOfMassMotion(SimulationState& state) noexcept {
     double massSum{};
     Vec3 weightedPosition{};
@@ -49,7 +59,38 @@ void addPerturbation(SimulationState& state, Pcg32& random, double amount) noexc
     removeCenterOfMassMotion(state);
 }
 
+std::array<double, bodyCount> defaultPlaneTilts(InitialSystem system) noexcept {
+    switch (system) {
+    case InitialSystem::FigureEight:
+        return {-8.0, 5.0, 13.0};
+    case InitialSystem::Hierarchical:
+        return {0.0, 14.0, -19.0};
+    case InitialSystem::Stable:
+        return {-10.0, 7.0, 16.0};
+    case InitialSystem::ControlledChaos:
+        return {5.0, -8.0, 12.0};
+    case InitialSystem::Unbound:
+        return {0.0, 0.0, 0.0};
+    }
+    return {0.0, 0.0, 0.0};
+}
+
 } // namespace
+
+SimulationState applyInitialPlaneTilts(SimulationState state,
+                                       const std::array<double, bodyCount>& tiltDegrees) noexcept {
+    constexpr std::array<Vec3, bodyCount> axes{{{1.0, 0.0, 0.0},
+                                                {0.5, 0.8660254037844386, 0.0},
+                                                {-0.766044443118978, 0.6427876096865394, 0.0}}};
+    constexpr auto radians = pi / 180.0;
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        const auto angle = std::clamp(tiltDegrees[body], -75.0, 75.0) * radians;
+        state.bodies[body].position = rotateAroundAxis(state.bodies[body].position, axes[body], angle);
+        state.bodies[body].velocity = rotateAroundAxis(state.bodies[body].velocity, axes[body], angle);
+    }
+    removeCenterOfMassMotion(state);
+    return state;
+}
 
 SimulationState makeInitialState(InitialSystem system, std::uint64_t seed, double chaos) noexcept {
     SimulationState result;
@@ -92,6 +133,7 @@ SimulationState makeInitialState(InitialSystem system, std::uint64_t seed, doubl
         break;
     }
 
+    result = applyInitialPlaneTilts(result, defaultPlaneTilts(system));
     return result;
 }
 
