@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <string_view>
 #include <vector>
 
@@ -216,6 +217,19 @@ void testSnapshotQueue() {
     check(queue.pop(output) && output.sequence == 42, "snapshot queue preserves value");
 }
 
+void testNoteVisualizationQueue() {
+    threebs::NoteVisualizationQueue queue;
+    threebs::NoteVisualizationEvent input;
+    for (std::size_t index = 0; index < 2047; ++index) {
+        input.sequence = index;
+        check(queue.push(input), "note visualization queue accepts fixed capacity");
+    }
+    check(!queue.push(input), "note visualization queue drops on overflow");
+    threebs::NoteVisualizationEvent output;
+    check(queue.pop(output) && output.sequence == 0,
+          "note visualization queue preserves event order");
+}
+
 void testCameraTargetAndHitTesting() {
     std::array<threebs::BodyState, threebs::bodyCount> bodies{{
         {2.0, {-1.0, 0.0, 0.0}, {}},
@@ -268,7 +282,8 @@ void testCameraMotion() {
     camera.zoom(1000.0, 4.0);
     check(near(camera.state().distance, 2.5, 1.0e-6), "camera zoom has a near bound");
     camera.zoom(-1000.0, 4.0);
-    check(near(camera.state().distance, 20.0, 1.0e-6), "camera zoom has a far bound");
+    check(near(camera.state().distance, 40.0, 1.0e-6), "camera zoom has a configurable far bound");
+    check(!camera.state().autoFrame, "manual zoom disables automatic framing");
 
     camera.selectFocus(0, bodies, 5.0);
     camera.update(5.35, bodies);
@@ -276,6 +291,57 @@ void testCameraMotion() {
     check(halfway > 0.0 && halfway < 1.0, "camera focus transition eases between targets");
     camera.update(5.8, bodies);
     check(near(camera.basis().target.x, 1.0, 1.0e-6), "camera focus transition completes");
+}
+
+void testCameraAutoFraming() {
+    std::array<threebs::BodyState, threebs::bodyCount> bodies{{
+        {1.0, {-5.0, 0.0, 0.0}, {}},
+        {1.0, {5.0, 0.0, 0.0}, {}},
+        {1.0, {0.0, 1.0, 0.0}, {}},
+    }};
+    const auto wide = threebs::CameraController::framingDistance(bodies, 16.0 / 9.0);
+    const auto narrow = threebs::CameraController::framingDistance(bodies, 0.5);
+    check(narrow > wide && wide > 5.0, "camera framing accounts for viewport aspect ratio");
+
+    threebs::CameraState state;
+    state.distance = 2.5F;
+    state.maximumDistance = 40.0F;
+    state.autoOrbit = 0.0F;
+    threebs::CameraController camera;
+    camera.setState(state, bodies, 0.0);
+    for (int step = 1; step <= 100; ++step)
+        camera.update(static_cast<double>(step) * 0.1, bodies, 16.0 / 9.0);
+    check(std::abs(camera.state().distance - wide) < 0.01,
+          "barycenter camera smoothly reaches the fitted distance");
+
+    state.distance = 7.0F;
+    state.focusBody = 0;
+    camera.setState(state, bodies, 0.0);
+    camera.update(1.0, bodies, 16.0 / 9.0);
+    check(near(camera.state().distance, 7.0, 1.0e-6),
+          "selected-body focus bypasses automatic framing");
+}
+
+void testCameraSanitization() {
+    threebs::CameraState state;
+    state.yaw = std::numeric_limits<float>::infinity();
+    state.pitch = std::numeric_limits<float>::quiet_NaN();
+    state.distance = -200.0F;
+    state.minimumDistance = 30.0F;
+    state.maximumDistance = 2.0F;
+    state.autoOrbit = std::numeric_limits<float>::quiet_NaN();
+    state.focusBody = 99;
+    const auto sanitized = threebs::sanitizedCameraState(state);
+    check(std::isfinite(sanitized.yaw) && std::isfinite(sanitized.pitch)
+              && std::isfinite(sanitized.autoOrbit),
+          "camera state replaces non-finite values");
+    check(sanitized.minimumDistance >= 1.0F && sanitized.maximumDistance <= 80.0F
+              && sanitized.maximumDistance >= sanitized.minimumDistance + 0.5F,
+          "camera state repairs crossed zoom limits");
+    check(sanitized.distance >= sanitized.minimumDistance
+              && sanitized.distance <= sanitized.maximumDistance
+              && sanitized.focusBody == 2,
+          "camera state clamps distance and focus");
 }
 
 void testTrailHistory() {
@@ -310,8 +376,11 @@ int main() {
     testBlockSizeIndependentMidi();
     testNoteCleanup();
     testSnapshotQueue();
+    testNoteVisualizationQueue();
     testCameraTargetAndHitTesting();
     testCameraMotion();
+    testCameraAutoFraming();
+    testCameraSanitization();
     testTrailHistory();
     testPresentationMigration();
     if (failures == 0)

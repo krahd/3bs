@@ -39,16 +39,25 @@ void ArtworkPanel::DeckLookAndFeel::drawRotarySlider(
     graphics.fillEllipse(point.x - 2.3F, point.y - 2.3F, 4.6F, 4.6F);
 }
 
-ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots)
-    : scene_(snapshots) {
+ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
+                           NoteVisualizationQueue& noteVisualizationEvents)
+    : scene_(snapshots, noteVisualizationEvents) {
     setLookAndFeel(&lookAndFeel_);
     setWantsKeyboardFocus(true);
     setOpaque(true);
     addAndMakeVisible(scene_);
     scene_.onCameraInteractionComplete = [this](const CameraState& camera) {
         presentation_.camera = camera;
+        minimumCameraDistance_.setValue(camera.minimumDistance, juce::dontSendNotification);
+        maximumCameraDistance_.setValue(camera.maximumDistance, juce::dontSendNotification);
+        autoFrame_.setToggleState(camera.autoFrame, juce::dontSendNotification);
         if (onCameraChanged)
             onCameraChanged(camera);
+    };
+    scene_.onNotePaneMinimizedChanged = [this](bool minimized) {
+        presentation_.notePaneMinimized = minimized;
+        if (onNotePaneMinimizedChanged)
+            onNotePaneMinimizedChanged(minimized);
     };
 
     title_.setText("THE THREE BODY SOLUTION", juce::dontSendNotification);
@@ -89,6 +98,8 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots)
     configureKnob(tiltOne_, " deg");
     configureKnob(tiltTwo_, " deg");
     configureKnob(tiltThree_, " deg");
+    configureKnob(minimumCameraDistance_);
+    configureKnob(maximumCameraDistance_);
 
     speed_.setRange(0.0, 8.0, 0.001); speed_.setValue(1.0);
     gravity_.setRange(0.01, 3.0, 0.001); gravity_.setValue(0.65);
@@ -99,10 +110,15 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots)
     bloom_.setRange(0.0, 100.0, 0.1); bloom_.setValue(34.0);
     for (auto* mass : massSliders()) { mass->setRange(0.05, 8.0, 0.001); mass->setValue(1.0); }
     for (auto* tilt : planeTiltSliders()) { tilt->setRange(-75.0, 75.0, 0.1); tilt->setValue(0.0); }
+    minimumCameraDistance_.setRange(1.0, 20.0, 0.1); minimumCameraDistance_.setValue(2.5);
+    maximumCameraDistance_.setRange(5.0, 80.0, 0.1); maximumCameraDistance_.setValue(40.0);
+    autoFrame_.setToggleState(true, juce::dontSendNotification);
+    addAndMakeVisible(autoFrame_);
 
-    const std::array<juce::String, 13> labels{
+    const std::array<juce::String, 15> labels{
         "SPEED", "GRAVITY", "SOFTEN", "CHAOS", "DENSITY", "TRAIL", "BLOOM",
-        "MASS I", "MASS II", "MASS III", "TILT I", "TILT II", "TILT III"};
+        "MASS I", "MASS II", "MASS III", "TILT I", "TILT II", "TILT III",
+        "ZOOM IN", "ZOOM OUT"};
     for (std::size_t i = 0; i < knobLabels_.size(); ++i) {
         knobLabels_[i].setText(labels[i], juce::dontSendNotification);
         knobLabels_[i].setJustificationType(juce::Justification::centred);
@@ -206,7 +222,10 @@ void ArtworkPanel::resized() {
         break;
     case DeckPage::Space:
         advanced_.setBounds(left.removeFromTop(28));
-        layoutKnobs({{5U, &trail_}, {6U, &bloom_}, {10U, &tiltOne_}, {11U, &tiltTwo_}, {12U, &tiltThree_}},
+        left.removeFromTop(6);
+        autoFrame_.setBounds(left.removeFromTop(28));
+        layoutKnobs({{5U, &trail_}, {6U, &bloom_}, {10U, &tiltOne_}, {11U, &tiltTwo_}, {12U, &tiltThree_},
+                     {13U, &minimumCameraDistance_}, {14U, &maximumCameraDistance_}},
                     content);
         break;
     case DeckPage::Presets:
@@ -278,6 +297,9 @@ void ArtworkPanel::updateDeckVisibility() {
     tiltOne_.setVisible(false);
     tiltTwo_.setVisible(false);
     tiltThree_.setVisible(false);
+    minimumCameraDistance_.setVisible(false);
+    maximumCameraDistance_.setVisible(false);
+    autoFrame_.setVisible(false);
     presets_.setVisible(false);
     midiOutput_.setVisible(false);
     randomize_.setVisible(false);
@@ -316,14 +338,17 @@ void ArtworkPanel::updateDeckVisibility() {
         break;
     case DeckPage::Space:
         pageTitle_.setText("SPACE", juce::dontSendNotification);
-        pageHelp_.setText("Visual trails, bloom, and extra initial orbital-plane tilt per body.",
+        pageHelp_.setText("Visuals, orbital-plane tilt, and automatic camera framing limits.",
                           juce::dontSendNotification);
         advanced_.setVisible(true);
+        autoFrame_.setVisible(true);
         showKnob(5U, trail_);
         showKnob(6U, bloom_);
         showKnob(10U, tiltOne_);
         showKnob(11U, tiltTwo_);
         showKnob(12U, tiltThree_);
+        showKnob(13U, minimumCameraDistance_);
+        showKnob(14U, maximumCameraDistance_);
         break;
     case DeckPage::Presets:
         pageTitle_.setText("PRESETS", juce::dontSendNotification);
@@ -348,6 +373,9 @@ void ArtworkPanel::setPresentationState(const PresentationState& state) {
     scene_.setPresentationState(presentation_);
     trail_.setValue(presentation_.visual.trailSeconds, juce::dontSendNotification);
     bloom_.setValue(presentation_.visual.bloom * 100.0, juce::dontSendNotification);
+    minimumCameraDistance_.setValue(presentation_.camera.minimumDistance, juce::dontSendNotification);
+    maximumCameraDistance_.setValue(presentation_.camera.maximumDistance, juce::dontSendNotification);
+    autoFrame_.setToggleState(presentation_.camera.autoFrame, juce::dontSendNotification);
 }
 
 void ArtworkPanel::setPresetNames(const juce::StringArray& names) {

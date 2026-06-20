@@ -67,6 +67,14 @@ int main() {
     }
     check(audioWasSilent, "VST3 processor must produce silent audio");
     check(generatedNote, "processor must generate MIDI notes");
+    bool visualizedNote{};
+    threebs::NoteVisualizationEvent visualEvent;
+    while (processor.noteVisualizationEvents().pop(visualEvent)) {
+        visualizedNote = visualizedNote
+            || (visualEvent.type == threebs::NoteVisualizationType::On
+                && visualEvent.body < threebs::bodyCount && visualEvent.velocity > 0);
+    }
+    check(visualizedNote, "generated notes must retain source-body visualization metadata");
 
     midi.clear();
     processor.processBlockBypassed(audio, midi);
@@ -80,9 +88,13 @@ int main() {
     presentation.camera.yaw = 1.125F;
     presentation.camera.pitch = -0.42F;
     presentation.camera.distance = 9.5F;
+    presentation.camera.minimumDistance = 1.8F;
+    presentation.camera.maximumDistance = 64.0F;
+    presentation.camera.autoFrame = false;
     presentation.visual.trailSeconds = 30.0F;
     presentation.visual.palette = threebs::PaletteId::Violet;
     presentation.visualSeed = 20260620;
+    presentation.notePaneMinimized = true;
     processor.setPresentationState(presentation);
     processor.requestPlaneTilts({14.0, -18.0, 9.5});
 
@@ -99,6 +111,12 @@ int main() {
               && std::abs(restoredPresentation.camera.pitch + 0.42F) < 1.0e-6F
               && std::abs(restoredPresentation.camera.distance - 9.5F) < 1.0e-6F,
           "camera orbit and zoom must survive state recall");
+    check(std::abs(restoredPresentation.camera.minimumDistance - 1.8F) < 1.0e-6F
+              && std::abs(restoredPresentation.camera.maximumDistance - 64.0F) < 1.0e-6F
+              && !restoredPresentation.camera.autoFrame,
+          "camera framing settings must survive state recall");
+    check(restoredPresentation.notePaneMinimized,
+          "note-pane minimization must survive state recall");
     check(restoredPresentation.visual.palette == threebs::PaletteId::Violet
               && restoredPresentation.visualSeed == 20260620,
           "planet appearance must survive state recall");
@@ -110,6 +128,26 @@ int main() {
     juce::MemoryBlock roundTrip;
     restored.getStateInformation(roundTrip);
     check(roundTrip.getSize() > 0, "processor state must deserialize and serialize again");
+
+    auto legacyXml = juce::AudioProcessor::getXmlFromBinary(
+        state.getData(), static_cast<int>(state.getSize()));
+    check(legacyXml != nullptr, "schema-v4 state must decode as XML for migration test");
+    if (legacyXml != nullptr) {
+        legacyXml->setAttribute("schemaVersion", 3);
+        legacyXml->removeAttribute("cameraMinimumDistance");
+        legacyXml->removeAttribute("cameraMaximumDistance");
+        legacyXml->removeAttribute("cameraAutoFrame");
+        legacyXml->removeAttribute("notePaneMinimized");
+        juce::MemoryBlock legacyState;
+        juce::AudioProcessor::copyXmlToBinary(*legacyXml, legacyState);
+        threebs::ThreeBSProcessor legacyRestored;
+        legacyRestored.setStateInformation(legacyState.getData(), static_cast<int>(legacyState.getSize()));
+        const auto legacyPresentation = legacyRestored.presentationState();
+        check(std::abs(legacyPresentation.camera.minimumDistance - 2.5F) < 1.0e-6F
+                  && std::abs(legacyPresentation.camera.maximumDistance - 40.0F) < 1.0e-6F
+                  && legacyPresentation.camera.autoFrame && !legacyPresentation.notePaneMinimized,
+              "schema-v3 state must receive schema-v4 presentation defaults");
+    }
     processor.requestReset();
     const auto originalSequence = renderBlocks(processor, 32);
     const auto restoredSequence = renderBlocks(restored, 32);

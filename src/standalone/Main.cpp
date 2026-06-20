@@ -17,7 +17,7 @@ namespace threebs {
 
 class StandaloneContent final : public juce::Component, private juce::Timer {
 public:
-    StandaloneContent() : panel_(snapshots_) {
+    StandaloneContent() : panel_(snapshots_, noteVisualizationEvents_) {
         setWantsKeyboardFocus(true);
         addAndMakeVisible(panel_);
         panel_.setPresetNames(presets_.names());
@@ -33,6 +33,9 @@ public:
         };
         panel_.onReset = [this] { engine_.reset(initial_); ++trajectoryRevision_; };
         panel_.onCameraChanged = [this](const CameraState& camera) { presentation_.camera = camera; };
+        panel_.onNotePaneMinimizedChanged = [this](bool minimized) {
+            presentation_.notePaneMinimized = minimized;
+        };
         panel_.onAdvanced = [this] {
             const auto target = panel_.getLocalArea(&panel_.advancedButton(), panel_.advancedButton().getLocalBounds());
             showAdvancedStateEditor(initial_, target, panel_, [this](const SimulationState& state) {
@@ -168,6 +171,19 @@ private:
         beat_ += context.beatsPerSample * static_cast<double>(blockSize);
         wasRunning_ = context.playing;
 
+        for (const auto& event : events) {
+            if (event.type == MidiEventType::ControlChange)
+                continue;
+            NoteVisualizationEvent visual;
+            visual.type = event.type == MidiEventType::NoteOn
+                ? NoteVisualizationType::On : NoteVisualizationType::Off;
+            visual.body = event.sourceBody;
+            visual.note = event.data1;
+            visual.velocity = event.data2;
+            visual.sequence = ++noteVisualizationSequence_;
+            (void)noteVisualizationEvents_.push(visual);
+        }
+
         if (midiOutput_ != nullptr && events.size() > 0) {
             juce::MidiBuffer buffer;
             for (const auto& event : events) {
@@ -202,6 +218,10 @@ private:
 
         presentation_.visual.trailSeconds = static_cast<float>(panel_.trailSlider().getValue());
         presentation_.visual.bloom = static_cast<float>(panel_.bloomSlider().getValue() / 100.0);
+        presentation_.camera.minimumDistance = static_cast<float>(panel_.minimumCameraDistanceSlider().getValue());
+        presentation_.camera.maximumDistance = static_cast<float>(panel_.maximumCameraDistanceSlider().getValue());
+        presentation_.camera.autoFrame = panel_.autoFrameButton().getToggleState();
+        presentation_.camera = sanitizedCameraState(presentation_.camera);
         panel_.setPresentationState(presentation_);
         if (config_.simulation.escapePolicy == EscapePolicy::Prompt) {
             for (const auto escaped : engine_.simulation().state().escaped) {
@@ -217,6 +237,7 @@ private:
     static constexpr int timerRate_ = 100;
     static constexpr double tempo_ = 120.0;
     SpscQueue<RenderSnapshot, 64> snapshots_;
+    NoteVisualizationQueue noteVisualizationEvents_;
     ArtworkPanel panel_;
     PresetCatalog presets_;
     MusicEngine engine_;
@@ -228,6 +249,7 @@ private:
     PresentationState presentation_{};
     std::uint64_t seed_{0x33425320ULL};
     std::uint64_t sequence_{};
+    std::uint64_t noteVisualizationSequence_{};
     std::uint64_t trajectoryRevision_{1};
     std::array<std::uint32_t, bodyCount> lastRespawnCounts_{};
     std::array<double, bodyCount> planeTilts_{};

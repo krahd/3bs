@@ -21,6 +21,7 @@ struct MidiEvent {
     std::uint8_t channel{1};
     std::uint8_t data1{};
     std::uint8_t data2{};
+    std::uint8_t sourceBody{};
 };
 
 template <std::size_t Capacity>

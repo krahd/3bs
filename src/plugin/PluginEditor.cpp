@@ -10,7 +10,8 @@
 namespace threebs {
 
 ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
-    : AudioProcessorEditor(owner), processor_(owner), panel_(owner.snapshots()) {
+    : AudioProcessorEditor(owner), processor_(owner),
+      panel_(owner.snapshots(), owner.noteVisualizationEvents()) {
     setOpaque(true);
     setResizable(true, true);
     setResizeLimits(900, 600, 1800, 1200);
@@ -42,6 +43,11 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
         processor_.setPresentationState(presentation_);
         processor_.updateHostDisplay(juce::AudioProcessorListener::ChangeDetails{}.withNonParameterStateChanged(true));
     };
+    panel_.onNotePaneMinimizedChanged = [this](bool minimized) {
+        presentation_.notePaneMinimized = minimized;
+        processor_.setPresentationState(presentation_);
+        processor_.updateHostDisplay(juce::AudioProcessorListener::ChangeDetails{}.withNonParameterStateChanged(true));
+    };
     panel_.onAdvanced = [this] {
         const auto target = panel_.getLocalArea(&panel_.advancedButton(), panel_.advancedButton().getLocalBounds());
         showAdvancedStateEditor(processor_.currentInitialState(), target, panel_,
@@ -70,6 +76,10 @@ void ThreeBSEditor::resized() {
 void ThreeBSEditor::timerCallback() {
     presentation_.visual.trailSeconds = static_cast<float>(panel_.trailSlider().getValue());
     presentation_.visual.bloom = static_cast<float>(panel_.bloomSlider().getValue() / 100.0);
+    presentation_.camera.minimumDistance = static_cast<float>(panel_.minimumCameraDistanceSlider().getValue());
+    presentation_.camera.maximumDistance = static_cast<float>(panel_.maximumCameraDistanceSlider().getValue());
+    presentation_.camera.autoFrame = panel_.autoFrameButton().getToggleState();
+    presentation_.camera = sanitizedCameraState(presentation_.camera);
     panel_.setPresentationState(presentation_);
     processor_.setPresentationState(presentation_);
     const auto tilts = panel_.planeTilts();

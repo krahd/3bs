@@ -21,6 +21,16 @@ struct RenderSnapshot {
     double interpolationAlpha{};
 };
 
+enum class NoteVisualizationType : std::uint8_t { On, Off };
+
+struct NoteVisualizationEvent {
+    NoteVisualizationType type{NoteVisualizationType::On};
+    std::uint8_t body{};
+    std::uint8_t note{};
+    std::uint8_t velocity{};
+    std::uint64_t sequence{};
+};
+
 template <typename Value, std::size_t Capacity>
 class SpscQueue {
     static_assert(Capacity >= 2);
@@ -55,5 +65,7 @@ private:
     alignas(64) std::atomic<std::size_t> read_{};
     alignas(64) std::atomic<std::size_t> write_{};
 };
+
+using NoteVisualizationQueue = SpscQueue<NoteVisualizationEvent, 2048>;
 
 } // namespace threebs

@@ -15,7 +15,8 @@ namespace threebs {
 
 class MetalSceneComponent final : public juce::NSViewComponent {
 public:
-    explicit MetalSceneComponent(SpscQueue<RenderSnapshot, 64>& snapshots);
+    MetalSceneComponent(SpscQueue<RenderSnapshot, 64>& snapshots,
+                        NoteVisualizationQueue& noteVisualizationEvents);
     ~MetalSceneComponent() override;
 
     void setPresentationState(const PresentationState& state) noexcept;
@@ -23,6 +24,7 @@ public:
     bool rendererAvailable() const noexcept;
 
     std::function<void(const CameraState&)> onCameraInteractionComplete;
+    std::function<void(bool)> onNotePaneMinimizedChanged;
 
 private:
     class Impl;

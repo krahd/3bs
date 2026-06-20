@@ -37,11 +37,7 @@ bool raySphere(const Vec3& origin, const Vec3& direction, const Vec3& center,
 void CameraController::setState(const CameraState& state,
                                 const std::array<BodyState, bodyCount>& bodies,
                                 double now) noexcept {
-    state_ = state;
-    state_.pitch = std::clamp(state_.pitch, static_cast<float>(-pi * 0.4722),
-                             static_cast<float>(pi * 0.4722));
-    state_.distance = std::clamp(state_.distance, 2.5F, 20.0F);
-    state_.focusBody = std::clamp(state_.focusBody, -1, static_cast<int>(bodyCount) - 1);
+    state_ = sanitizedCameraState(state);
     focus_ = desiredTarget(bodies);
     transitionStart_ = focus_;
     transitionStartTime_ = now;
@@ -79,7 +75,9 @@ void CameraController::orbit(double deltaX, double deltaY, double viewportWidth,
 
 void CameraController::zoom(double delta, double now) noexcept {
     const auto factor = std::exp(-delta * 0.08);
-    state_.distance = std::clamp(static_cast<float>(state_.distance * factor), 2.5F, 20.0F);
+    state_.distance = std::clamp(static_cast<float>(state_.distance * factor),
+                                 state_.minimumDistance, state_.maximumDistance);
+    state_.autoFrame = false;
     lastInteractionTime_ = now;
 }
 
@@ -93,7 +91,8 @@ void CameraController::selectFocus(int body, const std::array<BodyState, bodyCou
     (void)bodies;
 }
 
-void CameraController::update(double now, const std::array<BodyState, bodyCount>& bodies) noexcept {
+void CameraController::update(double now, const std::array<BodyState, bodyCount>& bodies,
+                              double aspectRatio) noexcept {
     const auto desired = desiredTarget(bodies);
     if (transitioning_) {
         const auto amount = smoothstep((now - transitionStartTime_) / focusTransitionSeconds);
@@ -104,6 +103,15 @@ void CameraController::update(double now, const std::array<BodyState, bodyCount>
     }
 
     const auto delta = std::clamp(now - previousUpdateTime_, 0.0, 0.1);
+    if (state_.autoFrame && state_.focusBody < 0) {
+        const auto desiredDistance = std::clamp(
+            framingDistance(bodies, aspectRatio),
+            static_cast<double>(state_.minimumDistance),
+            static_cast<double>(state_.maximumDistance));
+        const auto amount = 1.0 - std::exp(-delta * autoFrameResponse);
+        state_.distance = static_cast<float>(
+            static_cast<double>(state_.distance) + (desiredDistance - state_.distance) * amount);
+    }
     const auto idle = now - lastInteractionTime_ - autoOrbitDelaySeconds;
     const auto resume = smoothstep(idle / autoOrbitFadeSeconds);
     state_.yaw = static_cast<float>(std::remainder(
@@ -147,6 +155,20 @@ Vec3 CameraController::barycenter(const std::array<BodyState, bodyCount>& bodies
         totalMass += mass;
     }
     return totalMass > 1.0e-12 ? weighted / totalMass : Vec3{};
+}
+
+double CameraController::framingDistance(const std::array<BodyState, bodyCount>& bodies,
+                                         double aspectRatio) noexcept {
+    const auto center = barycenter(bodies);
+    double radius{};
+    for (const auto& body : bodies)
+        radius = std::max(radius, length(body.position - center) + planetRadius(body.mass));
+
+    const auto safeAspect = std::clamp(aspectRatio, 0.25, 8.0);
+    const auto halfVertical = fieldOfViewRadians * 0.5;
+    const auto halfHorizontal = std::atan(std::tan(halfVertical) * safeAspect);
+    const auto limitingHalfAngle = std::min(halfVertical, halfHorizontal);
+    return radius * autoFramePadding / std::max(0.01, std::sin(limitingHalfAngle));
 }
 
 bool CameraController::isClick(double deltaX, double deltaY) noexcept {

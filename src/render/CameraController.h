@@ -23,6 +23,8 @@ public:
     static constexpr double focusTransitionSeconds = 0.7;
     static constexpr double autoOrbitDelaySeconds = 3.0;
     static constexpr double autoOrbitFadeSeconds = 0.5;
+    static constexpr double autoFramePadding = 1.15;
+    static constexpr double autoFrameResponse = 2.5;
 
     CameraController() = default;
 
@@ -35,12 +37,15 @@ public:
     void orbit(double deltaX, double deltaY, double viewportWidth, double now) noexcept;
     void zoom(double delta, double now) noexcept;
     void selectFocus(int body, const std::array<BodyState, bodyCount>& bodies, double now) noexcept;
-    void update(double now, const std::array<BodyState, bodyCount>& bodies) noexcept;
+    void update(double now, const std::array<BodyState, bodyCount>& bodies,
+                double aspectRatio = 16.0 / 9.0) noexcept;
 
     int hitTest(double x, double y, double width, double height,
                 const std::array<BodyState, bodyCount>& bodies) const noexcept;
 
     static Vec3 barycenter(const std::array<BodyState, bodyCount>& bodies) noexcept;
+    static double framingDistance(const std::array<BodyState, bodyCount>& bodies,
+                                  double aspectRatio) noexcept;
     static bool isClick(double deltaX, double deltaY) noexcept;
 
 private:

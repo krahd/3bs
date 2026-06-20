@@ -42,6 +42,7 @@ public:
 
     juce::AudioProcessorValueTreeState& parameters() noexcept { return parameters_; }
     SpscQueue<RenderSnapshot, 64>& snapshots() noexcept { return snapshots_; }
+    NoteVisualizationQueue& noteVisualizationEvents() noexcept { return noteVisualizationEvents_; }
     std::uint32_t escapePromptMask() const noexcept { return escapePromptMask_.load(std::memory_order_relaxed); }
     void requestPreset(const ArtworkPreset& preset, int presetIndex);
     void requestRandomize(double chaos);
@@ -91,9 +92,13 @@ private:
         std::atomic<float> yaw{};
         std::atomic<float> pitch{-0.34F};
         std::atomic<float> distance{7.0F};
+        std::atomic<float> minimumDistance{2.5F};
+        std::atomic<float> maximumDistance{40.0F};
         std::atomic<float> autoOrbit{0.035F};
         std::atomic<int> focusBody{-1};
+        std::atomic<bool> autoFrame{true};
         std::atomic<std::uint64_t> visualSeed{0x334253ULL};
+        std::atomic<bool> notePaneMinimized{};
         void store(const PresentationState& state) noexcept;
         PresentationState load() const noexcept;
     } storedPresentation_;
@@ -116,6 +121,7 @@ private:
     void consumeCommands(MusicEngine::EventBuffer& eventBuffer) noexcept;
     void updateEngineConfigFromParameters() noexcept;
     void publishSnapshot() noexcept;
+    void publishNoteVisualization(const MusicEngine::EventBuffer&) noexcept;
     void setParameterValue(const juce::String& id, float plainValue);
     static void addEvents(const MusicEngine::EventBuffer&, juce::MidiBuffer&);
 
@@ -123,6 +129,7 @@ private:
     MusicEngine engine_;
     EngineConfig engineConfig_{};
     SpscQueue<RenderSnapshot, 64> snapshots_;
+    NoteVisualizationQueue noteVisualizationEvents_;
     SpscQueue<EngineCommand, 8> commands_;
     std::atomic<std::uint64_t> nextSeed_{0x33425310ULL};
     std::atomic<int> loopPolicy_{static_cast<int>(LoopPolicy::Restart)};
@@ -137,6 +144,7 @@ private:
     bool hostWasPlaying_{};
     bool haveHostPosition_{};
     std::uint64_t snapshotSequence_{};
+    std::uint64_t noteVisualizationSequence_{};
     std::uint64_t trajectoryRevision_{1};
     std::array<std::uint32_t, bodyCount> lastRespawnCounts_{};
 

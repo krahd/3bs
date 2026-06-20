@@ -179,8 +179,10 @@ void MusicEngine::triggerVoice(std::size_t bodyIndex, std::uint32_t sampleOffset
         static_cast<int>(std::lround(voice.minimumVelocity + measurement.speed * velocityRange)), 1, 127));
 
     if (runtime.noteActive)
-        output.push({sampleOffset, MidiEventType::NoteOff, voice.channel, runtime.activeNote, 0});
-    output.push({sampleOffset, MidiEventType::NoteOn, voice.channel, note, velocity});
+        output.push({sampleOffset, MidiEventType::NoteOff, voice.channel, runtime.activeNote, 0,
+                     static_cast<std::uint8_t>(bodyIndex)});
+    output.push({sampleOffset, MidiEventType::NoteOn, voice.channel, note, velocity,
+                 static_cast<std::uint8_t>(bodyIndex)});
     runtime.noteActive = true;
     runtime.activeNote = note;
     runtime.noteOffBeat = beat + voice.durationBeats;
@@ -203,7 +205,8 @@ void MusicEngine::emitContinuousControllers(
             static_cast<int>(std::lround(runtime.smoothedCc[lane] * 127.0)), 0, 127));
         if (runtime.lastCc[lane] != value) {
             output.push({sampleOffset, MidiEventType::ControlChange, voice.channel,
-                         static_cast<std::uint8_t>(std::clamp<int>(cc.controller, 0, 119)), value});
+                         static_cast<std::uint8_t>(std::clamp<int>(cc.controller, 0, 119)), value,
+                         static_cast<std::uint8_t>(bodyIndex)});
             runtime.lastCc[lane] = value;
         }
         runtime.lastCcSample[lane] = processedSamples_;
@@ -247,7 +250,8 @@ void MusicEngine::process(const ProcessContext& context, EventBuffer& output) no
             const auto& voice = config_.voices[body];
             auto& runtime = runtime_[body];
             if (runtime.noteActive && beat >= runtime.noteOffBeat) {
-                output.push({sample, MidiEventType::NoteOff, voice.channel, runtime.activeNote, 0});
+                output.push({sample, MidiEventType::NoteOff, voice.channel, runtime.activeNote, 0,
+                             static_cast<std::uint8_t>(body)});
                 runtime.noteActive = false;
             }
             if (voice.enabled && (!config_.inputGateEnabled || config_.inputGateOpen)
@@ -267,7 +271,7 @@ void MusicEngine::allNotesOff(std::uint32_t sampleOffset, EventBuffer& output) n
         auto& runtime = runtime_[body];
         if (runtime.noteActive) {
             output.push({sampleOffset, MidiEventType::NoteOff, config_.voices[body].channel,
-                         runtime.activeNote, 0});
+                         runtime.activeNote, 0, static_cast<std::uint8_t>(body)});
             runtime.noteActive = false;
         }
     }

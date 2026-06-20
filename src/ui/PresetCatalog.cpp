@@ -155,9 +155,14 @@ PresetCatalog::PresetCatalog() {
         const auto camera = property(item, "camera");
         presentation.camera.focusBody = focusBody(text(camera, "focus"));
         presentation.camera.distance = static_cast<float>(number(camera, "distance", 7.0));
+        presentation.camera.minimumDistance = static_cast<float>(number(camera, "minimumDistance", 2.5));
+        presentation.camera.maximumDistance = static_cast<float>(number(camera, "maximumDistance", 40.0));
         presentation.camera.yaw = static_cast<float>(number(camera, "yaw", 0.0));
         presentation.camera.pitch = static_cast<float>(number(camera, "pitch", -0.34));
         presentation.camera.autoOrbit = static_cast<float>(number(camera, "autoOrbit", 0.035));
+        const auto autoFrameValue = property(camera, "autoFrame");
+        presentation.camera.autoFrame = autoFrameValue.isVoid() || static_cast<bool>(autoFrameValue);
+        presentation.camera = sanitizedCameraState(presentation.camera);
         presentation.visualSeed = preset.seed;
         presets_.push_back(std::move(preset));
     }

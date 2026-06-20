@@ -15,7 +15,8 @@ namespace threebs {
 
 class ArtworkPanel final : public juce::Component {
 public:
-    explicit ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots);
+    ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
+                 NoteVisualizationQueue& noteVisualizationEvents);
 
     void paint(juce::Graphics& graphics) override;
     void resized() override;
@@ -38,6 +39,9 @@ public:
     juce::Slider& densitySlider() noexcept { return density_; }
     juce::Slider& trailSlider() noexcept { return trail_; }
     juce::Slider& bloomSlider() noexcept { return bloom_; }
+    juce::Slider& minimumCameraDistanceSlider() noexcept { return minimumCameraDistance_; }
+    juce::Slider& maximumCameraDistanceSlider() noexcept { return maximumCameraDistance_; }
+    juce::ToggleButton& autoFrameButton() noexcept { return autoFrame_; }
     juce::ComboBox& presetSelector() noexcept { return presets_; }
     juce::ComboBox& midiOutputSelector() noexcept { return midiOutput_; }
     juce::TextButton& randomizeButton() noexcept { return randomize_; }
@@ -54,6 +58,7 @@ public:
     std::function<void()> onReset;
     std::function<void()> onAdvanced;
     std::function<void(const CameraState&)> onCameraChanged;
+    std::function<void(bool)> onNotePaneMinimizedChanged;
 
 private:
     class DeckLookAndFeel final : public juce::LookAndFeel_V4 {
@@ -91,6 +96,9 @@ private:
     juce::Slider tiltOne_;
     juce::Slider tiltTwo_;
     juce::Slider tiltThree_;
+    juce::Slider minimumCameraDistance_;
+    juce::Slider maximumCameraDistance_;
+    juce::ToggleButton autoFrame_{"AUTO FRAME"};
     juce::ComboBox presets_;
     juce::ComboBox midiOutput_;
     juce::TextButton randomize_{"NEW SYSTEM"};
@@ -100,7 +108,7 @@ private:
     std::array<juce::TextButton, 5> tabs_{
         juce::TextButton{"SYSTEM"}, juce::TextButton{"VOICES"}, juce::TextButton{"SPACE"},
         juce::TextButton{"PRESETS"}, juce::TextButton{"SETTINGS"}};
-    std::array<juce::Label, 13> knobLabels_;
+    std::array<juce::Label, 15> knobLabels_;
     DeckPage deckPage_{DeckPage::System};
     bool midiOutputAvailable_{};
     bool presentationMode_{};

@@ -18,7 +18,8 @@ int main() {
         return 77;
     }
     threebs::SpscQueue<threebs::RenderSnapshot, 64> snapshots;
-    threebs::MetalSceneComponent scene(snapshots);
+    threebs::NoteVisualizationQueue noteEvents;
+    threebs::MetalSceneComponent scene(snapshots, noteEvents);
     if (!scene.rendererAvailable()) {
         std::cerr << "Metal renderer or shader pipeline unavailable\n";
         return EXIT_FAILURE;

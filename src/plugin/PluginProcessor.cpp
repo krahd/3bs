@@ -85,6 +85,7 @@ std::array<double, bodyCount> ThreeBSProcessor::AtomicPlaneTilts::load() const n
 }
 
 void ThreeBSProcessor::AtomicPresentationState::store(const PresentationState& state) noexcept {
+    const auto camera = sanitizedCameraState(state.camera);
     trailSeconds.store(state.visual.trailSeconds, std::memory_order_relaxed);
     trailWidth.store(state.visual.trailWidth, std::memory_order_relaxed);
     extrusion.store(state.visual.extrusion, std::memory_order_relaxed);
@@ -92,12 +93,16 @@ void ThreeBSProcessor::AtomicPresentationState::store(const PresentationState& s
     starDensity.store(state.visual.starDensity, std::memory_order_relaxed);
     palette.store(static_cast<int>(state.visual.palette), std::memory_order_relaxed);
     quality.store(static_cast<int>(state.visual.quality), std::memory_order_relaxed);
-    yaw.store(state.camera.yaw, std::memory_order_relaxed);
-    pitch.store(state.camera.pitch, std::memory_order_relaxed);
-    distance.store(state.camera.distance, std::memory_order_relaxed);
-    autoOrbit.store(state.camera.autoOrbit, std::memory_order_relaxed);
-    focusBody.store(state.camera.focusBody, std::memory_order_relaxed);
+    yaw.store(camera.yaw, std::memory_order_relaxed);
+    pitch.store(camera.pitch, std::memory_order_relaxed);
+    distance.store(camera.distance, std::memory_order_relaxed);
+    minimumDistance.store(camera.minimumDistance, std::memory_order_relaxed);
+    maximumDistance.store(camera.maximumDistance, std::memory_order_relaxed);
+    autoOrbit.store(camera.autoOrbit, std::memory_order_relaxed);
+    focusBody.store(camera.focusBody, std::memory_order_relaxed);
+    autoFrame.store(camera.autoFrame, std::memory_order_relaxed);
     visualSeed.store(state.visualSeed, std::memory_order_relaxed);
+    notePaneMinimized.store(state.notePaneMinimized, std::memory_order_relaxed);
 }
 
 PresentationState ThreeBSProcessor::AtomicPresentationState::load() const noexcept {
@@ -112,9 +117,14 @@ PresentationState ThreeBSProcessor::AtomicPresentationState::load() const noexce
     state.camera.yaw = yaw.load(std::memory_order_relaxed);
     state.camera.pitch = pitch.load(std::memory_order_relaxed);
     state.camera.distance = distance.load(std::memory_order_relaxed);
+    state.camera.minimumDistance = minimumDistance.load(std::memory_order_relaxed);
+    state.camera.maximumDistance = maximumDistance.load(std::memory_order_relaxed);
     state.camera.autoOrbit = autoOrbit.load(std::memory_order_relaxed);
     state.camera.focusBody = focusBody.load(std::memory_order_relaxed);
+    state.camera.autoFrame = autoFrame.load(std::memory_order_relaxed);
     state.visualSeed = visualSeed.load(std::memory_order_relaxed);
+    state.notePaneMinimized = notePaneMinimized.load(std::memory_order_relaxed);
+    state.camera = sanitizedCameraState(state.camera);
     return state;
 }
 
@@ -267,6 +277,21 @@ void ThreeBSProcessor::addEvents(const MusicEngine::EventBuffer& events, juce::M
     }
 }
 
+void ThreeBSProcessor::publishNoteVisualization(const MusicEngine::EventBuffer& events) noexcept {
+    for (const auto& event : events) {
+        if (event.type == MidiEventType::ControlChange)
+            continue;
+        NoteVisualizationEvent visual;
+        visual.type = event.type == MidiEventType::NoteOn
+            ? NoteVisualizationType::On : NoteVisualizationType::Off;
+        visual.body = event.sourceBody;
+        visual.note = event.data1;
+        visual.velocity = event.data2;
+        visual.sequence = ++noteVisualizationSequence_;
+        (void)noteVisualizationEvents_.push(visual);
+    }
+}
+
 void ThreeBSProcessor::processBlock(juce::AudioBuffer<float>& audio, juce::MidiBuffer& midi) {
     juce::ScopedNoDenormals noDenormals;
     audio.clear();
@@ -284,6 +309,7 @@ void ThreeBSProcessor::processBlock(juce::AudioBuffer<float>& audio, juce::MidiB
 
     MusicEngine::EventBuffer generated;
     consumeCommands(generated);
+    publishNoteVisualization(generated);
     addEvents(generated, midi);
     updateEngineConfigFromParameters();
 
@@ -326,6 +352,7 @@ void ThreeBSProcessor::processBlock(juce::AudioBuffer<float>& audio, juce::MidiB
         ++trajectoryRevision_;
 
     engine_.process(context, generated);
+    publishNoteVisualization(generated);
     addEvents(generated, midi);
     freeBeat_ += beatsPerSample * static_cast<double>(sampleCount);
     hostWasPlaying_ = context.playing;
@@ -345,6 +372,7 @@ void ThreeBSProcessor::processBlockBypassed(juce::AudioBuffer<float>& audio, juc
     midi.clear();
     MusicEngine::EventBuffer events;
     engine_.allNotesOff(0, events);
+    publishNoteVisualization(events);
     addEvents(events, midi);
     hostWasPlaying_ = false;
 }
@@ -487,8 +515,12 @@ void ThreeBSProcessor::getStateInformation(juce::MemoryBlock& destination) {
     state.setProperty("cameraYaw", presentation.camera.yaw, nullptr);
     state.setProperty("cameraPitch", presentation.camera.pitch, nullptr);
     state.setProperty("cameraDistance", presentation.camera.distance, nullptr);
+    state.setProperty("cameraMinimumDistance", presentation.camera.minimumDistance, nullptr);
+    state.setProperty("cameraMaximumDistance", presentation.camera.maximumDistance, nullptr);
     state.setProperty("cameraAutoOrbit", presentation.camera.autoOrbit, nullptr);
     state.setProperty("cameraFocusBody", presentation.camera.focusBody, nullptr);
+    state.setProperty("cameraAutoFrame", presentation.camera.autoFrame, nullptr);
+    state.setProperty("notePaneMinimized", presentation.notePaneMinimized, nullptr);
     state.setProperty("visualSeed", juce::String(presentation.visualSeed), nullptr);
     const auto initial = storedInitial_.load();
     const auto baseInitial = storedBaseInitial_.load();
@@ -598,10 +630,19 @@ void ThreeBSProcessor::setStateInformation(const void* data, int size) {
     presentation.camera.pitch = static_cast<float>(state.getProperty("cameraPitch", presentation.camera.pitch));
     presentation.camera.distance = static_cast<float>(
         state.getProperty("cameraDistance", presentation.camera.distance));
+    presentation.camera.minimumDistance = static_cast<float>(
+        state.getProperty("cameraMinimumDistance", presentation.camera.minimumDistance));
+    presentation.camera.maximumDistance = static_cast<float>(
+        state.getProperty("cameraMaximumDistance", presentation.camera.maximumDistance));
     presentation.camera.autoOrbit = static_cast<float>(
         state.getProperty("cameraAutoOrbit", presentation.camera.autoOrbit));
     presentation.camera.focusBody = static_cast<int>(
         state.getProperty("cameraFocusBody", presentation.camera.focusBody));
+    presentation.camera.autoFrame = static_cast<bool>(
+        state.getProperty("cameraAutoFrame", presentation.camera.autoFrame));
+    presentation.notePaneMinimized = static_cast<bool>(
+        state.getProperty("notePaneMinimized", presentation.notePaneMinimized));
+    presentation.camera = sanitizedCameraState(presentation.camera);
     presentation.visualSeed = static_cast<std::uint64_t>(state.getProperty(
         "visualSeed", juce::String(initial.seed)).toString().getLargeIntValue());
     storedPresentation_.store(presentation);

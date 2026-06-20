@@ -6,6 +6,7 @@
 #include "core/Random.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace threebs {
 namespace {
@@ -43,6 +44,34 @@ Colour3 mix(Colour3 a, Colour3 b, float amount) noexcept {
 }
 
 } // namespace
+
+CameraState sanitizedCameraState(CameraState state) noexcept {
+    const CameraState defaults;
+    if (!std::isfinite(state.yaw))
+        state.yaw = defaults.yaw;
+    if (!std::isfinite(state.pitch))
+        state.pitch = defaults.pitch;
+    if (!std::isfinite(state.distance))
+        state.distance = defaults.distance;
+    if (!std::isfinite(state.minimumDistance))
+        state.minimumDistance = defaults.minimumDistance;
+    if (!std::isfinite(state.maximumDistance))
+        state.maximumDistance = defaults.maximumDistance;
+    if (!std::isfinite(state.autoOrbit))
+        state.autoOrbit = defaults.autoOrbit;
+
+    state.pitch = std::clamp(state.pitch, -1.4835298F, 1.4835298F);
+    state.minimumDistance = std::clamp(state.minimumDistance, 1.0F, 20.0F);
+    state.maximumDistance = std::clamp(state.maximumDistance, 5.0F, 80.0F);
+    if (state.maximumDistance < state.minimumDistance + 0.5F)
+        state.maximumDistance = std::min(80.0F, state.minimumDistance + 0.5F);
+    if (state.minimumDistance > state.maximumDistance - 0.5F)
+        state.minimumDistance = std::max(1.0F, state.maximumDistance - 0.5F);
+    state.distance = std::clamp(state.distance, state.minimumDistance, state.maximumDistance);
+    state.autoOrbit = std::clamp(state.autoOrbit, -2.0F, 2.0F);
+    state.focusBody = std::clamp(state.focusBody, -1, static_cast<int>(bodyCount) - 1);
+    return state;
+}
 
 std::array<PlanetVisualStyle, bodyCount> makePlanetVisualStyles(PaletteId palette,
                                                                std::uint64_t seed) noexcept {

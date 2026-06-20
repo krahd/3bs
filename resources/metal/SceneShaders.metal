@@ -61,6 +61,11 @@ struct ColourOut {
     float2 uv;
 };
 
+struct OverlayInstance {
+    float4 bounds;
+    float4 colour;
+};
+
 constant float pi = 3.14159265358979323846;
 
 float4 projectWorld(float3 world, constant SceneUniforms& u) {
@@ -304,7 +309,8 @@ fragment float4 trailFragment(ColourOut in [[stage_in]]) {
 fragment float4 bloomExtractFragment(FullscreenOut in [[stage_in]],
                                      texture2d<float> source [[texture(0)]]) {
     constexpr sampler linearSampler(filter::linear, address::clamp_to_edge);
-    const float3 colour = source.sample(linearSampler, in.uv).rgb;
+    const float2 textureUv = float2(in.uv.x, 1.0 - in.uv.y);
+    const float3 colour = source.sample(linearSampler, textureUv).rgb;
     const float luminance = dot(colour, float3(0.2126, 0.7152, 0.0722));
     return float4(colour * smoothstep(0.32, 1.25, luminance), 1.0);
 }
@@ -320,11 +326,12 @@ fragment float4 blurFragment(FullscreenOut in [[stage_in]], texture2d<float> sou
                              constant PostUniforms& post [[buffer(0)]]) {
     constexpr sampler linearSampler(filter::linear, address::clamp_to_edge);
     const float2 step = post.texel * post.direction;
-    float3 colour = source.sample(linearSampler, in.uv).rgb * 0.227027;
-    colour += source.sample(linearSampler, in.uv + step * 1.384615).rgb * 0.316216;
-    colour += source.sample(linearSampler, in.uv - step * 1.384615).rgb * 0.316216;
-    colour += source.sample(linearSampler, in.uv + step * 3.230769).rgb * 0.070270;
-    colour += source.sample(linearSampler, in.uv - step * 3.230769).rgb * 0.070270;
+    const float2 textureUv = float2(in.uv.x, 1.0 - in.uv.y);
+    float3 colour = source.sample(linearSampler, textureUv).rgb * 0.227027;
+    colour += source.sample(linearSampler, textureUv + step * 1.384615).rgb * 0.316216;
+    colour += source.sample(linearSampler, textureUv - step * 1.384615).rgb * 0.316216;
+    colour += source.sample(linearSampler, textureUv + step * 3.230769).rgb * 0.070270;
+    colour += source.sample(linearSampler, textureUv - step * 3.230769).rgb * 0.070270;
     return float4(colour, 1.0);
 }
 
@@ -342,9 +349,35 @@ fragment float4 compositeFragment(FullscreenOut in [[stage_in]],
                                   texture2d<float> bloomTexture [[texture(1)]],
                                   constant PostUniforms& post [[buffer(0)]]) {
     constexpr sampler linearSampler(filter::linear, address::clamp_to_edge);
-    float3 colour = scene.sample(linearSampler, in.uv).rgb;
-    colour += bloomTexture.sample(linearSampler, in.uv).rgb * post.bloom * 1.65;
+    const float2 textureUv = float2(in.uv.x, 1.0 - in.uv.y);
+    float3 colour = scene.sample(linearSampler, textureUv).rgb;
+    colour += bloomTexture.sample(linearSampler, textureUv).rgb * post.bloom * 1.65;
     colour = acesToneMap(colour);
     const float dither = hash31(float3(in.position.xy, 0.37)) - 0.5;
     return float4(colour + dither / 255.0, 1.0);
+}
+
+vertex ColourOut overlayVertex(const device OverlayInstance* instances [[buffer(0)]],
+                               constant SceneUniforms& u [[buffer(1)]],
+                               uint vertexId [[vertex_id]], uint instanceId [[instance_id]]) {
+    const float2 corners[6] = {
+        float2(0, 0), float2(1, 0), float2(0, 1),
+        float2(0, 1), float2(1, 0), float2(1, 1)
+    };
+    const OverlayInstance instance = instances[instanceId];
+    const float2 corner = corners[vertexId];
+    const float2 pixel = instance.bounds.xy + corner * instance.bounds.zw;
+    ColourOut out;
+    out.position = float4(pixel.x * 2.0 / max(1.0, u.viewportTime.x) - 1.0,
+                          1.0 - pixel.y * 2.0 / max(1.0, u.viewportTime.y), 0.0, 1.0);
+    out.colour = instance.colour;
+    out.uv = corner * 2.0 - 1.0;
+    return out;
+}
+
+fragment float4 overlayFragment(ColourOut in [[stage_in]]) {
+    const float2 q = abs(in.uv) - 0.92;
+    const float distance = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 0.08;
+    const float coverage = 1.0 - smoothstep(-0.025, 0.025, distance);
+    return float4(in.colour.rgb, in.colour.a * coverage);
 }

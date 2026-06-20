@@ -14,8 +14,9 @@ The project targets Apple Silicon Macs and will produce:
 ## Status
 
 The deterministic core, AU, VST3, standalone application, interactive HDR Metal
-presentation, 24 factory presets, and automated test targets are implemented. The original
-concept and policy templates remain in [`doc/`](doc/). See
+presentation with automatic framing and live note streams, 24 factory presets,
+and automated test targets are implemented. The original concept and policy
+templates remain in [`doc/`](doc/). See
 [`STATUS.md`](STATUS.md) for exact verification results and remaining host tests.
 
 The repository remains private until a deterministic three-format vertical
@@ -93,17 +94,26 @@ fullscreen.
 The shared control deck is split into System, Voices, Space, Presets, and
 Settings pages. It exposes run/sync, speed, gravity, softening, chaos, density,
 trail duration, bloom, body masses, non-automatable initial orbital-plane tilt
-macros, deterministic randomization, reset, and the 24-scene factory catalog.
+macros, automatic framing and zoom limits, deterministic randomization, reset,
+and the 24-scene factory catalog.
 Drag the scene to orbit around the active target, scroll to zoom, click a
 planet to follow it, and click the background to return to the mass-weighted
 barycenter. Manual input pauses cinematic auto-orbit for three seconds before
-it eases back in.
+it eases back in. Barycenter auto-frame keeps all bodies visible as the system
+expands and contracts. Manual scroll zoom disables it until `AUTO FRAME` is
+enabled again on the Space page.
+
+A translucent six-second piano-roll pane overlays the lower-right scene with
+one body-coloured stream per generated voice. Note position, duration, and
+velocity control each bar. Its minimize control collapses it to a small
+three-lane icon; this preference is recalled with plugin state.
 
 `ADVANCED STATE` opens a nonmodal numerical editor for every mass and initial
-position/velocity vector. Schema-v3 host state stores parameters, simulation
+position/velocity vector. Schema-v4 host state stores parameters, simulation
 seed and vectors, non-automatable plane-tilt macro state, mappings, loop policy,
-palette, camera target, orbit angle, and zoom. Rendering consumes revisioned
-immutable snapshots and never runs on the MIDI processing thread.
+palette, camera target, orbit angle, framing limits, zoom, and note-pane state.
+Rendering consumes revisioned immutable snapshots and a separate fixed-capacity
+note-event queue; it never runs on the MIDI processing thread.
 
 The renderer embeds a small real bright-star fallback plus a deterministic
 faint field. To populate the pinned HYG v4.1 magnitude-6.5 catalogue, obtain

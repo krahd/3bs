@@ -30,6 +30,10 @@ namespace {
 
 constexpr std::size_t trailCapacity = 4096;
 constexpr std::size_t generatedStarCount = 12000;
+constexpr std::size_t noteHistoryCapacity = 32;
+constexpr std::size_t overlayInstanceCapacity = 128;
+constexpr double noteHistorySeconds = 6.0;
+constexpr double minimumNoteDisplaySeconds = 0.08;
 
 void writeMetalDiagnostic(const char* stage, NSString* message) noexcept {
     const auto* text = message != nil ? message.UTF8String : "unknown Metal error";
@@ -78,6 +82,20 @@ struct alignas(16) PostUniforms {
     simd_float2 direction{};
     float bloom{};
     simd_float3 padding{};
+};
+
+struct alignas(16) OverlayInstance {
+    simd_float4 bounds{};
+    simd_float4 colour{};
+};
+
+struct NoteHistoryEntry {
+    double startTime{};
+    double endTime{};
+    std::uint8_t note{};
+    std::uint8_t velocity{};
+    bool active{};
+    bool valid{};
 };
 
 simd_float4 vector(Vec3 value, float w = 0.0F) noexcept {
@@ -207,6 +225,7 @@ std::vector<StarInstance> makeStars() {
     NSPoint _mouseDownPoint;
     NSPoint _lastMousePoint;
     BOOL _dragged;
+    BOOL _notePaneInteraction;
 }
 @property(nonatomic, assign) ThreeBSMetalDelegate* sceneDelegate;
 @end
@@ -214,6 +233,7 @@ std::vector<StarInstance> makeStars() {
 @interface ThreeBSMetalDelegate : NSObject <MTKViewDelegate>
 - (instancetype)initWithView:(ThreeBSMetalView*)view
                    snapshots:(threebs::SpscQueue<threebs::RenderSnapshot, 64>*)snapshots
+                  noteEvents:(threebs::NoteVisualizationQueue*)noteEvents
                        owner:(threebs::MetalSceneComponent*)owner;
 - (void)setPresentation:(const threebs::PresentationState&)state;
 - (threebs::PresentationState)presentation;
@@ -222,6 +242,8 @@ std::vector<StarInstance> makeStars() {
 - (void)zoomBy:(double)delta;
 - (void)selectAtX:(double)x y:(double)y width:(double)width height:(double)height;
 - (void)finishCameraInteraction;
+- (BOOL)notePaneContainsX:(double)x y:(double)y width:(double)width height:(double)height;
+- (void)notePaneClickAtX:(double)x y:(double)y width:(double)width height:(double)height;
 - (BOOL)isReady;
 @end
 
@@ -240,7 +262,12 @@ std::vector<StarInstance> makeStars() {
     _mouseDownPoint = [self cameraPoint:event];
     _lastMousePoint = _mouseDownPoint;
     _dragged = NO;
-    [_sceneDelegate beginCameraInteraction];
+    _notePaneInteraction = [_sceneDelegate notePaneContainsX:_mouseDownPoint.x
+                                                          y:_mouseDownPoint.y
+                                                      width:self.bounds.size.width
+                                                     height:self.bounds.size.height];
+    if (!_notePaneInteraction)
+        [_sceneDelegate beginCameraInteraction];
 }
 
 - (void)mouseDragged:(NSEvent*)event {
@@ -249,7 +276,7 @@ std::vector<StarInstance> makeStars() {
     const auto totalY = point.y - _mouseDownPoint.y;
     if (!threebs::CameraController::isClick(totalX, totalY))
         _dragged = YES;
-    if (_dragged)
+    if (_dragged && !_notePaneInteraction)
         [_sceneDelegate orbitByX:point.x - _lastMousePoint.x
                                y:point.y - _lastMousePoint.y
                            width:self.bounds.size.width];
@@ -258,6 +285,12 @@ std::vector<StarInstance> makeStars() {
 
 - (void)mouseUp:(NSEvent*)event {
     const auto point = [self cameraPoint:event];
+    if (_notePaneInteraction) {
+        [_sceneDelegate notePaneClickAtX:point.x y:point.y
+                                   width:self.bounds.size.width height:self.bounds.size.height];
+        _notePaneInteraction = NO;
+        return;
+    }
     if (!_dragged)
         [_sceneDelegate selectAtX:point.x y:point.y width:self.bounds.size.width height:self.bounds.size.height];
     [_sceneDelegate finishCameraInteraction];
@@ -284,6 +317,7 @@ std::vector<StarInstance> makeStars() {
     id<MTLRenderPipelineState> _bloomExtractPipeline;
     id<MTLRenderPipelineState> _blurPipeline;
     id<MTLRenderPipelineState> _compositePipeline;
+    id<MTLRenderPipelineState> _overlayPipeline;
     id<MTLDepthStencilState> _depthWrite;
     id<MTLDepthStencilState> _depthRead;
     id<MTLDepthStencilState> _depthNone;
@@ -299,6 +333,7 @@ std::vector<StarInstance> makeStars() {
     id<MTLTexture> _bloomA;
     id<MTLTexture> _bloomB;
     threebs::SpscQueue<threebs::RenderSnapshot, 64>* _snapshots;
+    threebs::NoteVisualizationQueue* _noteEvents;
     threebs::MetalSceneComponent* _owner;
     threebs::PresentationState _presentation;
     threebs::CameraState _hostCamera;
@@ -307,9 +342,13 @@ std::vector<StarInstance> makeStars() {
     std::array<threebs::TrailHistory<threebs::trailCapacity>, threebs::bodyCount> _trails;
     std::array<threebs::PlanetVisualStyle, threebs::bodyCount> _styles;
     std::array<threebs::TrailVertex, threebs::trailCapacity * threebs::bodyCount * 2U> _trailStaging;
+    std::array<std::array<threebs::NoteHistoryEntry, threebs::noteHistoryCapacity>, threebs::bodyCount> _noteHistory;
+    std::array<std::size_t, threebs::bodyCount> _nextNoteHistory;
+    std::array<threebs::OverlayInstance, threebs::overlayInstanceCapacity> _overlayStaging;
     std::size_t _sphereIndexCount;
     std::size_t _starCount;
     std::uint64_t _lastSequence;
+    std::uint64_t _noteHistoryRevision;
     NSUInteger _targetWidth;
     NSUInteger _targetHeight;
     CFTimeInterval _startTime;
@@ -318,11 +357,15 @@ std::vector<StarInstance> makeStars() {
 
 - (instancetype)initWithView:(ThreeBSMetalView*)view
                    snapshots:(threebs::SpscQueue<threebs::RenderSnapshot, 64>*)snapshots
+                  noteEvents:(threebs::NoteVisualizationQueue*)noteEvents
                        owner:(threebs::MetalSceneComponent*)owner {
     self = [super init];
     if (self == nil)
         return nil;
     _snapshots = snapshots;
+    _noteEvents = noteEvents;
+    threebs::NoteVisualizationEvent discardedNote;
+    while (_noteEvents->pop(discardedNote)) {}
     _owner = owner;
     _device = [view.device retain];
     _queue = [_device newCommandQueue];
@@ -384,6 +427,25 @@ std::vector<StarInstance> makeStars() {
     _bloomExtractPipeline = makePipeline(@"fullscreenVertex", @"bloomExtractFragment", hdr, NO, NO);
     _blurPipeline = makePipeline(@"fullscreenVertex", @"blurFragment", hdr, NO, NO);
     _compositePipeline = makePipeline(@"fullscreenVertex", @"compositeFragment", view.colorPixelFormat, NO, NO);
+
+    MTLRenderPipelineDescriptor* overlayDescriptor = [MTLRenderPipelineDescriptor new];
+    id<MTLFunction> overlayVertex = [library newFunctionWithName:@"overlayVertex"];
+    id<MTLFunction> overlayFragment = [library newFunctionWithName:@"overlayFragment"];
+    overlayDescriptor.vertexFunction = overlayVertex;
+    overlayDescriptor.fragmentFunction = overlayFragment;
+    overlayDescriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat;
+    overlayDescriptor.colorAttachments[0].blendingEnabled = YES;
+    overlayDescriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
+    overlayDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+    overlayDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
+    overlayDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+    NSError* overlayError = nil;
+    _overlayPipeline = [_device newRenderPipelineStateWithDescriptor:overlayDescriptor error:&overlayError];
+    if (_overlayPipeline == nil)
+        threebs::writeMetalDiagnostic("overlay pipeline", overlayError.localizedDescription);
+    [overlayVertex release];
+    [overlayFragment release];
+    [overlayDescriptor release];
     [library release];
 
     MTLDepthStencilDescriptor* depth = [MTLDepthStencilDescriptor new];
@@ -424,6 +486,7 @@ std::vector<StarInstance> makeStars() {
         && _trailPipeline != nil && _planetPipeline != nil && _cloudPipeline != nil
         && _atmospherePipeline != nil && _bloomExtractPipeline != nil
         && _blurPipeline != nil && _compositePipeline != nil && _sphereVertices != nil
+        && _overlayPipeline != nil
         && _sphereIndices != nil && _starInstances != nil && _trailVertices != nil;
     return self;
 }
@@ -443,6 +506,7 @@ std::vector<StarInstance> makeStars() {
     [_depthNone release];
     [_depthRead release];
     [_depthWrite release];
+    [_overlayPipeline release];
     [_compositePipeline release];
     [_blurPipeline release];
     [_bloomExtractPipeline release];
@@ -501,6 +565,31 @@ std::vector<StarInstance> makeStars() {
         _owner->onCameraInteractionComplete(_presentation.camera);
 }
 
+- (BOOL)notePaneContainsX:(double)x y:(double)y width:(double)width height:(double)height {
+    constexpr double inset = 16.0;
+    const auto paneWidth = _presentation.notePaneMinimized ? 42.0 : 310.0;
+    const auto paneHeight = _presentation.notePaneMinimized ? 42.0 : 150.0;
+    const auto left = width - inset - paneWidth;
+    const auto top = height - inset - paneHeight;
+    return x >= left && x <= left + paneWidth && y >= top && y <= top + paneHeight;
+}
+
+- (void)notePaneClickAtX:(double)x y:(double)y width:(double)width height:(double)height {
+    constexpr double inset = 16.0;
+    const auto paneWidth = _presentation.notePaneMinimized ? 42.0 : 310.0;
+    const auto paneHeight = _presentation.notePaneMinimized ? 42.0 : 150.0;
+    const auto left = width - inset - paneWidth;
+    const auto top = height - inset - paneHeight;
+    const auto toggleHit = _presentation.notePaneMinimized
+        || (x >= left + paneWidth - 32.0 && x <= left + paneWidth - 6.0
+            && y >= top + 6.0 && y <= top + 32.0);
+    if (!toggleHit)
+        return;
+    _presentation.notePaneMinimized = !_presentation.notePaneMinimized;
+    if (_owner != nullptr && _owner->onNotePaneMinimizedChanged)
+        _owner->onNotePaneMinimizedChanged(_presentation.notePaneMinimized);
+}
+
 - (void)mtkView:(MTKView*)view drawableSizeWillChange:(CGSize)size {
     (void)view;
     (void)size;
@@ -553,6 +642,36 @@ std::vector<StarInstance> makeStars() {
         _latest = incoming;
         received = YES;
     }
+    if (_noteHistoryRevision != _latest.trajectoryRevision) {
+        _noteHistory = {};
+        _nextNoteHistory = {};
+        _noteHistoryRevision = _latest.trajectoryRevision;
+    }
+    threebs::NoteVisualizationEvent noteEvent;
+    while (_noteEvents->pop(noteEvent)) {
+        if (noteEvent.body >= threebs::bodyCount)
+            continue;
+        auto& history = _noteHistory[noteEvent.body];
+        if (noteEvent.type == threebs::NoteVisualizationType::On) {
+            for (auto& entry : history) {
+                if (entry.valid && entry.active) {
+                    entry.endTime = std::max(now, entry.startTime + threebs::minimumNoteDisplaySeconds);
+                    entry.active = false;
+                }
+            }
+            auto& entry = history[_nextNoteHistory[noteEvent.body]];
+            entry = {now, now, noteEvent.note, noteEvent.velocity, true, true};
+            _nextNoteHistory[noteEvent.body]
+                = (_nextNoteHistory[noteEvent.body] + 1U) % threebs::noteHistoryCapacity;
+        } else {
+            for (auto& entry : history) {
+                if (entry.valid && entry.active && entry.note == noteEvent.note) {
+                    entry.endTime = std::max(now, entry.startTime + threebs::minimumNoteDisplaySeconds);
+                    entry.active = false;
+                }
+            }
+        }
+    }
     if (received && _latest.sequence != _lastSequence) {
         _lastSequence = _latest.sequence;
         for (std::size_t body = 0; body < threebs::bodyCount; ++body)
@@ -561,7 +680,8 @@ std::vector<StarInstance> makeStars() {
     for (auto& trail : _trails)
         trail.prune(now, std::clamp(static_cast<double>(_presentation.visual.trailSeconds), 5.0, 60.0));
 
-    _camera.update(now, _latest.bodies);
+    _camera.update(now, _latest.bodies,
+                   static_cast<double>(_targetWidth) / static_cast<double>(_targetHeight));
     const auto basis = _camera.basis();
     threebs::SceneUniforms uniforms;
     uniforms.cameraPosition = threebs::vector(basis.position, 1.0F);
@@ -621,6 +741,81 @@ std::vector<StarInstance> makeStars() {
     if (trailVertexCount > 0U)
         std::memcpy(_trailVertices.contents, _trailStaging.data(),
                     trailVertexCount * sizeof(threebs::TrailVertex));
+
+    std::size_t overlayCount{};
+    const auto appendOverlay = [&](float x, float y, float width, float height,
+                                   simd_float4 overlayColour) {
+        if (overlayCount >= threebs::overlayInstanceCapacity)
+            return;
+        _overlayStaging[overlayCount++] = {{x, y, width, height}, overlayColour};
+    };
+    const auto backingScale = static_cast<float>(std::max<CGFloat>(1.0, view.window.backingScaleFactor));
+    const auto inset = 16.0F * backingScale;
+    if (_presentation.notePaneMinimized) {
+        const auto size = 42.0F * backingScale;
+        const auto left = static_cast<float>(_targetWidth) - inset - size;
+        const auto top = static_cast<float>(_targetHeight) - inset - size;
+        appendOverlay(left, top, size, size, simd_make_float4(0.025F, 0.035F, 0.065F, 0.84F));
+        for (std::size_t body = 0; body < threebs::bodyCount; ++body) {
+            const auto bodyColour = _styles[body].colours[2];
+            appendOverlay(left + 9.0F * backingScale,
+                          top + (10.0F + static_cast<float>(body) * 10.0F) * backingScale,
+                          24.0F * backingScale, 3.0F * backingScale,
+                          simd_make_float4(bodyColour.r, bodyColour.g, bodyColour.b, 0.9F));
+        }
+    } else {
+        const auto paneWidth = 310.0F * backingScale;
+        const auto paneHeight = 150.0F * backingScale;
+        const auto left = static_cast<float>(_targetWidth) - inset - paneWidth;
+        const auto top = static_cast<float>(_targetHeight) - inset - paneHeight;
+        appendOverlay(left, top, paneWidth, paneHeight,
+                      simd_make_float4(0.018F, 0.026F, 0.052F, 0.80F));
+        appendOverlay(left + paneWidth - 30.0F * backingScale, top + 7.0F * backingScale,
+                      23.0F * backingScale, 23.0F * backingScale,
+                      simd_make_float4(0.18F, 0.23F, 0.34F, 0.72F));
+        appendOverlay(left + paneWidth - 25.0F * backingScale, top + 17.0F * backingScale,
+                      13.0F * backingScale, 2.0F * backingScale,
+                      simd_make_float4(0.72F, 0.81F, 0.88F, 0.92F));
+
+        const auto contentLeft = left + 24.0F * backingScale;
+        const auto contentRight = left + paneWidth - 10.0F * backingScale;
+        const auto contentTop = top + 34.0F * backingScale;
+        const auto laneHeight = (paneHeight - 42.0F * backingScale) / 3.0F;
+        for (std::size_t body = 0; body < threebs::bodyCount; ++body) {
+            const auto laneTop = contentTop + static_cast<float>(body) * laneHeight;
+            const auto bodyColour = _styles[body].colours[2];
+            appendOverlay(left + 10.0F * backingScale, laneTop + laneHeight * 0.5F - 3.0F * backingScale,
+                          7.0F * backingScale, 7.0F * backingScale,
+                          simd_make_float4(bodyColour.r, bodyColour.g, bodyColour.b, 0.95F));
+            if (body > 0U)
+                appendOverlay(contentLeft, laneTop, contentRight - contentLeft, 1.0F * backingScale,
+                              simd_make_float4(0.30F, 0.37F, 0.48F, 0.32F));
+
+            for (const auto& entry : _noteHistory[body]) {
+                if (!entry.valid)
+                    continue;
+                const auto endTime = entry.active
+                    ? now : std::max(entry.endTime, entry.startTime + threebs::minimumNoteDisplaySeconds);
+                if (endTime < now - threebs::noteHistorySeconds)
+                    continue;
+                const auto width = contentRight - contentLeft;
+                const auto startAmount = static_cast<float>(
+                    (entry.startTime - (now - threebs::noteHistorySeconds)) / threebs::noteHistorySeconds);
+                const auto endAmount = static_cast<float>(
+                    (endTime - (now - threebs::noteHistorySeconds)) / threebs::noteHistorySeconds);
+                const auto x0 = std::clamp(contentLeft + startAmount * width, contentLeft, contentRight);
+                const auto x1 = std::clamp(contentLeft + endAmount * width, contentLeft, contentRight);
+                const auto velocity = static_cast<float>(entry.velocity) / 127.0F;
+                const auto barHeight = (4.0F + velocity * 4.0F) * backingScale;
+                const auto pitch = static_cast<float>(entry.note) / 127.0F;
+                const auto y = laneTop + (laneHeight - barHeight - 3.0F * backingScale) * (1.0F - pitch)
+                               + 1.5F * backingScale;
+                appendOverlay(x0, y, std::max(2.0F * backingScale, x1 - x0), barHeight,
+                              simd_make_float4(bodyColour.r, bodyColour.g, bodyColour.b,
+                                               0.38F + velocity * 0.58F));
+            }
+        }
+    }
 
     id<MTLCommandBuffer> command = [_queue commandBuffer];
     MTLRenderPassDescriptor* scenePass = [MTLRenderPassDescriptor renderPassDescriptor];
@@ -732,6 +927,14 @@ std::vector<StarInstance> makeStars() {
     [encoder setFragmentTexture:_bloomA atIndex:1];
     [encoder setFragmentBytes:&post length:sizeof(post) atIndex:0];
     [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+    if (overlayCount > 0U) {
+        [encoder setRenderPipelineState:_overlayPipeline];
+        [encoder setVertexBytes:_overlayStaging.data()
+                         length:overlayCount * sizeof(threebs::OverlayInstance) atIndex:0];
+        [encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:1];
+        [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6
+                  instanceCount:overlayCount];
+    }
     [encoder endEncoding];
     [command presentDrawable:view.currentDrawable];
     [command commit];
@@ -742,7 +945,8 @@ namespace threebs {
 
 class MetalSceneComponent::Impl {
 public:
-    Impl(MetalSceneComponent& owner, SpscQueue<RenderSnapshot, 64>& snapshots) {
+    Impl(MetalSceneComponent& owner, SpscQueue<RenderSnapshot, 64>& snapshots,
+         NoteVisualizationQueue& noteVisualizationEvents) {
         auto device = MTLCreateSystemDefaultDevice();
         if (device == nil) {
             std::fprintf(stderr, "3bs Metal device unavailable\n");
@@ -754,7 +958,8 @@ public:
         view.preferredFramesPerSecond = 60;
         view.paused = NO;
         view.enableSetNeedsDisplay = NO;
-        delegate = [[ThreeBSMetalDelegate alloc] initWithView:view snapshots:&snapshots owner:&owner];
+        delegate = [[ThreeBSMetalDelegate alloc] initWithView:view snapshots:&snapshots
+                                                  noteEvents:&noteVisualizationEvents owner:&owner];
         view.sceneDelegate = delegate;
         view.delegate = delegate;
         owner.setView(static_cast<void*>(view));
@@ -771,8 +976,9 @@ public:
     ThreeBSMetalDelegate* delegate{};
 };
 
-MetalSceneComponent::MetalSceneComponent(SpscQueue<RenderSnapshot, 64>& snapshots)
-    : impl_(std::make_unique<Impl>(*this, snapshots)) {}
+MetalSceneComponent::MetalSceneComponent(SpscQueue<RenderSnapshot, 64>& snapshots,
+                                         NoteVisualizationQueue& noteVisualizationEvents)
+    : impl_(std::make_unique<Impl>(*this, snapshots, noteVisualizationEvents)) {}
 
 MetalSceneComponent::~MetalSceneComponent() {
     setView(nullptr);

@@ -36,8 +36,11 @@ struct CameraState {
     float yaw{};
     float pitch{-0.34F};
     float distance{7.0F};
+    float minimumDistance{2.5F};
+    float maximumDistance{40.0F};
     float autoOrbit{0.035F};
     int focusBody{-1};
+    bool autoFrame{true};
 
     bool operator==(const CameraState&) const = default;
 };
@@ -68,6 +71,7 @@ struct PresentationState {
     VisualSettings visual{};
     CameraState camera{};
     std::uint64_t visualSeed{0x334253ULL};
+    bool notePaneMinimized{};
 
     bool operator==(const PresentationState&) const = default;
 };
@@ -83,5 +87,7 @@ constexpr double planetRadius(double mass) noexcept {
     const auto safeMass = mass < 0.05 ? 0.05 : mass;
     return 0.22 + 0.10 * std::cbrt(safeMass);
 }
+
+CameraState sanitizedCameraState(CameraState state) noexcept;
 
 } // namespace threebs

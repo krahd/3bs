@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-20 01-15 GMT-3
+Last updated: 2026-06-20 14-57 GMT-3
 
 ## Project purpose
 
@@ -12,8 +12,8 @@ standalone artwork driven by a normalized three-body gravitational simulation.
 The repository builds a deterministic core library, Logic AU MIDI effect,
 Ableton-oriented VST3 instrument, and standalone CoreMIDI application. It has a
 native interactive HDR Metal presentation layer, shared control deck, 24
-schema-v2 factory presets, schema-v3 host state serialization, automated tests,
-and macOS CI.
+schema-v2 factory presets, schema-v4 host state serialization, automatic camera
+framing, live note-stream visualization, automated tests, and macOS CI.
 
 ## Active focus
 
@@ -25,7 +25,8 @@ three-format vertical slice before making the repository public.
 The framework-independent core owns physics, measurements, mapping, MIDI event
 scheduling, deterministic random state, and fixed-capacity queues. Thin JUCE
 adapters translate host transport and MIDI. The Metal renderer consumes
-immutable snapshots without touching real-time processing.
+immutable snapshots and bounded note events without touching real-time
+processing.
 
 ### Architecture diagram
 
@@ -46,7 +47,7 @@ The same engine is shared by all three runtime surfaces.
     <text x="135" y="285" font-size="17">Standalone</text><text x="135" y="306" font-size="12" fill="#7f9bb4">CoreMIDI adapter</text>
     <text x="455" y="150" font-size="19">Deterministic Engine</text><text x="455" y="182" font-size="13" fill="#9cb4c8">Verlet physics · measurements</text><text x="455" y="204" font-size="13" fill="#9cb4c8">pitch/trigger mapping · state</text><text x="455" y="226" font-size="13" fill="#9cb4c8">fixed MIDI event buffers</text>
     <text x="795" y="82" font-size="18">MIDI Destination</text><text x="795" y="106" font-size="12" fill="#7f9bb4">host events or CoreMIDI</text>
-    <text x="795" y="238" font-size="18">Presentation</text><text x="795" y="264" font-size="13" fill="#9cb4c8">JUCE control deck</text><text x="795" y="286" font-size="13" fill="#9cb4c8">NSView + MetalKit renderer</text>
+    <text x="795" y="238" font-size="18">Presentation</text><text x="795" y="264" font-size="13" fill="#9cb4c8">JUCE control deck</text><text x="795" y="286" font-size="13" fill="#9cb4c8">Metal scene + note streams</text>
   </g>
   <g stroke="#64748b" stroke-width="2" fill="none" marker-end="url(#arch-arrow)">
     <path d="M230 89 C275 89 285 145 330 145"/><path d="M230 189 L330 189"/><path d="M230 289 C275 289 285 235 330 235"/><path d="M580 155 C625 155 635 93 680 93"/><path d="M580 228 C625 228 635 260 680 260"/>
@@ -59,7 +60,7 @@ Commands and render snapshots use fixed-capacity queues; MIDI stays on the
 processing path.
 
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="330" viewBox="0 0 960 330" role="img" aria-labelledby="flow-title flow-desc">
-  <title id="flow-title">Real-time data flow</title><desc id="flow-desc">Host transport and parameters enter processing, simulation produces mappings and MIDI, while snapshots go independently to Metal.</desc>
+  <title id="flow-title">Real-time data flow</title><desc id="flow-desc">Host transport and parameters enter processing, simulation produces mappings and MIDI, while snapshots and bounded note events go independently to Metal.</desc>
   <defs><marker id="flow-arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker></defs>
   <rect width="960" height="330" rx="18" fill="#080d18"/>
   <g fill="#111b2d" stroke="#34506f" stroke-width="2">
@@ -69,10 +70,10 @@ processing path.
     <text x="120" y="80" font-size="16">Transport</text><text x="120" y="101" font-size="12" fill="#8ba3b8">parameters + MIDI in</text><text x="120" y="243" font-size="16">Control Deck</text><text x="120" y="264" font-size="12" fill="#8ba3b8">preset/reset commands</text>
     <text x="375" y="139" font-size="17">processBlock</text><text x="375" y="162" font-size="12" fill="#8ba3b8">consume · advance · schedule</text>
     <text x="630" y="85" font-size="16">MIDI Events</text><text x="630" y="106" font-size="12" fill="#8ba3b8">sample offsets</text><text x="630" y="235" font-size="16">Render Snapshot</text><text x="630" y="256" font-size="12" fill="#8ba3b8">immutable body state</text>
-    <text x="857" y="86" font-size="16">Host / MIDI</text><text x="857" y="238" font-size="16">Metal 60 fps</text><text x="857" y="259" font-size="12" fill="#8ba3b8">when available</text>
+    <text x="857" y="86" font-size="16">Host / MIDI</text><text x="857" y="238" font-size="16">Metal + note pane</text><text x="857" y="259" font-size="12" fill="#8ba3b8">60 fps when available</text>
   </g>
   <g stroke="#64748b" stroke-width="2" fill="none" marker-end="url(#flow-arrow)">
-    <path d="M205 85 C245 85 245 135 280 135"/><path d="M205 248 C245 248 245 172 280 172"/><path d="M470 136 C505 136 510 90 545 90"/><path d="M715 90 L790 90"/><path d="M470 170 C505 170 510 242 545 242"/><path d="M715 242 L790 242"/>
+    <path d="M205 85 C245 85 245 135 280 135"/><path d="M205 248 C245 248 245 172 280 172"/><path d="M470 136 C505 136 510 90 545 90"/><path d="M715 90 L790 90"/><path d="M690 112 C760 140 745 212 790 226"/><path d="M470 170 C505 170 510 242 545 242"/><path d="M715 242 L790 242"/>
   </g>
 </svg>
 
@@ -131,6 +132,12 @@ repository.
   visible controls, with Space exposing trail, bloom, and plane-tilt controls.
 - Reduced catalogue-star size, background dust peaks, trail additive energy,
   and cloud-shell opacity so visual effects do not read as extra planets.
+- Corrected vertically mirrored post-process sampling that made bloom appear as
+  detached duplicate planets.
+- Added schema-v4 barycenter auto-framing, editable near/far camera limits, and
+  manual-zoom override behavior shared by plugin and standalone.
+- Added a real-time-safe body-tagged note queue and a persistent, minimizable
+  three-lane Metal piano-roll overlay.
 
 ## Tests and verification status
 
@@ -140,8 +147,10 @@ repository.
 - `cmake --build --preset plugin-debug -j4`: passed for arm64 AU, VST3, and
   standalone.
 - `ctest --preset plugin-debug --output-on-failure`: core, schema-v2 preset, and
-  processor/schema-v3 state tests passed; Metal smoke test skipped because the
+  processor/schema-v4 state tests passed; Metal smoke test skipped because the
   sandbox returned no Metal device.
+- Offline `xcrun metal` validation was attempted but the installed Xcode lacks
+  the optional Metal Toolchain component.
 - Standalone was launched externally on Apple Silicon; runtime Metal shader
   compilation passed. The tabbed deck was manually verified by switching to the
   Presets page. The final cloud/trail attenuation build was compiled into all
@@ -152,7 +161,8 @@ repository.
   Release bundle build passed.
 - `auval -v aumi Tbs1 Krhd`: attempted and failed discovery because the local
   component was not installed in the Audio Unit search path.
-- Standalone launch, installed `auval`, pluginval, Logic, Ableton, and 60 fps
+- A fresh standalone launch for the bloom/framing/note-pane build could not be
+  approved in this run; installed `auval`, pluginval, Logic, Ableton, and 60 fps
   profiling remain unverified.
 
 ## Known issues, risks, and limitations
@@ -165,8 +175,8 @@ repository.
   and deterministic faint field are present.
 - User preset file import/export, detailed per-voice mapping UI, and advanced
   graphics controls are not yet exposed.
-- The final renderer attenuation pass needs one clean foreground screenshot or
-  hands-on visual check; desktop focus prevented a final capture in this run.
+- The corrected bloom orientation, automatic framing, note overlay, and pane
+  hit testing need one clean foreground visual and interaction check.
 - Allocation/lock instrumentation and baseline 60 fps profiling have not run.
 
 ## Pending tasks
@@ -176,7 +186,7 @@ repository.
   inspection, and 60 fps profiling.
 - Install and validate AU with `auval`, then test it in Logic.
 - Run plugin validation and test VST3 MIDI routing in Ableton.
-- Complete advanced editing, voice, camera, and user-preset controls.
+- Complete advanced voice and user-preset controls.
 - Profile processing allocation/locking and renderer frame time.
 
 ## Next steps
@@ -207,4 +217,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-20 01-15 GMT-3
+Last updated: 2026-06-20 14-57 GMT-3
