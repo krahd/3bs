@@ -6,7 +6,8 @@ ignore/
 
 # Editors
 .idea/
-.vscode/
+.vscode/*
+!.vscode/tasks.json
 *.swp
 
 # CMake and build products

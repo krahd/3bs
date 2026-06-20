@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-19 20-05 GMT-3
+Last updated: 2026-06-19 22-12 GMT-3
 
 ## Project purpose
 
@@ -80,7 +80,9 @@ processing path.
 Requirements are Apple Silicon macOS 13+, Xcode, CMake 3.22+, and recursive Git
 submodules. Use `cmake --preset dev` for core tests or
 `cmake --preset plugin-debug` for all formats, then the matching build and test
-presets. Detailed commands and artifact paths are in `README.md`.
+presets. Detailed commands and artifact paths are in `README.md`. In VS Code,
+run the `3bs: Run Standalone` task to build the standalone target and execute
+the application with its output visible in a dedicated terminal.
 
 ## Configuration and environment variables
 
@@ -112,6 +114,7 @@ repository.
   factory presets, ad-hoc signing, tests, and CI.
 - Added a nonmodal advanced editor for all masses and initial position/velocity
   vectors, shared by plugin and standalone.
+- Added tracked VS Code build and run tasks for the standalone application.
 
 ## Tests and verification status
 
@@ -177,4 +180,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-19 20-05 GMT-3
+Last updated: 2026-06-19 22-12 GMT-3

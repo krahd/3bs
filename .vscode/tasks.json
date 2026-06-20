@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "3bs: Build Standalone",
+      "type": "process",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "--preset",
+        "plugin-debug",
+        "--target",
+        "ThreeBSStandalone",
+        "-j",
+        "8"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": ["$gcc"],
+      "group": "build"
+    },
+    {
+      "label": "3bs: Run Standalone",
+      "type": "process",
+      "command": "${workspaceFolder}/build/plugin-debug/src/standalone/ThreeBSStandalone_artefacts/Debug/The Three Body Solution.app/Contents/MacOS/The Three Body Solution",
+      "dependsOrder": "sequence",
+      "dependsOn": "3bs: Build Standalone",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    }
+  ]
+}
