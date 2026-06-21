@@ -301,6 +301,12 @@ void testChordAndStrumModes() {
     const auto strum = render(threebs::VoicingMode::Strum, 10.0);
     check(strum[0] == 0 && strum[1] == 480 && strum[2] == 960,
           "strum mode schedules deterministic notes across processing blocks");
+    for (auto& voice : config.voices)
+        voice.triggerMapping = threebs::TriggerMapping::PhaseStep;
+    const auto physicalChord = render(threebs::VoicingMode::Chord, 0.0);
+    check(physicalChord[0] != std::numeric_limits<std::uint64_t>::max()
+              && physicalChord[0] == physicalChord[1] && physicalChord[1] == physicalChord[2],
+          "planet phase criteria can trigger a complete chord");
 }
 
 void testSnapshotQueue() {
@@ -391,10 +397,15 @@ void testCameraMotion() {
     check(camera.state().focusBody == -1 && near(camera.basis().target.x, 1.0 / 3.0, 1.0e-6),
           "manual zoom returns selected focus to the barycenter");
 
+    const auto yawBeforeReset = camera.state().yaw;
+    const auto pitchBeforeReset = camera.state().pitch;
     camera.resetView(bodies, 16.0 / 9.0, 7.0);
     check(camera.state().autoFrame && camera.state().focusBody == -1
               && near(camera.basis().target.x, 1.0 / 3.0, 1.0e-6),
           "camera view reset immediately restores fitted barycenter framing");
+    check(near(camera.state().yaw, yawBeforeReset, 1.0e-6)
+              && near(camera.state().pitch, pitchBeforeReset, 1.0e-6),
+          "camera view reset preserves the viewing plane");
 }
 
 void testCameraAutoFraming() {

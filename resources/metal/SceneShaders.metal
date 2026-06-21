@@ -53,6 +53,7 @@ struct PlanetOut {
     float4 colour3 [[flat]];
     float4 style0 [[flat]];
     float4 style1 [[flat]];
+    uint instanceId [[flat]];
 };
 
 struct ColourOut {
@@ -171,7 +172,7 @@ vertex ColourOut starVertex(const device StarInstance* stars [[buffer(0)]],
                          cameraZ * 0.0001, cameraZ);
     const float magnitude = star.directionMagnitude.w;
     const float catalogue = star.colourKind.w;
-    const float brightness = clamp(exp2(-0.4 * (magnitude - 5.0)) * 0.18, 0.035, 0.90);
+    const float brightness = clamp(exp2(-0.4 * (magnitude - 5.0)) * 0.24, 0.045, 1.0);
     const float faintScale = mix(u.renderSettings.y, 1.0, catalogue);
     const float size = (0.85 + sqrt(brightness) * 1.55) * mix(0.72, 1.0, faintScale);
     const float2 corner = corners[vertexId];
@@ -215,7 +216,20 @@ vertex PlanetOut planetVertex(const device SphereVertex* vertices [[buffer(0)]],
     out.colour3 = instance.colour3;
     out.style0 = instance.style0;
     out.style1 = instance.style1;
+    out.instanceId = instanceId;
     return out;
+}
+
+float otherBodyVisibility(PlanetOut in, const device PlanetInstance* planets) {
+    float visibility = 1.0;
+    for (uint body = 0; body < 3; ++body) {
+        if (body == in.instanceId)
+            continue;
+        const float distance = length(in.worldPosition - planets[body].centerRadius.xyz);
+        const float radius = planets[body].centerRadius.w;
+        visibility *= smoothstep(radius * 0.94, radius * 1.06, distance);
+    }
+    return visibility;
 }
 
 float terrainField(float3 local, float seed, float scale) {
@@ -227,7 +241,8 @@ float terrainField(float3 local, float seed, float scale) {
 }
 
 fragment float4 planetFragment(PlanetOut in [[stage_in]],
-                               constant SceneUniforms& u [[buffer(0)]]) {
+                               constant SceneUniforms& u [[buffer(0)]],
+                               const device PlanetInstance* planets [[buffer(1)]]) {
     const float seed = in.style0.x;
     const float terrain = terrainField(normalize(in.localNormal), seed, in.style0.y);
     const float ocean = smoothstep(in.style0.z - 0.035, in.style0.z + 0.035, terrain);
@@ -252,11 +267,20 @@ fragment float4 planetFragment(PlanetOut in [[stage_in]],
     float3 colour = albedo * (0.09 + diffuse * 0.91);
     colour += waterSpecular * in.colour3.rgb * 1.4;
     colour += fresnel * in.colour2.rgb * 0.16;
+    for (uint body = 0; body < 3; ++body) {
+        if (body == in.instanceId)
+            continue;
+        const float distance = length(in.worldPosition - planets[body].centerRadius.xyz);
+        const float radius = planets[body].centerRadius.w;
+        const float boundary = 1.0 - smoothstep(0.0, radius * 0.14, abs(distance - radius));
+        colour = mix(colour, planets[body].colour1.rgb, boundary * 0.24);
+    }
     return float4(colour, 1.0);
 }
 
 fragment float4 cloudFragment(PlanetOut in [[stage_in]],
-                              constant SceneUniforms& u [[buffer(0)]]) {
+                              constant SceneUniforms& u [[buffer(0)]],
+                              const device PlanetInstance* planets [[buffer(1)]]) {
     const float3 local = normalize(in.localNormal);
     const float flow = u.viewportTime.z * in.style1.y;
     const float3 offset = float3(flow, flow * -0.37, flow * 0.23) + in.style0.x * 0.00001;
@@ -267,17 +291,18 @@ fragment float4 cloudFragment(PlanetOut in [[stage_in]],
         dot(normal, normalize(float3(-0.58, 0.31, 0.75))));
     const float rim = pow(1.0 - saturate(dot(normal, viewDirection)), 2.0);
     return float4(mix(in.colour3.rgb, float3(0.92, 0.96, 1.0), 0.45) * light * 0.55,
-                  cloud * (0.035 + rim * 0.045));
+                  cloud * (0.035 + rim * 0.045) * otherBodyVisibility(in, planets));
 }
 
 fragment float4 atmosphereFragment(PlanetOut in [[stage_in]],
-                                   constant SceneUniforms& u [[buffer(0)]]) {
+                                   constant SceneUniforms& u [[buffer(0)]],
+                                   const device PlanetInstance* planets [[buffer(1)]]) {
     const float3 normal = normalize(in.worldNormal);
     const float3 viewDirection = normalize(u.cameraPosition.xyz - in.worldPosition);
     const float fresnel = pow(1.0 - saturate(dot(normal, viewDirection)), 2.6);
     const float sunlight = smoothstep(-0.45, 0.35,
         dot(normal, normalize(float3(-0.58, 0.31, 0.75))));
-    const float alpha = fresnel * (0.16 + sunlight * 0.34);
+    const float alpha = fresnel * (0.16 + sunlight * 0.34) * otherBodyVisibility(in, planets);
     return float4(in.colour2.rgb * (0.45 + sunlight * 0.9), alpha);
 }
 

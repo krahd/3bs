@@ -228,6 +228,7 @@ ThreeBSProcessor::ThreeBSProcessor()
         const auto initial = makeInitialState(preset.system, preset.seed, preset.chaos);
         engineConfig_.simulation = preset.simulation;
         engineConfig_.voices = preset.voices;
+        storedConfigurationTemplate_ = engineConfig_;
         engine_.setConfig(engineConfig_);
         engine_.reset(initial);
         loopPolicy_.store(static_cast<int>(preset.loopPolicy), std::memory_order_relaxed);
@@ -244,6 +245,7 @@ ThreeBSProcessor::ThreeBSProcessor()
             setParameterValue("mass" + juce::String(body + 1), static_cast<float>(initial.bodies[body].mass));
         applyVoiceParameters(preset.voices);
     } else {
+        storedConfigurationTemplate_ = engineConfig_;
         storedInitial_.store(engine_.simulation().initialState());
         storedBaseInitial_.store(engine_.simulation().initialState());
         storedPlaneTilts_.store({});
@@ -485,6 +487,7 @@ void ThreeBSProcessor::requestPreset(const ArtworkPreset& preset, int presetInde
     command.state = makeInitialState(preset.system, preset.seed, preset.chaos);
     command.config.simulation = preset.simulation;
     command.config.voices = preset.voices;
+    storedConfigurationTemplate_ = command.config;
     command.loopPolicy = preset.loopPolicy;
     commands_.push(command);
     storedBaseInitial_.store(command.state);
@@ -569,6 +572,79 @@ void ThreeBSProcessor::requestPlaneTilts(const std::array<double, bodyCount>& ti
     commands_.push(command);
 }
 
+UserConfiguration ThreeBSProcessor::currentUserConfiguration() const {
+    UserConfiguration result;
+    result.initial = storedInitial_.load();
+    result.baseInitial = storedBaseInitial_.load();
+    result.planeTilts = storedPlaneTilts_.load();
+    result.presentation = storedPresentation_.load();
+    result.loopPolicy = static_cast<LoopPolicy>(loopPolicy_.load(std::memory_order_relaxed));
+    result.chaosPercent = parameterRefs_.chaos->load(std::memory_order_relaxed);
+    result.densityPercent = parameterRefs_.density->load(std::memory_order_relaxed);
+    result.presetIndex = std::clamp(static_cast<int>(std::lround(
+        parameterRefs_.preset->load(std::memory_order_relaxed))), 0, 23);
+    result.run = parameterRefs_.run->load(std::memory_order_relaxed) >= 0.5F;
+    result.sync = parameterRefs_.sync->load(std::memory_order_relaxed) >= 0.5F;
+    result.engine = storedConfigurationTemplate_;
+    result.engine.simulation.gravitationalConstant = parameterRefs_.gravity->load(std::memory_order_relaxed);
+    result.engine.simulation.softening = parameterRefs_.softening->load(std::memory_order_relaxed);
+    result.engine.simulation.speed = parameterRefs_.speed->load(std::memory_order_relaxed);
+    result.engine.voicingMode = static_cast<VoicingMode>(std::clamp(static_cast<int>(std::lround(
+        parameterRefs_.voicingMode->load(std::memory_order_relaxed))), 0, 2));
+    result.engine.chordStrumMilliseconds = parameterRefs_.chordStrum->load(std::memory_order_relaxed);
+    const auto inputMode = static_cast<int>(std::lround(parameterRefs_.inputMode->load(std::memory_order_relaxed)));
+    result.engine.inputTransposeEnabled = inputMode == 1;
+    result.engine.inputGateEnabled = inputMode == 2;
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        auto& voice = result.engine.voices[body];
+        voice.enabled = parameterRefs_.voiceEnabled[body]->load(std::memory_order_relaxed) >= 0.5F;
+        voice.root = static_cast<std::uint8_t>(std::clamp(static_cast<int>(std::lround(
+            parameterRefs_.voiceRoot[body]->load(std::memory_order_relaxed))), 0, 11));
+        voice.scale = static_cast<ScaleId>(std::clamp(static_cast<int>(std::lround(
+            parameterRefs_.voiceScale[body]->load(std::memory_order_relaxed))), 0, 14));
+        voice.pitchMapping = static_cast<PitchMapping>(std::clamp(static_cast<int>(std::lround(
+            parameterRefs_.voicePitch[body]->load(std::memory_order_relaxed))), 0, 8));
+        voice.triggerMapping = static_cast<TriggerMapping>(std::clamp(static_cast<int>(std::lround(
+            parameterRefs_.voiceTrigger[body]->load(std::memory_order_relaxed))), 0, 7));
+        voice.probability = result.densityPercent / 100.0;
+    }
+    return result;
+}
+
+void ThreeBSProcessor::applyUserConfiguration(const UserConfiguration& configuration) {
+    EngineCommand command;
+    command.type = CommandType::Replace;
+    command.state = configuration.initial;
+    command.config = configuration.engine;
+    command.loopPolicy = configuration.loopPolicy;
+    storedInitial_.store(configuration.initial);
+    storedBaseInitial_.store(configuration.baseInitial);
+    storedPlaneTilts_.store(configuration.planeTilts);
+    storedPresentation_.store(configuration.presentation);
+    storedConfigurationTemplate_ = configuration.engine;
+    loopPolicy_.store(static_cast<int>(configuration.loopPolicy), std::memory_order_relaxed);
+    commands_.push(command);
+
+    setParameterValue("run", configuration.run ? 1.0F : 0.0F);
+    setParameterValue("sync", configuration.sync ? 1.0F : 0.0F);
+    setParameterValue("preset", static_cast<float>(configuration.presetIndex));
+    setParameterValue("chaos", static_cast<float>(configuration.chaosPercent));
+    setParameterValue("density", static_cast<float>(configuration.densityPercent));
+    setParameterValue("gravity", static_cast<float>(configuration.engine.simulation.gravitationalConstant));
+    setParameterValue("softening", static_cast<float>(configuration.engine.simulation.softening));
+    setParameterValue("speed", static_cast<float>(configuration.engine.simulation.speed));
+    setParameterValue("trail", configuration.presentation.visual.trailSeconds);
+    setParameterValue("bloom", configuration.presentation.visual.bloom * 100.0F);
+    setParameterValue("voicingMode", static_cast<float>(configuration.engine.voicingMode));
+    setParameterValue("chordStrum", static_cast<float>(configuration.engine.chordStrumMilliseconds));
+    setParameterValue("inputMode", configuration.engine.inputTransposeEnabled ? 1.0F
+        : configuration.engine.inputGateEnabled ? 2.0F : 0.0F);
+    applyVoiceParameters(configuration.engine.voices);
+    for (std::size_t body = 0; body < bodyCount; ++body)
+        setParameterValue("mass" + juce::String(body + 1),
+                          static_cast<float>(configuration.initial.bodies[body].mass));
+}
+
 std::array<double, bodyCount> ThreeBSProcessor::initialPlaneTilts() const noexcept {
     return storedPlaneTilts_.load();
 }
@@ -576,6 +652,8 @@ std::array<double, bodyCount> ThreeBSProcessor::initialPlaneTilts() const noexce
 void ThreeBSProcessor::getStateInformation(juce::MemoryBlock& destination) {
     auto state = parameters_.copyState();
     state.setProperty("schemaVersion", static_cast<int>(stateSchemaVersion), nullptr);
+    state.setProperty("configurationTemplateJson",
+                      serializeUserConfiguration(currentUserConfiguration()), nullptr);
     const auto presentation = storedPresentation_.load();
     state.setProperty("visualTrailSeconds", presentation.visual.trailSeconds, nullptr);
     state.setProperty("visualTrailWidth", presentation.visual.trailWidth, nullptr);
@@ -692,8 +770,15 @@ void ThreeBSProcessor::setStateInformation(const void* data, int size) {
         command.config.voices = catalog[static_cast<std::size_t>(selected)].voices;
         command.loopPolicy = catalog[static_cast<std::size_t>(selected)].loopPolicy;
     }
+    UserConfiguration configurationTemplate;
+    juce::String configurationError;
+    const auto configurationJson = state.getProperty("configurationTemplateJson").toString();
+    if (configurationJson.isNotEmpty()
+        && deserializeUserConfiguration(configurationJson, configurationTemplate, configurationError))
+        command.config = configurationTemplate.engine;
     command.loopPolicy = static_cast<LoopPolicy>(static_cast<int>(
         state.getProperty("loopPolicy", static_cast<int>(command.loopPolicy))));
+    storedConfigurationTemplate_ = command.config;
     auto presentation = catalog.valid() && selected >= 0
             && static_cast<std::size_t>(selected) < catalog.size()
         ? catalog[static_cast<std::size_t>(selected)].presentation

@@ -96,12 +96,12 @@ The shared control deck is split into System, Voices, Space, Presets, and
 Settings pages. It exposes run/sync, speed, gravity, softening, chaos, density,
 trail duration, bloom, body masses, non-automatable initial orbital-plane tilt
 macros, automatic framing and zoom limits, deterministic randomization, reset,
-and the 24-scene factory catalog grouped by orbital family. `RESET` remains
+and the 24-scene factory catalog grouped horizontally by orbital family. `RESET` remains
 available on every deck page.
 Drag the scene to orbit around the active target, scroll to zoom, click a
 planet to follow it, and click the background to return to the mass-weighted
-barycenter. Double-click the background to restore the default orientation and
-fit every planet. Scroll zoom also returns to the barycenter. Manual input
+barycenter. Double-click the background to fit every planet without changing
+the current yaw or pitch. Scroll zoom also returns to the barycenter. Manual input
 pauses cinematic auto-orbit for three seconds before
 it eases back in. Barycenter auto-frame keeps all bodies visible as the system
 expands and contracts. Manual scroll zoom disables it until `AUTO FRAME` is
@@ -112,6 +112,12 @@ one body-coloured stream per generated voice. Note position, duration, and
 velocity control each bar. Its minimize control collapses it to a small
 three-lane icon; this preference is recalled with plugin state.
 
+The Voices page changes context with `INDEPENDENT`, `CHORD`, and `STRUM`.
+Independent mode uses each planet's own note trigger. In chord and strum modes,
+any enabled planet can launch the shared scale-degree voicing from its selected
+clock, crossing, distance, apsis, speed-peak, or phase-step criterion. Strum
+adds an adjustable inter-note delay.
+
 `SET STATE` opens a separate nonmodal numerical window for every mass and
 initial position/velocity vector. Schema-v5 host state stores parameters, simulation
 seed and vectors, non-automatable plane-tilt macro state, mappings, loop policy,
@@ -119,6 +125,12 @@ per-planet roots, chord controls, palette, camera target, orbit angle, framing
 limits, zoom, and note-pane state. Schemas v1-v4 migrate with compatible defaults.
 Rendering consumes revisioned immutable snapshots and a separate fixed-capacity
 note-event queue; it never runs on the MIDI processing thread.
+
+The Settings page saves and loads portable `.3bs` files. These are versioned,
+human-readable JSON configurations containing exact initial/base body vectors,
+physics, all voice and chord settings, camera/presentation state, plane tilts,
+run/sync state, and preset selection. Hardware-specific MIDI destinations and
+window geometry are intentionally excluded.
 
 The renderer embeds 8,921 stars from the pinned HYG v4.1 magnitude-6.5
 catalogue, plus a deterministic faint field. To regenerate it, obtain

@@ -6,6 +6,7 @@
 #include "core/MusicEngine.h"
 #include "core/SnapshotQueue.h"
 #include "ui/PresetCatalog.h"
+#include "ui/UserConfiguration.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -53,6 +54,8 @@ public:
     std::array<double, bodyCount> initialPlaneTilts() const noexcept;
     void setPresentationState(const PresentationState& state) noexcept { storedPresentation_.store(state); }
     PresentationState presentationState() const noexcept { return storedPresentation_.load(); }
+    UserConfiguration currentUserConfiguration() const;
+    void applyUserConfiguration(const UserConfiguration& configuration);
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
@@ -137,6 +140,7 @@ private:
     juce::AudioProcessorValueTreeState parameters_;
     MusicEngine engine_;
     EngineConfig engineConfig_{};
+    EngineConfig storedConfigurationTemplate_{};
     SpscQueue<RenderSnapshot, 64> snapshots_;
     NoteVisualizationQueue noteVisualizationEvents_;
     SpscQueue<EngineCommand, 8> commands_;

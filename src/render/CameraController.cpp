@@ -92,8 +92,6 @@ void CameraController::zoom(double delta, const std::array<BodyState, bodyCount>
 void CameraController::resetView(const std::array<BodyState, bodyCount>& bodies,
                                  double aspectRatio, double now) noexcept {
     state_.focusBody = -1;
-    state_.yaw = 0.0F;
-    state_.pitch = -0.34F;
     state_.autoFrame = true;
     state_.distance = static_cast<float>(std::clamp(
         framingDistance(bodies, aspectRatio), static_cast<double>(state_.minimumDistance),

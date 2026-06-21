@@ -5,7 +5,8 @@ add_library(threebs_presentation STATIC
     MetalSceneComponent.mm
     ../ui/AdvancedStateEditor.cpp
     ../ui/ArtworkPanel.cpp
-    ../ui/PresetCatalog.cpp)
+    ../ui/PresetCatalog.cpp
+    ../ui/UserConfiguration.cpp)
 
 target_include_directories(threebs_presentation PUBLIC ..)
 target_compile_features(threebs_presentation PUBLIC cxx_std_20)

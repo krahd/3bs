@@ -13,7 +13,7 @@
 
 namespace threebs {
 
-class ArtworkPanel final : public juce::Component {
+class ArtworkPanel final : public juce::Component, private juce::ComboBox::Listener {
 public:
     ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
                  NoteVisualizationQueue& noteVisualizationEvents);
@@ -74,6 +74,8 @@ public:
     std::function<void()> onRandomize;
     std::function<void()> onReset;
     std::function<void()> onAdvanced;
+    std::function<void()> onSaveConfiguration;
+    std::function<void()> onLoadConfiguration;
     std::function<void(int)> onPresetSelected;
     std::function<void(const CameraState&)> onCameraChanged;
     std::function<void(bool)> onNotePaneMinimizedChanged;
@@ -93,6 +95,8 @@ private:
     void togglePresentation();
     void selectDeckPage(DeckPage page);
     void updateDeckVisibility();
+    void updateVoiceModeControls();
+    void comboBoxChanged(juce::ComboBox* comboBox) override;
 
     MetalSceneComponent scene_;
     juce::Label title_;
@@ -123,14 +127,18 @@ private:
     std::array<juce::ComboBox, bodyCount> voiceTrigger_;
     std::array<juce::Label, bodyCount> voiceHeaders_;
     std::array<juce::Label, 4> voiceRowLabels_;
+    juce::Label voiceModeContext_;
     juce::ComboBox voicingMode_;
     juce::Slider chordStrum_;
     juce::ToggleButton autoFrame_{"AUTO FRAME"};
     std::array<juce::ComboBox, 4> presetCategories_;
+    std::array<juce::Label, 4> presetCategoryLabels_;
     juce::ComboBox midiOutput_;
     juce::TextButton randomize_{"NEW SYSTEM"};
     juce::TextButton reset_{"RESET"};
     juce::TextButton advanced_{"SET STATE"};
+    juce::TextButton saveConfiguration_{"SAVE .3BS"};
+    juce::TextButton loadConfiguration_{"LOAD .3BS"};
     juce::TextButton present_{"PRESENT"};
     std::array<juce::TextButton, 5> tabs_{
         juce::TextButton{"SYSTEM"}, juce::TextButton{"VOICES"}, juce::TextButton{"SPACE"},

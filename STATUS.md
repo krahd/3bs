@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-21 01-49 GMT-3
+Last updated: 2026-06-21 02-48 GMT-3
 
 ## Project purpose
 
@@ -14,6 +14,8 @@ Ableton-oriented VST3 instrument, and standalone CoreMIDI application. It has a
 native interactive HDR Metal presentation layer, shared control deck, 24
 schema-v2 factory presets, schema-v5 host state serialization, automatic camera
 framing, live note-stream visualization, automated tests, and macOS CI.
+Portable schema-v1 `.3bs` JSON files save and restore complete musical,
+simulation, and presentation configurations across plugin and standalone.
 
 ## Active focus
 
@@ -162,6 +164,16 @@ repository.
   and allocation-free deterministic chord/strum generation with schema-v5 recall.
 - Replaced note-pane H/V glyphs with line icons and raised the third FTII
   column's text luminance.
+- Removed FTII header glyph artifacts, raised pane buttons above content, and
+  reduced the orientation icon stroke width.
+- Distributed labeled preset families horizontally and made the Voices page
+  expose contextual independent/chord/strum semantics.
+- Preserved camera yaw/pitch during background double-click fitting, brightened
+  stars, and added soft planet-boundary blending with overlap suppression for
+  cloud and atmosphere shells.
+- Added validated, versioned `.3bs` JSON save/load to plugin and standalone,
+  including exact states, hidden voice fields, physics, camera/presentation,
+  tilts, mode controls, and preset selection.
 
 ## Tests and verification status
 
@@ -173,7 +185,9 @@ repository.
   AU, VST3, and standalone.
 - `ctest --preset plugin-debug --output-on-failure`: all executable tests
   passed (core, presets, and plugin); the Metal smoke test was skipped because
-  this execution environment exposed no Metal device.
+  this execution environment exposed no Metal device. Plugin coverage includes
+  `.3bs` JSON round trips, malformed-file rejection, hidden-field re-save, and
+  host recall after a configuration load.
 - Offline `xcrun metal` validation was attempted but the installed Xcode lacks
   the optional Metal Toolchain component.
 - Standalone was launched externally on Apple Silicon; runtime Metal shader
@@ -200,14 +214,18 @@ repository.
 - GitHub repository `krahd/3bs` exists and was verified private on `main`.
 - AU MIDI effects and VST3 MIDI generation still require real host validation.
 - Apple signing and notarization are blocked until Developer credentials exist.
-- User preset file import/export and advanced graphics controls are not yet
-  exposed. Per-planet enable/root/scale/pitch/trigger controls now exist;
+- Authored user-preset library management and advanced graphics controls are not
+  yet exposed. Complete configuration import/export is available as `.3bs`.
+  Per-planet enable/root/scale/pitch/trigger controls now exist;
   per-voice range and custom-scale editing remain available only through presets.
 - The reversed-Z depth fix, glyph atlas, and vertical FastTracker II note view
   compile and pass the Metal smoke test but still need a clean foreground visual
   check (legibility, scrolling, and the absence of z-fighting at close approach).
 - The corrected bloom orientation, automatic framing, note overlay, and pane
   hit testing need one clean foreground visual and interaction check.
+- The TODO-3 Metal overlap cross-fade and revised FTII/preset/Voices pages build,
+  but a fresh foreground restart was blocked by the execution approval limit;
+  their final visual and interaction pass remains unverified.
 - Allocation/lock instrumentation and baseline 60 fps profiling have not run.
 
 ## Pending tasks
@@ -216,8 +234,8 @@ repository.
   inspection, and 60 fps profiling.
 - Install and validate AU with `auval`, then test it in Logic.
 - Run plugin validation and test VST3 MIDI routing in Ableton.
-- Complete remaining voice controls (root, range, custom scale) and user-preset
-  import/export.
+- Complete remaining voice controls (range and custom scale) and authored
+  user-preset library management.
 - Profile processing allocation/locking and renderer frame time.
 
 ## Next steps
@@ -248,4 +266,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-21 01-49 GMT-3
+Last updated: 2026-06-21 02-48 GMT-3

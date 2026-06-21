@@ -91,6 +91,48 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
                 panel_.setPlaneTilts(lastPlaneTilts_);
             });
     };
+    panel_.onSaveConfiguration = [this] {
+        fileChooser_ = std::make_unique<juce::FileChooser>(
+            "Save 3bs configuration", juce::File::getSpecialLocation(
+                juce::File::userDocumentsDirectory).getChildFile("Three Body Solution.3bs"), "*.3bs");
+        fileChooser_->launchAsync(juce::FileBrowserComponent::saveMode
+                                      | juce::FileBrowserComponent::canSelectFiles
+                                      | juce::FileBrowserComponent::warnAboutOverwriting,
+            [this](const juce::FileChooser& chooser) {
+                auto file = chooser.getResult();
+                if (file == juce::File{})
+                    return;
+                file = file.withFileExtension(".3bs");
+                const auto saved = file.replaceWithText(
+                    serializeUserConfiguration(processor_.currentUserConfiguration()));
+                panel_.setStatus(saved ? "SAVED / " + file.getFileName() : "SAVE FAILED");
+            });
+    };
+    panel_.onLoadConfiguration = [this] {
+        fileChooser_ = std::make_unique<juce::FileChooser>(
+            "Load 3bs configuration", juce::File::getSpecialLocation(
+                juce::File::userDocumentsDirectory), "*.3bs");
+        fileChooser_->launchAsync(juce::FileBrowserComponent::openMode
+                                      | juce::FileBrowserComponent::canSelectFiles,
+            [this](const juce::FileChooser& chooser) {
+                const auto file = chooser.getResult();
+                if (file == juce::File{})
+                    return;
+                UserConfiguration configuration;
+                juce::String error;
+                if (!deserializeUserConfiguration(file.loadFileAsString(), configuration, error)) {
+                    panel_.setStatus("LOAD FAILED / " + error);
+                    return;
+                }
+                processor_.applyUserConfiguration(configuration);
+                presentation_ = configuration.presentation;
+                lastPlaneTilts_ = configuration.planeTilts;
+                panel_.setPresentationState(presentation_);
+                panel_.setPlaneTilts(lastPlaneTilts_);
+                panel_.setSelectedPresetIndex(configuration.presetIndex);
+                panel_.setStatus("LOADED / " + file.getFileName());
+            });
+    };
     panel_.setMidiOutputAvailable(false);
     presentation_ = processor_.presentationState();
     panel_.setPresentationState(presentation_);

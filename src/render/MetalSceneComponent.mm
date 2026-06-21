@@ -133,9 +133,9 @@ NotePaneLayout computeNotePaneLayout(NotePaneStyle style, bool minimized, double
     layout.top = viewHeight - inset - layout.height;
     layout.buttonSize = 23.0 * scale;
     layout.minimizeX = layout.left + layout.width - 30.0 * scale;
-    layout.minimizeY = layout.top + 6.0 * scale;
+    layout.minimizeY = layout.top + 3.0 * scale;
     layout.styleX = layout.left + layout.width - 58.0 * scale;
-    layout.styleY = layout.top + 6.0 * scale;
+    layout.styleY = layout.top + 3.0 * scale;
     return layout;
 }
 
@@ -986,7 +986,7 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
                       static_cast<float>(layout.buttonSize), static_cast<float>(layout.buttonSize),
                       simd_make_float4(0.18F, 0.23F, 0.34F, 0.72F));
         appendOverlay(static_cast<float>(layout.minimizeX) + 5.0F * s,
-                      static_cast<float>(layout.minimizeY) + 10.5F * s, 13.0F * s, 2.0F * s,
+                      static_cast<float>(layout.minimizeY) + 10.5F * s, 13.0F * s, 1.5F * s,
                       simd_make_float4(0.72F, 0.81F, 0.88F, 0.92F));
         appendOverlay(static_cast<float>(layout.styleX), static_cast<float>(layout.styleY),
                       static_cast<float>(layout.buttonSize), static_cast<float>(layout.buttonSize),
@@ -996,19 +996,15 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
             if (_presentation.notePaneStyle == threebs::NotePaneStyle::Horizontal)
                 appendOverlay(static_cast<float>(layout.styleX) + 5.0F * s,
                               static_cast<float>(layout.styleY) + (6.0F + line * 5.0F) * s,
-                              14.0F * s, 2.0F * s, iconColour);
+                              14.0F * s, 1.0F * s, iconColour);
             else
                 appendOverlay(static_cast<float>(layout.styleX) + (6.0F + line * 5.0F) * s,
                               static_cast<float>(layout.styleY) + 5.0F * s,
-                              2.0F * s, 14.0F * s, iconColour);
+                              1.0F * s, 14.0F * s, iconColour);
         }
 
         if (_presentation.notePaneStyle == threebs::NotePaneStyle::Vertical) {
             const auto headerHeight = 26.0F * s;
-            appendOverlay(left, top, paneWidth, headerHeight,
-                          simd_make_float4(0.05F, 0.07F, 0.12F, 0.92F));
-            appendText(left + 8.0F * s, top + 7.0F * s, 13.0F * s,
-                       simd_make_float4(0.62F, 0.74F, 0.95F, 0.85F), "3BS");
             const auto contentTop = top + headerHeight + 6.0F * s;
             const auto contentBottom = top + paneHeight - 6.0F * s;
             const auto contentHeight = contentBottom - contentTop;
@@ -1025,9 +1021,6 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
                           simd_make_float4(0.92F, 0.96F, 1.0F, 0.55F));
             for (std::size_t body = 0; body < threebs::bodyCount; ++body) {
                 const auto columnLeft = left + gutter + static_cast<float>(body) * columnWidth;
-                const char header[2] = {static_cast<char>('1' + body), '\0'};
-                appendText(columnLeft + columnWidth * 0.5F - 3.0F * s, top + 7.0F * s, 12.0F * s,
-                           bodyTint(body, 0.92F), header);
                 if (body > 0U)
                     appendOverlay(columnLeft - 0.5F * s, contentTop, 1.0F * s, contentHeight,
                                   simd_make_float4(0.30F, 0.37F, 0.48F, 0.25F));
@@ -1135,6 +1128,7 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     [encoder setVertexBuffer:_planetInstances offset:0 atIndex:1];
     [encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:2];
     [encoder setFragmentBytes:&uniforms length:sizeof(uniforms) atIndex:0];
+    [encoder setFragmentBuffer:_planetInstances offset:0 atIndex:1];
     [encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:_sphereIndexCount
                          indexType:MTLIndexTypeUInt32 indexBuffer:_sphereIndices indexBufferOffset:0
                      instanceCount:threebs::bodyCount];

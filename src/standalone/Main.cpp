@@ -6,6 +6,7 @@
 #include "ui/ArtworkPanel.h"
 #include "ui/AdvancedStateEditor.h"
 #include "ui/PresetCatalog.h"
+#include "ui/UserConfiguration.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_gui_extra/juce_gui_extra.h>
@@ -56,6 +57,8 @@ public:
                     masses[body]->setValue(initial_.bodies[body].mass, juce::dontSendNotification);
             });
         };
+        panel_.onSaveConfiguration = [this] { saveConfiguration(); };
+        panel_.onLoadConfiguration = [this] { loadConfiguration(); };
         panel_.syncButton().setToggleState(false, juce::dontSendNotification);
         panel_.syncButton().setButtonText("INTERNAL 120 BPM");
         panel_.syncButton().setTooltip("Standalone generation always runs from its internal 120 BPM clock.");
@@ -116,6 +119,7 @@ private:
         if (!presets_.valid() || index < 0 || static_cast<std::size_t>(index) >= presets_.size())
             return;
         const auto& preset = presets_[static_cast<std::size_t>(index)];
+        selectedPresetIndex_ = index;
         baseInitial_ = makeInitialState(preset.system, preset.seed, preset.chaos);
         planeTilts_.fill(0.0);
         panel_.setPlaneTilts(planeTilts_);
@@ -149,6 +153,102 @@ private:
             triggers[body]->setSelectedId(static_cast<int>(preset.voices[body].triggerMapping) + 1,
                                           juce::dontSendNotification);
         }
+    }
+
+    UserConfiguration currentConfiguration() {
+        UserConfiguration result;
+        result.initial = initial_;
+        result.baseInitial = baseInitial_;
+        result.planeTilts = planeTilts_;
+        result.engine = config_;
+        result.presentation = presentation_;
+        result.chaosPercent = panel_.chaosSlider().getValue();
+        result.densityPercent = panel_.densitySlider().getValue();
+        result.presetIndex = selectedPresetIndex_;
+        result.run = panel_.runButton().getToggleState();
+        result.sync = false;
+        return result;
+    }
+
+    void applyConfiguration(const UserConfiguration& configuration) {
+        initial_ = configuration.initial;
+        baseInitial_ = configuration.baseInitial;
+        planeTilts_ = configuration.planeTilts;
+        config_ = configuration.engine;
+        presentation_ = configuration.presentation;
+        selectedPresetIndex_ = configuration.presetIndex;
+        engine_.setConfig(config_);
+        engine_.reset(initial_);
+        ++trajectoryRevision_;
+
+        panel_.setSelectedPresetIndex(selectedPresetIndex_);
+        panel_.setPresentationState(presentation_);
+        panel_.setPlaneTilts(planeTilts_);
+        panel_.runButton().setToggleState(configuration.run, juce::dontSendNotification);
+        panel_.chaosSlider().setValue(configuration.chaosPercent, juce::dontSendNotification);
+        panel_.densitySlider().setValue(configuration.densityPercent, juce::dontSendNotification);
+        panel_.gravitySlider().setValue(config_.simulation.gravitationalConstant, juce::dontSendNotification);
+        panel_.softeningSlider().setValue(config_.simulation.softening, juce::dontSendNotification);
+        panel_.speedSlider().setValue(config_.simulation.speed, juce::dontSendNotification);
+        panel_.voicingModeSelector().setSelectedId(static_cast<int>(config_.voicingMode) + 1,
+                                                   juce::sendNotificationSync);
+        panel_.chordStrumSlider().setValue(config_.chordStrumMilliseconds, juce::dontSendNotification);
+        const auto masses = panel_.massSliders();
+        const auto enables = panel_.voiceEnableButtons();
+        const auto roots = panel_.voiceRootSelectors();
+        const auto scales = panel_.voiceScaleSelectors();
+        const auto pitches = panel_.voicePitchSelectors();
+        const auto triggers = panel_.voiceTriggerSelectors();
+        for (std::size_t body = 0; body < bodyCount; ++body) {
+            masses[body]->setValue(initial_.bodies[body].mass, juce::dontSendNotification);
+            enables[body]->setToggleState(config_.voices[body].enabled, juce::dontSendNotification);
+            roots[body]->setSelectedId(static_cast<int>(config_.voices[body].root) + 1,
+                                       juce::dontSendNotification);
+            scales[body]->setSelectedId(static_cast<int>(config_.voices[body].scale) + 1,
+                                        juce::dontSendNotification);
+            pitches[body]->setSelectedId(static_cast<int>(config_.voices[body].pitchMapping) + 1,
+                                         juce::dontSendNotification);
+            triggers[body]->setSelectedId(static_cast<int>(config_.voices[body].triggerMapping) + 1,
+                                          juce::dontSendNotification);
+        }
+    }
+
+    void saveConfiguration() {
+        fileChooser_ = std::make_unique<juce::FileChooser>(
+            "Save 3bs configuration", juce::File::getSpecialLocation(
+                juce::File::userDocumentsDirectory).getChildFile("Three Body Solution.3bs"), "*.3bs");
+        fileChooser_->launchAsync(juce::FileBrowserComponent::saveMode
+                                      | juce::FileBrowserComponent::canSelectFiles
+                                      | juce::FileBrowserComponent::warnAboutOverwriting,
+            [this](const juce::FileChooser& chooser) {
+                auto file = chooser.getResult();
+                if (file == juce::File{})
+                    return;
+                file = file.withFileExtension(".3bs");
+                const auto saved = file.replaceWithText(serializeUserConfiguration(currentConfiguration()));
+                panel_.setStatus(saved ? "SAVED / " + file.getFileName() : "SAVE FAILED");
+            });
+    }
+
+    void loadConfiguration() {
+        fileChooser_ = std::make_unique<juce::FileChooser>(
+            "Load 3bs configuration", juce::File::getSpecialLocation(
+                juce::File::userDocumentsDirectory), "*.3bs");
+        fileChooser_->launchAsync(juce::FileBrowserComponent::openMode
+                                      | juce::FileBrowserComponent::canSelectFiles,
+            [this](const juce::FileChooser& chooser) {
+                const auto file = chooser.getResult();
+                if (file == juce::File{})
+                    return;
+                UserConfiguration configuration;
+                juce::String error;
+                if (!deserializeUserConfiguration(file.loadFileAsString(), configuration, error)) {
+                    panel_.setStatus("LOAD FAILED / " + error);
+                    return;
+                }
+                applyConfiguration(configuration);
+                panel_.setStatus("LOADED / " + file.getFileName());
+            });
     }
 
     void timerCallback() override {
@@ -282,10 +382,12 @@ private:
     SimulationState initial_{};
     juce::Array<juce::MidiDeviceInfo> devices_;
     std::unique_ptr<juce::MidiOutput> midiOutput_;
+    std::unique_ptr<juce::FileChooser> fileChooser_;
     PresentationState presentation_{};
     std::uint64_t seed_{0x33425320ULL};
     std::uint64_t sequence_{};
     std::uint64_t noteVisualizationSequence_{};
+    int selectedPresetIndex_{};
     std::uint64_t trajectoryRevision_{1};
     std::array<std::uint32_t, bodyCount> lastRespawnCounts_{};
     std::array<double, bodyCount> planeTilts_{};

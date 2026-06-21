@@ -162,6 +162,11 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     voicingMode_.setSelectedId(1, juce::dontSendNotification);
     voicingMode_.setTooltip("Independent triggers each planet separately. Chord and Strum generate scale triads from all enabled planets.");
     addAndMakeVisible(voicingMode_);
+    voicingMode_.addListener(this);
+    voiceModeContext_.setFont(juce::Font(juce::FontOptions(10.0F).withStyle("Bold")));
+    voiceModeContext_.setColour(juce::Label::textColourId, juce::Colour(0xff8fa9bd));
+    voiceModeContext_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(voiceModeContext_);
     chordStrum_.setSliderStyle(juce::Slider::LinearHorizontal);
     chordStrum_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 58, 20);
     chordStrum_.setRange(0.0, 120.0, 1.0);
@@ -183,8 +188,9 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     }
 
     midiOutput_.setTextWhenNothingSelected("MIDI output");
-    for (auto& selector : presetCategories_) {
-        selector.setTextWhenNothingSelected("SELECT");
+    for (std::size_t category = 0; category < presetCategories_.size(); ++category) {
+        auto& selector = presetCategories_[category];
+        selector.setTextWhenNothingSelected({});
         addAndMakeVisible(selector);
         auto* selectedBox = &selector;
         selector.onChange = [this, selectedBox] {
@@ -197,16 +203,26 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
             if (onPresetSelected)
                 onPresetSelected(id - 1);
         };
+        presetCategoryLabels_[category].setFont(
+            juce::Font(juce::FontOptions(10.0F).withStyle("Bold")));
+        presetCategoryLabels_[category].setColour(
+            juce::Label::textColourId, juce::Colour(0xff71889d));
+        presetCategoryLabels_[category].setJustificationType(juce::Justification::centred);
+        addAndMakeVisible(presetCategoryLabels_[category]);
     }
     addAndMakeVisible(midiOutput_);
     midiOutput_.setVisible(false);
     addAndMakeVisible(randomize_);
     addAndMakeVisible(reset_);
     addAndMakeVisible(advanced_);
+    addAndMakeVisible(saveConfiguration_);
+    addAndMakeVisible(loadConfiguration_);
     addAndMakeVisible(present_);
     randomize_.onClick = [this] { if (onRandomize) onRandomize(); };
     reset_.onClick = [this] { if (onReset) onReset(); };
     advanced_.onClick = [this] { if (onAdvanced) onAdvanced(); };
+    saveConfiguration_.onClick = [this] { if (onSaveConfiguration) onSaveConfiguration(); };
+    loadConfiguration_.onClick = [this] { if (onLoadConfiguration) onLoadConfiguration(); };
     present_.onClick = [this] { togglePresentation(); };
 
     for (std::size_t i = 0; i < tabs_.size(); ++i) {
@@ -216,6 +232,7 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
         tabs_[i].onClick = [this, i] { selectDeckPage(static_cast<DeckPage>(i)); };
     }
     tabs_[0].setToggleState(true, juce::dontSendNotification);
+    updateVoiceModeControls();
     updateDeckVisibility();
 }
 
@@ -292,25 +309,27 @@ void ArtworkPanel::resized() {
         auto grid = content;
         auto gutter = grid.removeFromLeft(70);
         const auto columnWidth = grid.getWidth() / static_cast<int>(bodyCount);
-        auto headerRow = grid.removeFromTop(18);
+        voiceModeContext_.setBounds(grid.removeFromTop(18));
         gutter.removeFromTop(18);
+        auto headerRow = grid.removeFromTop(16);
+        gutter.removeFromTop(16);
         for (std::size_t body = 0; body < bodyCount; ++body)
             voiceHeaders_[body].setBounds(headerRow.removeFromLeft(columnWidth));
-        grid.removeFromTop(4);
-        gutter.removeFromTop(4);
-        auto enableRow = grid.removeFromTop(22);
-        gutter.removeFromTop(22);
+        grid.removeFromTop(2);
+        gutter.removeFromTop(2);
+        auto enableRow = grid.removeFromTop(20);
+        gutter.removeFromTop(20);
         for (std::size_t body = 0; body < bodyCount; ++body)
             voiceEnable_[body].setBounds(enableRow.removeFromLeft(columnWidth).reduced(10, 1));
-        grid.removeFromTop(4);
-        gutter.removeFromTop(4);
+        grid.removeFromTop(2);
+        gutter.removeFromTop(2);
         const auto comboRow = [&](std::array<juce::ComboBox, bodyCount>& combos, std::size_t labelIndex) {
-            auto row = grid.removeFromTop(24);
-            voiceRowLabels_[labelIndex].setBounds(gutter.removeFromTop(24));
+            auto row = grid.removeFromTop(22);
+            voiceRowLabels_[labelIndex].setBounds(gutter.removeFromTop(22));
             for (std::size_t body = 0; body < bodyCount; ++body)
                 combos[body].setBounds(row.removeFromLeft(columnWidth).reduced(4, 1));
-            grid.removeFromTop(4);
-            gutter.removeFromTop(4);
+            grid.removeFromTop(2);
+            gutter.removeFromTop(2);
         };
         comboRow(voiceRoot_, 0U);
         comboRow(voiceScale_, 1U);
@@ -327,13 +346,22 @@ void ArtworkPanel::resized() {
                     content);
         break;
     case DeckPage::Presets:
-        for (auto& selector : presetCategories_) {
-            selector.setBounds(left.removeFromTop(26));
-            left.removeFromTop(3);
+        {
+        auto categories = content;
+        const auto categoryWidth = categories.getWidth() / static_cast<int>(presetCategories_.size());
+        for (std::size_t category = 0; category < presetCategories_.size(); ++category) {
+            auto cell = categories.removeFromLeft(categoryWidth).reduced(5, 2);
+            presetCategoryLabels_[category].setBounds(cell.removeFromTop(22));
+            presetCategories_[category].setBounds(cell.removeFromTop(30));
         }
         randomize_.setBounds(left.removeFromTop(28).removeFromLeft(124));
         break;
+        }
     case DeckPage::Settings:
+        saveConfiguration_.setBounds(left.removeFromTop(28).removeFromLeft(124));
+        left.removeFromTop(5);
+        loadConfiguration_.setBounds(left.removeFromTop(28).removeFromLeft(124));
+        left.removeFromTop(8);
         if (midiOutputAvailable_)
             midiOutput_.setBounds(left.removeFromTop(30));
         break;
@@ -399,10 +427,13 @@ void ArtworkPanel::updateDeckVisibility() {
     maximumCameraDistance_.setVisible(false);
     autoFrame_.setVisible(false);
     for (auto& selector : presetCategories_) selector.setVisible(false);
+    for (auto& label : presetCategoryLabels_) label.setVisible(false);
     midiOutput_.setVisible(false);
     randomize_.setVisible(false);
     reset_.setVisible(showBase);
     advanced_.setVisible(false);
+    saveConfiguration_.setVisible(false);
+    loadConfiguration_.setVisible(false);
     for (auto& label : knobLabels_)
         label.setVisible(false);
     for (std::size_t body = 0; body < bodyCount; ++body) {
@@ -415,6 +446,7 @@ void ArtworkPanel::updateDeckVisibility() {
     }
     voicingMode_.setVisible(false);
     chordStrum_.setVisible(false);
+    voiceModeContext_.setVisible(false);
     for (auto& label : voiceRowLabels_)
         label.setVisible(false);
 
@@ -443,7 +475,8 @@ void ArtworkPanel::updateDeckVisibility() {
                           juce::dontSendNotification);
         showKnob(4U, density_);
         voicingMode_.setVisible(true);
-        chordStrum_.setVisible(true);
+        chordStrum_.setVisible(voicingMode_.getSelectedItemIndex() == 2);
+        voiceModeContext_.setVisible(true);
         for (std::size_t body = 0; body < bodyCount; ++body) {
             voiceHeaders_[body].setVisible(true);
             voiceEnable_[body].setVisible(true);
@@ -472,12 +505,15 @@ void ArtworkPanel::updateDeckVisibility() {
         pageHelp_.setText("Choose a deterministic authored system, randomize from the current chaos amount, or reset.",
                           juce::dontSendNotification);
         for (auto& selector : presetCategories_) selector.setVisible(true);
+        for (auto& label : presetCategoryLabels_) label.setVisible(true);
         randomize_.setVisible(true);
         break;
     case DeckPage::Settings:
-        pageHelp_.setText(midiOutputAvailable_ ? "Standalone CoreMIDI destination. Host plugins route MIDI through the host."
-                                                : "Host plugins route MIDI through the host. Standalone exposes CoreMIDI here.",
+        pageHelp_.setText(midiOutputAvailable_ ? "Save/load complete .3bs JSON configurations or choose the CoreMIDI destination."
+                                                : "Save or load complete portable .3bs JSON configurations.",
                           juce::dontSendNotification);
+        saveConfiguration_.setVisible(true);
+        loadConfiguration_.setVisible(true);
         midiOutput_.setVisible(midiOutputAvailable_);
         break;
     }
@@ -507,10 +543,40 @@ void ArtworkPanel::setPresetCatalog(const PresetCatalog& catalog) {
     for (std::size_t category = 0; category < presetCategories_.size(); ++category) {
         const std::array<InitialSystem, 4> systems{InitialSystem::FigureEight, InitialSystem::Hierarchical,
             InitialSystem::Stable, InitialSystem::ControlledChaos};
-        presetCategories_[category].setTextWhenNothingSelected(presetCategoryName(systems[category]));
+        presetCategoryLabels_[category].setText(presetCategoryName(systems[category]),
+                                                juce::dontSendNotification);
+        presetCategories_[category].setTextWhenNothingSelected({});
     }
     if (catalog.size() > 0U)
         setSelectedPresetIndex(0);
+}
+
+void ArtworkPanel::comboBoxChanged(juce::ComboBox* comboBox) {
+    if (comboBox == &voicingMode_)
+        updateVoiceModeControls();
+}
+
+void ArtworkPanel::updateVoiceModeControls() {
+    const auto mode = std::max(0, voicingMode_.getSelectedItemIndex());
+    if (mode == 0) {
+        voiceModeContext_.setText("INDEPENDENT NOTES / EACH PLANET USES ITS OWN TRIGGER",
+                                  juce::dontSendNotification);
+        voiceRowLabels_[2].setText("PITCH MAP", juce::dontSendNotification);
+        voiceRowLabels_[3].setText("TRIGGER", juce::dontSendNotification);
+    } else if (mode == 1) {
+        voiceModeContext_.setText("CHORD / ANY PLANET TRIGGER LAUNCHES SCALE DEGREES 0 / 2 / 4",
+                                  juce::dontSendNotification);
+        voiceRowLabels_[2].setText("DEGREE SRC", juce::dontSendNotification);
+        voiceRowLabels_[3].setText("CHORD TRIG", juce::dontSendNotification);
+    } else {
+        voiceModeContext_.setText("STRUM / PHYSICAL TRIGGER LAUNCHES A ROTATING SHORT SEQUENCE",
+                                  juce::dontSendNotification);
+        voiceRowLabels_[2].setText("DEGREE SRC", juce::dontSendNotification);
+        voiceRowLabels_[3].setText("STRUM TRIG", juce::dontSendNotification);
+    }
+    chordStrum_.setVisible(!presentationMode_ && deckPage_ == DeckPage::Voices && mode == 2);
+    resized();
+    repaint();
 }
 
 void ArtworkPanel::setSelectedPresetIndex(int index) {
