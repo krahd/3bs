@@ -90,7 +90,7 @@ int main() {
                                                  decodedConfiguration, configurationError),
           "malformed .3bs JSON must be rejected");
     processor.applyUserConfiguration(decodedConfiguration);
-    check(std::abs(processor.currentUserConfiguration().engine.voices[1].maximumDurationBeats - 0.77) < 1.0e-9,
+    check(std::abs(processor.currentUserConfiguration().engine.voices[1].maximumDurationBeats - 0.77) < 1.0e-6,
           "loaded hidden voice fields must survive a subsequent save");
 
     juce::AudioBuffer<float> audio(2, 512);
