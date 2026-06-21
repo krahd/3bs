@@ -1,6 +1,6 @@
 # The Three Body Solution
 
-**Gravity becomes music.** The Three Body Solution (`3bs`) is a deterministic
+The Three Body Solution (`3bs`) is a deterministic
 generative MIDI instrument and cinematic planetary artwork. Three bodies move
 through a fixed-step gravitational simulation; their distances, velocities,
 phases, and crossings become three interlocking musical voices.
