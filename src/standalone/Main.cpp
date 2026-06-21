@@ -10,6 +10,7 @@
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_gui_extra/juce_gui_extra.h>
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 
@@ -35,6 +36,9 @@ public:
         panel_.onCameraChanged = [this](const CameraState& camera) { presentation_.camera = camera; };
         panel_.onNotePaneMinimizedChanged = [this](bool minimized) {
             presentation_.notePaneMinimized = minimized;
+        };
+        panel_.onNotePaneStyleChanged = [this](NotePaneStyle style) {
+            presentation_.notePaneStyle = style;
         };
         panel_.onAdvanced = [this] {
             const auto target = panel_.getLocalArea(&panel_.advancedButton(), panel_.advancedButton().getLocalBounds());
@@ -128,6 +132,19 @@ private:
         const auto masses = panel_.massSliders();
         for (std::size_t i = 0; i < bodyCount; ++i)
             masses[i]->setValue(initial_.bodies[i].mass, juce::dontSendNotification);
+        const auto enables = panel_.voiceEnableButtons();
+        const auto scales = panel_.voiceScaleSelectors();
+        const auto pitches = panel_.voicePitchSelectors();
+        const auto triggers = panel_.voiceTriggerSelectors();
+        for (std::size_t body = 0; body < bodyCount; ++body) {
+            enables[body]->setToggleState(preset.voices[body].enabled, juce::dontSendNotification);
+            scales[body]->setSelectedId(static_cast<int>(preset.voices[body].scale) + 1,
+                                        juce::dontSendNotification);
+            pitches[body]->setSelectedId(static_cast<int>(preset.voices[body].pitchMapping) + 1,
+                                         juce::dontSendNotification);
+            triggers[body]->setSelectedId(static_cast<int>(preset.voices[body].triggerMapping) + 1,
+                                          juce::dontSendNotification);
+        }
     }
 
     void timerCallback() override {
@@ -135,8 +152,18 @@ private:
         config_.simulation.softening = panel_.softeningSlider().getValue();
         config_.simulation.speed = panel_.speedSlider().getValue();
         const auto density = panel_.densitySlider().getValue() / 100.0;
-        for (auto& voice : config_.voices)
+        const auto enables = panel_.voiceEnableButtons();
+        const auto scales = panel_.voiceScaleSelectors();
+        const auto pitches = panel_.voicePitchSelectors();
+        const auto triggers = panel_.voiceTriggerSelectors();
+        for (std::size_t body = 0; body < bodyCount; ++body) {
+            auto& voice = config_.voices[body];
             voice.probability = density;
+            voice.enabled = enables[body]->getToggleState();
+            voice.scale = static_cast<ScaleId>(std::max(0, scales[body]->getSelectedItemIndex()));
+            voice.pitchMapping = static_cast<PitchMapping>(std::max(0, pitches[body]->getSelectedItemIndex()));
+            voice.triggerMapping = static_cast<TriggerMapping>(std::max(0, triggers[body]->getSelectedItemIndex()));
+        }
         engine_.setConfig(config_);
         const auto masses = panel_.massSliders();
         for (std::size_t i = 0; i < bodyCount; ++i) {

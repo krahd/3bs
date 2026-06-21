@@ -9,6 +9,7 @@
 
 #include <BinaryData.h>
 
+#import <CoreText/CoreText.h>
 #import <Metal/Metal.h>
 #import <MetalKit/MetalKit.h>
 #import <QuartzCore/QuartzCore.h>
@@ -31,9 +32,16 @@ namespace {
 constexpr std::size_t trailCapacity = 4096;
 constexpr std::size_t generatedStarCount = 12000;
 constexpr std::size_t noteHistoryCapacity = 32;
-constexpr std::size_t overlayInstanceCapacity = 128;
+constexpr std::size_t overlayInstanceCapacity = 512;
+constexpr std::size_t glyphInstanceCapacity = 1024;
 constexpr double noteHistorySeconds = 6.0;
 constexpr double minimumNoteDisplaySeconds = 0.08;
+
+// Monospace glyph atlas: printable ASCII 32..126 laid out in a fixed grid.
+constexpr NSUInteger glyphAtlasColumns = 16;
+constexpr NSUInteger glyphAtlasRows = 6;
+constexpr NSUInteger glyphCellWidth = 18;
+constexpr NSUInteger glyphCellHeight = 30;
 
 void writeMetalDiagnostic(const char* stage, NSString* message) noexcept {
     const auto* text = message != nil ? message.UTF8String : "unknown Metal error";
@@ -88,6 +96,59 @@ struct alignas(16) OverlayInstance {
     simd_float4 bounds{};
     simd_float4 colour{};
 };
+
+struct alignas(16) GlyphInstance {
+    simd_float4 bounds{};
+    simd_float4 uvRect{};
+    simd_float4 colour{};
+};
+
+struct NotePaneLayout {
+    double left{};
+    double top{};
+    double width{};
+    double height{};
+    double buttonSize{};
+    double minimizeX{};
+    double minimizeY{};
+    double styleX{};
+    double styleY{};
+};
+
+NotePaneLayout computeNotePaneLayout(NotePaneStyle style, bool minimized, double viewWidth,
+                                     double viewHeight, double scale) noexcept {
+    NotePaneLayout layout;
+    const double inset = 16.0 * scale;
+    if (minimized) {
+        layout.width = 42.0 * scale;
+        layout.height = 42.0 * scale;
+    } else if (style == NotePaneStyle::Vertical) {
+        layout.width = 196.0 * scale;
+        layout.height = 320.0 * scale;
+    } else {
+        layout.width = 310.0 * scale;
+        layout.height = 150.0 * scale;
+    }
+    layout.left = viewWidth - inset - layout.width;
+    layout.top = viewHeight - inset - layout.height;
+    layout.buttonSize = 23.0 * scale;
+    layout.minimizeX = layout.left + layout.width - 30.0 * scale;
+    layout.minimizeY = layout.top + 6.0 * scale;
+    layout.styleX = layout.left + layout.width - 58.0 * scale;
+    layout.styleY = layout.top + 6.0 * scale;
+    return layout;
+}
+
+void formatNoteName(std::uint8_t note, char out[4]) noexcept {
+    static const char* const names[12] = {"C ", "C#", "D ", "D#", "E ", "F ",
+                                          "F#", "G ", "G#", "A ", "A#", "B "};
+    const int pitchClass = note % 12;
+    const int octave = std::clamp(note / 12 - 1, 0, 9);
+    out[0] = names[pitchClass][0];
+    out[1] = names[pitchClass][1] == ' ' ? '-' : names[pitchClass][1];
+    out[2] = static_cast<char>('0' + octave);
+    out[3] = '\0';
+}
 
 struct NoteHistoryEntry {
     double startTime{};
@@ -216,6 +277,69 @@ std::vector<StarInstance> makeStars() {
     return stars;
 }
 
+id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
+    const NSUInteger columns = glyphAtlasColumns;
+    const NSUInteger rows = glyphAtlasRows;
+    const NSUInteger cellWidth = glyphCellWidth;
+    const NSUInteger cellHeight = glyphCellHeight;
+    const NSUInteger atlasWidth = columns * cellWidth;
+    const NSUInteger atlasHeight = rows * cellHeight;
+    std::vector<std::uint8_t> pixels(atlasWidth * atlasHeight * 4U, 0);
+    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context = CGBitmapContextCreate(pixels.data(), atlasWidth, atlasHeight, 8,
+                                                 atlasWidth * 4U, space,
+                                                 kCGImageAlphaPremultipliedLast);
+    CGColorSpaceRelease(space);
+    if (context == nullptr)
+        return nil;
+    CGContextSetShouldAntialias(context, true);
+    CTFontRef font = CTFontCreateWithName(CFSTR("Menlo-Bold"),
+                                          static_cast<CGFloat>(cellHeight) * 0.6, nullptr);
+    if (font == nullptr)
+        font = CTFontCreateWithName(CFSTR("Courier"), static_cast<CGFloat>(cellHeight) * 0.6, nullptr);
+    const CGFloat ascent = CTFontGetAscent(font);
+    const CGFloat descent = CTFontGetDescent(font);
+    CGColorRef white = CGColorCreateGenericRGB(1.0, 1.0, 1.0, 1.0);
+    const void* keys[] = {kCTFontAttributeName, kCTForegroundColorAttributeName};
+    const void* values[] = {font, white};
+    for (unsigned index = 0; index < 95U; ++index) {
+        const unichar character = static_cast<unichar>(32U + index);
+        const NSUInteger column = index % columns;
+        const NSUInteger row = index / columns;
+        const CGFloat cellLeft = static_cast<CGFloat>(column * cellWidth);
+        const CGFloat cellBottom = static_cast<CGFloat>(atlasHeight - (row + 1U) * cellHeight);
+        CFStringRef string = CFStringCreateWithCharacters(nullptr, &character, 1);
+        CFDictionaryRef attributes = CFDictionaryCreate(nullptr, keys, values, 2,
+                                                        &kCFTypeDictionaryKeyCallBacks,
+                                                        &kCFTypeDictionaryValueCallBacks);
+        CFAttributedStringRef attributed = CFAttributedStringCreate(nullptr, string, attributes);
+        CTLineRef line = CTLineCreateWithAttributedString(attributed);
+        const double width = CTLineGetTypographicBounds(line, nullptr, nullptr, nullptr);
+        const CGFloat textX = cellLeft + (static_cast<CGFloat>(cellWidth) - static_cast<CGFloat>(width)) * 0.5;
+        const CGFloat textY = cellBottom + (static_cast<CGFloat>(cellHeight) - (ascent + descent)) * 0.5 + descent;
+        CGContextSetTextPosition(context, textX, textY);
+        CTLineDraw(line, context);
+        CFRelease(line);
+        CFRelease(attributed);
+        CFRelease(attributes);
+        CFRelease(string);
+    }
+    CGColorRelease(white);
+    CFRelease(font);
+    CGContextRelease(context);
+    MTLTextureDescriptor* descriptor =
+        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+                                                           width:atlasWidth
+                                                          height:atlasHeight
+                                                       mipmapped:NO];
+    id<MTLTexture> texture = [device newTextureWithDescriptor:descriptor];
+    [texture replaceRegion:MTLRegionMake2D(0, 0, atlasWidth, atlasHeight)
+               mipmapLevel:0
+                 withBytes:pixels.data()
+               bytesPerRow:atlasWidth * 4U];
+    return texture;
+}
+
 } // namespace
 } // namespace threebs
 
@@ -318,6 +442,8 @@ std::vector<StarInstance> makeStars() {
     id<MTLRenderPipelineState> _blurPipeline;
     id<MTLRenderPipelineState> _compositePipeline;
     id<MTLRenderPipelineState> _overlayPipeline;
+    id<MTLRenderPipelineState> _glyphPipeline;
+    id<MTLTexture> _glyphAtlas;
     id<MTLDepthStencilState> _depthWrite;
     id<MTLDepthStencilState> _depthRead;
     id<MTLDepthStencilState> _depthNone;
@@ -345,6 +471,7 @@ std::vector<StarInstance> makeStars() {
     std::array<std::array<threebs::NoteHistoryEntry, threebs::noteHistoryCapacity>, threebs::bodyCount> _noteHistory;
     std::array<std::size_t, threebs::bodyCount> _nextNoteHistory;
     std::array<threebs::OverlayInstance, threebs::overlayInstanceCapacity> _overlayStaging;
+    std::array<threebs::GlyphInstance, threebs::glyphInstanceCapacity> _glyphStaging;
     std::size_t _sphereIndexCount;
     std::size_t _starCount;
     std::uint64_t _lastSequence;
@@ -446,13 +573,35 @@ std::vector<StarInstance> makeStars() {
     [overlayVertex release];
     [overlayFragment release];
     [overlayDescriptor release];
+
+    MTLRenderPipelineDescriptor* glyphDescriptor = [MTLRenderPipelineDescriptor new];
+    id<MTLFunction> glyphVertex = [library newFunctionWithName:@"glyphVertex"];
+    id<MTLFunction> glyphFragment = [library newFunctionWithName:@"glyphFragment"];
+    glyphDescriptor.vertexFunction = glyphVertex;
+    glyphDescriptor.fragmentFunction = glyphFragment;
+    glyphDescriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat;
+    glyphDescriptor.colorAttachments[0].blendingEnabled = YES;
+    glyphDescriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
+    glyphDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+    glyphDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
+    glyphDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+    NSError* glyphError = nil;
+    _glyphPipeline = [_device newRenderPipelineStateWithDescriptor:glyphDescriptor error:&glyphError];
+    if (_glyphPipeline == nil)
+        threebs::writeMetalDiagnostic("glyph pipeline", glyphError.localizedDescription);
+    [glyphVertex release];
+    [glyphFragment release];
+    [glyphDescriptor release];
     [library release];
 
+    _glyphAtlas = threebs::makeGlyphAtlas(_device);
+
+    // Reversed-Z depth (near = 1, far = 0), so opaque geometry keeps the greater value.
     MTLDepthStencilDescriptor* depth = [MTLDepthStencilDescriptor new];
-    depth.depthCompareFunction = MTLCompareFunctionLess;
+    depth.depthCompareFunction = MTLCompareFunctionGreater;
     depth.depthWriteEnabled = YES;
     _depthWrite = [_device newDepthStencilStateWithDescriptor:depth];
-    depth.depthCompareFunction = MTLCompareFunctionLessEqual;
+    depth.depthCompareFunction = MTLCompareFunctionGreaterEqual;
     depth.depthWriteEnabled = NO;
     _depthRead = [_device newDepthStencilStateWithDescriptor:depth];
     depth.depthCompareFunction = MTLCompareFunctionAlways;
@@ -486,7 +635,7 @@ std::vector<StarInstance> makeStars() {
         && _trailPipeline != nil && _planetPipeline != nil && _cloudPipeline != nil
         && _atmospherePipeline != nil && _bloomExtractPipeline != nil
         && _blurPipeline != nil && _compositePipeline != nil && _sphereVertices != nil
-        && _overlayPipeline != nil
+        && _overlayPipeline != nil && _glyphPipeline != nil && _glyphAtlas != nil
         && _sphereIndices != nil && _starInstances != nil && _trailVertices != nil;
     return self;
 }
@@ -506,6 +655,8 @@ std::vector<StarInstance> makeStars() {
     [_depthNone release];
     [_depthRead release];
     [_depthWrite release];
+    [_glyphAtlas release];
+    [_glyphPipeline release];
     [_overlayPipeline release];
     [_compositePipeline release];
     [_blurPipeline release];
@@ -566,28 +717,37 @@ std::vector<StarInstance> makeStars() {
 }
 
 - (BOOL)notePaneContainsX:(double)x y:(double)y width:(double)width height:(double)height {
-    constexpr double inset = 16.0;
-    const auto paneWidth = _presentation.notePaneMinimized ? 42.0 : 310.0;
-    const auto paneHeight = _presentation.notePaneMinimized ? 42.0 : 150.0;
-    const auto left = width - inset - paneWidth;
-    const auto top = height - inset - paneHeight;
-    return x >= left && x <= left + paneWidth && y >= top && y <= top + paneHeight;
+    const auto layout = threebs::computeNotePaneLayout(_presentation.notePaneStyle,
+        _presentation.notePaneMinimized, width, height, 1.0);
+    return x >= layout.left && x <= layout.left + layout.width
+        && y >= layout.top && y <= layout.top + layout.height;
 }
 
 - (void)notePaneClickAtX:(double)x y:(double)y width:(double)width height:(double)height {
-    constexpr double inset = 16.0;
-    const auto paneWidth = _presentation.notePaneMinimized ? 42.0 : 310.0;
-    const auto paneHeight = _presentation.notePaneMinimized ? 42.0 : 150.0;
-    const auto left = width - inset - paneWidth;
-    const auto top = height - inset - paneHeight;
-    const auto toggleHit = _presentation.notePaneMinimized
-        || (x >= left + paneWidth - 32.0 && x <= left + paneWidth - 6.0
-            && y >= top + 6.0 && y <= top + 32.0);
-    if (!toggleHit)
+    const auto layout = threebs::computeNotePaneLayout(_presentation.notePaneStyle,
+        _presentation.notePaneMinimized, width, height, 1.0);
+    if (_presentation.notePaneMinimized) {
+        _presentation.notePaneMinimized = NO;
+        if (_owner != nullptr && _owner->onNotePaneMinimizedChanged)
+            _owner->onNotePaneMinimizedChanged(_presentation.notePaneMinimized);
         return;
-    _presentation.notePaneMinimized = !_presentation.notePaneMinimized;
-    if (_owner != nullptr && _owner->onNotePaneMinimizedChanged)
-        _owner->onNotePaneMinimizedChanged(_presentation.notePaneMinimized);
+    }
+    const auto inButton = [](double px, double py, double bx, double by, double size) {
+        return px >= bx && px <= bx + size && py >= by && py <= by + size;
+    };
+    if (inButton(x, y, layout.minimizeX, layout.minimizeY, layout.buttonSize)) {
+        _presentation.notePaneMinimized = YES;
+        if (_owner != nullptr && _owner->onNotePaneMinimizedChanged)
+            _owner->onNotePaneMinimizedChanged(_presentation.notePaneMinimized);
+        return;
+    }
+    if (inButton(x, y, layout.styleX, layout.styleY, layout.buttonSize)) {
+        _presentation.notePaneStyle = _presentation.notePaneStyle == threebs::NotePaneStyle::Horizontal
+            ? threebs::NotePaneStyle::Vertical : threebs::NotePaneStyle::Horizontal;
+        if (_owner != nullptr && _owner->onNotePaneStyleChanged)
+            _owner->onNotePaneStyleChanged(_presentation.notePaneStyle);
+        return;
+    }
 }
 
 - (void)mtkView:(MTKView*)view drawableSizeWillChange:(CGSize)size {
@@ -749,70 +909,163 @@ std::vector<StarInstance> makeStars() {
             return;
         _overlayStaging[overlayCount++] = {{x, y, width, height}, overlayColour};
     };
+    std::size_t glyphCount{};
+    const auto appendGlyph = [&](float x, float y, float width, float height,
+                                 simd_float4 uvRect, simd_float4 tint) {
+        if (glyphCount >= threebs::glyphInstanceCapacity)
+            return;
+        _glyphStaging[glyphCount++] = {{x, y, width, height}, uvRect, tint};
+    };
     const auto backingScale = static_cast<float>(std::max<CGFloat>(1.0, view.window.backingScaleFactor));
-    const auto inset = 16.0F * backingScale;
-    if (_presentation.notePaneMinimized) {
-        const auto size = 42.0F * backingScale;
-        const auto left = static_cast<float>(_targetWidth) - inset - size;
-        const auto top = static_cast<float>(_targetHeight) - inset - size;
-        appendOverlay(left, top, size, size, simd_make_float4(0.025F, 0.035F, 0.065F, 0.84F));
-        for (std::size_t body = 0; body < threebs::bodyCount; ++body) {
-            const auto bodyColour = _styles[body].colours[2];
-            appendOverlay(left + 9.0F * backingScale,
-                          top + (10.0F + static_cast<float>(body) * 10.0F) * backingScale,
-                          24.0F * backingScale, 3.0F * backingScale,
-                          simd_make_float4(bodyColour.r, bodyColour.g, bodyColour.b, 0.9F));
+    const auto appendText = [&](float x, float y, float charHeight, simd_float4 tint,
+                                const char* text) {
+        const auto charWidth = charHeight * static_cast<float>(threebs::glyphCellWidth)
+                               / static_cast<float>(threebs::glyphCellHeight);
+        const auto du = 1.0F / static_cast<float>(threebs::glyphAtlasColumns);
+        const auto dv = 1.0F / static_cast<float>(threebs::glyphAtlasRows);
+        float cursor = x;
+        for (const char* character = text; *character != '\0'; ++character) {
+            int code = static_cast<unsigned char>(*character);
+            if (code < 32 || code > 126)
+                code = 32;
+            const auto glyph = code - 32;
+            const auto column = glyph % static_cast<int>(threebs::glyphAtlasColumns);
+            const auto row = glyph / static_cast<int>(threebs::glyphAtlasColumns);
+            appendGlyph(cursor, y, charWidth, charHeight,
+                        simd_make_float4(static_cast<float>(column) * du,
+                                         static_cast<float>(row) * dv, du, dv),
+                        tint);
+            cursor += charWidth;
         }
-    } else {
-        const auto paneWidth = 310.0F * backingScale;
-        const auto paneHeight = 150.0F * backingScale;
-        const auto left = static_cast<float>(_targetWidth) - inset - paneWidth;
-        const auto top = static_cast<float>(_targetHeight) - inset - paneHeight;
+    };
+    const auto bodyTint = [&](std::size_t body, float alpha) {
+        const auto bodyColour = _styles[body].colours[2];
+        return simd_make_float4(bodyColour.r, bodyColour.g, bodyColour.b, alpha);
+    };
+    const auto layout = threebs::computeNotePaneLayout(_presentation.notePaneStyle,
+        _presentation.notePaneMinimized, static_cast<double>(_targetWidth),
+        static_cast<double>(_targetHeight), backingScale);
+    const auto s = backingScale;
+    const auto left = static_cast<float>(layout.left);
+    const auto top = static_cast<float>(layout.top);
+    const auto paneWidth = static_cast<float>(layout.width);
+    const auto paneHeight = static_cast<float>(layout.height);
+    const auto noteEndTime = [&](const threebs::NoteHistoryEntry& entry) {
+        return entry.active ? now
+            : std::max(entry.endTime, entry.startTime + threebs::minimumNoteDisplaySeconds);
+    };
+    if (_presentation.notePaneMinimized) {
         appendOverlay(left, top, paneWidth, paneHeight,
-                      simd_make_float4(0.018F, 0.026F, 0.052F, 0.80F));
-        appendOverlay(left + paneWidth - 30.0F * backingScale, top + 7.0F * backingScale,
-                      23.0F * backingScale, 23.0F * backingScale,
+                      simd_make_float4(0.025F, 0.035F, 0.065F, 0.84F));
+        for (std::size_t body = 0; body < threebs::bodyCount; ++body)
+            appendOverlay(left + 9.0F * s, top + (10.0F + static_cast<float>(body) * 10.0F) * s,
+                          24.0F * s, 3.0F * s, bodyTint(body, 0.9F));
+    } else {
+        appendOverlay(left, top, paneWidth, paneHeight,
+                      simd_make_float4(0.018F, 0.026F, 0.052F, 0.82F));
+        // Shared minimize and style-toggle buttons.
+        appendOverlay(static_cast<float>(layout.minimizeX), static_cast<float>(layout.minimizeY),
+                      static_cast<float>(layout.buttonSize), static_cast<float>(layout.buttonSize),
                       simd_make_float4(0.18F, 0.23F, 0.34F, 0.72F));
-        appendOverlay(left + paneWidth - 25.0F * backingScale, top + 17.0F * backingScale,
-                      13.0F * backingScale, 2.0F * backingScale,
+        appendOverlay(static_cast<float>(layout.minimizeX) + 5.0F * s,
+                      static_cast<float>(layout.minimizeY) + 10.5F * s, 13.0F * s, 2.0F * s,
                       simd_make_float4(0.72F, 0.81F, 0.88F, 0.92F));
+        appendOverlay(static_cast<float>(layout.styleX), static_cast<float>(layout.styleY),
+                      static_cast<float>(layout.buttonSize), static_cast<float>(layout.buttonSize),
+                      simd_make_float4(0.18F, 0.23F, 0.34F, 0.72F));
+        const char styleLetter[2] = {
+            _presentation.notePaneStyle == threebs::NotePaneStyle::Vertical ? 'V' : 'H', '\0'};
+        appendText(static_cast<float>(layout.styleX) + 6.5F * s,
+                   static_cast<float>(layout.styleY) + 4.0F * s, 15.0F * s,
+                   simd_make_float4(0.80F, 0.87F, 0.95F, 0.95F), styleLetter);
 
-        const auto contentLeft = left + 24.0F * backingScale;
-        const auto contentRight = left + paneWidth - 10.0F * backingScale;
-        const auto contentTop = top + 34.0F * backingScale;
-        const auto laneHeight = (paneHeight - 42.0F * backingScale) / 3.0F;
-        for (std::size_t body = 0; body < threebs::bodyCount; ++body) {
-            const auto laneTop = contentTop + static_cast<float>(body) * laneHeight;
-            const auto bodyColour = _styles[body].colours[2];
-            appendOverlay(left + 10.0F * backingScale, laneTop + laneHeight * 0.5F - 3.0F * backingScale,
-                          7.0F * backingScale, 7.0F * backingScale,
-                          simd_make_float4(bodyColour.r, bodyColour.g, bodyColour.b, 0.95F));
-            if (body > 0U)
-                appendOverlay(contentLeft, laneTop, contentRight - contentLeft, 1.0F * backingScale,
-                              simd_make_float4(0.30F, 0.37F, 0.48F, 0.32F));
-
-            for (const auto& entry : _noteHistory[body]) {
-                if (!entry.valid)
-                    continue;
-                const auto endTime = entry.active
-                    ? now : std::max(entry.endTime, entry.startTime + threebs::minimumNoteDisplaySeconds);
-                if (endTime < now - threebs::noteHistorySeconds)
-                    continue;
-                const auto width = contentRight - contentLeft;
-                const auto startAmount = static_cast<float>(
-                    (entry.startTime - (now - threebs::noteHistorySeconds)) / threebs::noteHistorySeconds);
-                const auto endAmount = static_cast<float>(
-                    (endTime - (now - threebs::noteHistorySeconds)) / threebs::noteHistorySeconds);
-                const auto x0 = std::clamp(contentLeft + startAmount * width, contentLeft, contentRight);
-                const auto x1 = std::clamp(contentLeft + endAmount * width, contentLeft, contentRight);
-                const auto velocity = static_cast<float>(entry.velocity) / 127.0F;
-                const auto barHeight = (4.0F + velocity * 4.0F) * backingScale;
-                const auto pitch = static_cast<float>(entry.note) / 127.0F;
-                const auto y = laneTop + (laneHeight - barHeight - 3.0F * backingScale) * (1.0F - pitch)
-                               + 1.5F * backingScale;
-                appendOverlay(x0, y, std::max(2.0F * backingScale, x1 - x0), barHeight,
-                              simd_make_float4(bodyColour.r, bodyColour.g, bodyColour.b,
-                                               0.38F + velocity * 0.58F));
+        if (_presentation.notePaneStyle == threebs::NotePaneStyle::Vertical) {
+            const auto headerHeight = 26.0F * s;
+            appendOverlay(left, top, paneWidth, headerHeight,
+                          simd_make_float4(0.05F, 0.07F, 0.12F, 0.92F));
+            appendText(left + 8.0F * s, top + 7.0F * s, 13.0F * s,
+                       simd_make_float4(0.62F, 0.74F, 0.95F, 0.85F), "3BS");
+            const auto contentTop = top + headerHeight + 6.0F * s;
+            const auto contentBottom = top + paneHeight - 6.0F * s;
+            const auto contentHeight = contentBottom - contentTop;
+            const auto gutter = 8.0F * s;
+            const auto columnWidth = (paneWidth - 2.0F * gutter) / static_cast<float>(threebs::bodyCount);
+            constexpr int rowCount = 16;
+            for (int row = 0; row <= rowCount; ++row) {
+                const auto gridY = contentTop + static_cast<float>(row) / rowCount * contentHeight;
+                const auto alpha = row % 4 == 0 ? 0.20F : 0.08F;
+                appendOverlay(left + gutter, gridY, paneWidth - 2.0F * gutter, 1.0F * s,
+                              simd_make_float4(0.40F, 0.50F, 0.66F, alpha));
+            }
+            appendOverlay(left + gutter, contentTop, paneWidth - 2.0F * gutter, 2.0F * s,
+                          simd_make_float4(0.92F, 0.96F, 1.0F, 0.55F));
+            for (std::size_t body = 0; body < threebs::bodyCount; ++body) {
+                const auto columnLeft = left + gutter + static_cast<float>(body) * columnWidth;
+                const char header[2] = {static_cast<char>('1' + body), '\0'};
+                appendText(columnLeft + columnWidth * 0.5F - 3.0F * s, top + 7.0F * s, 12.0F * s,
+                           bodyTint(body, 0.92F), header);
+                if (body > 0U)
+                    appendOverlay(columnLeft - 0.5F * s, contentTop, 1.0F * s, contentHeight,
+                                  simd_make_float4(0.30F, 0.37F, 0.48F, 0.25F));
+                for (const auto& entry : _noteHistory[body]) {
+                    if (!entry.valid || noteEndTime(entry) < now - threebs::noteHistorySeconds)
+                        continue;
+                    const auto age = std::max(0.0, now - entry.startTime);
+                    const auto ageAmount = static_cast<float>(age / threebs::noteHistorySeconds);
+                    if (ageAmount > 1.0F)
+                        continue;
+                    const auto noteY = contentTop + ageAmount * contentHeight;
+                    if (noteY > contentBottom)
+                        continue;
+                    const auto fade = 1.0F - ageAmount;
+                    const auto velocity = static_cast<float>(entry.velocity) / 127.0F;
+                    const auto rowHeight = 14.0F * s;
+                    if (entry.active)
+                        appendOverlay(columnLeft + 1.0F * s, noteY - rowHeight * 0.5F,
+                                      columnWidth - 2.0F * s, rowHeight,
+                                      bodyTint(body, 0.16F * (0.5F + 0.5F * fade)));
+                    char name[4];
+                    threebs::formatNoteName(entry.note, name);
+                    appendText(columnLeft + 4.0F * s, noteY - 6.5F * s, 13.0F * s,
+                               bodyTint(body, std::clamp(0.45F + 0.55F * fade, 0.0F, 1.0F)), name);
+                    const auto tickHeight = 11.0F * s * velocity;
+                    appendOverlay(columnLeft + columnWidth - 5.0F * s, noteY - tickHeight * 0.5F,
+                                  3.0F * s, tickHeight, bodyTint(body, std::clamp(0.2F + 0.5F * fade, 0.0F, 1.0F)));
+                }
+            }
+        } else {
+            const auto contentLeft = left + 24.0F * s;
+            const auto contentRight = left + paneWidth - 10.0F * s;
+            const auto contentTop = top + 34.0F * s;
+            const auto laneHeight = (paneHeight - 42.0F * s) / static_cast<float>(threebs::bodyCount);
+            for (std::size_t body = 0; body < threebs::bodyCount; ++body) {
+                const auto laneTop = contentTop + static_cast<float>(body) * laneHeight;
+                appendOverlay(left + 10.0F * s, laneTop + laneHeight * 0.5F - 3.0F * s,
+                              7.0F * s, 7.0F * s, bodyTint(body, 0.95F));
+                if (body > 0U)
+                    appendOverlay(contentLeft, laneTop, contentRight - contentLeft, 1.0F * s,
+                                  simd_make_float4(0.30F, 0.37F, 0.48F, 0.32F));
+                for (const auto& entry : _noteHistory[body]) {
+                    if (!entry.valid)
+                        continue;
+                    const auto endTime = noteEndTime(entry);
+                    if (endTime < now - threebs::noteHistorySeconds)
+                        continue;
+                    const auto width = contentRight - contentLeft;
+                    const auto startAmount = static_cast<float>(
+                        (entry.startTime - (now - threebs::noteHistorySeconds)) / threebs::noteHistorySeconds);
+                    const auto endAmount = static_cast<float>(
+                        (endTime - (now - threebs::noteHistorySeconds)) / threebs::noteHistorySeconds);
+                    const auto x0 = std::clamp(contentLeft + startAmount * width, contentLeft, contentRight);
+                    const auto x1 = std::clamp(contentLeft + endAmount * width, contentLeft, contentRight);
+                    const auto velocity = static_cast<float>(entry.velocity) / 127.0F;
+                    const auto barHeight = (4.0F + velocity * 4.0F) * s;
+                    const auto pitch = static_cast<float>(entry.note) / 127.0F;
+                    const auto noteY = laneTop + (laneHeight - barHeight - 3.0F * s) * (1.0F - pitch)
+                                       + 1.5F * s;
+                    appendOverlay(x0, noteY, std::max(2.0F * s, x1 - x0), barHeight,
+                                  bodyTint(body, 0.38F + velocity * 0.58F));
+                }
             }
         }
     }
@@ -826,7 +1079,7 @@ std::vector<StarInstance> makeStars() {
     scenePass.depthAttachment.texture = _depthTexture;
     scenePass.depthAttachment.loadAction = MTLLoadActionClear;
     scenePass.depthAttachment.storeAction = MTLStoreActionStore;
-    scenePass.depthAttachment.clearDepth = 1.0;
+    scenePass.depthAttachment.clearDepth = 0.0;
     id<MTLRenderCommandEncoder> encoder = [command renderCommandEncoderWithDescriptor:scenePass];
     [encoder setCullMode:MTLCullModeNone];
     [encoder setDepthStencilState:_depthNone];
@@ -934,6 +1187,15 @@ std::vector<StarInstance> makeStars() {
         [encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:1];
         [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6
                   instanceCount:overlayCount];
+    }
+    if (glyphCount > 0U) {
+        [encoder setRenderPipelineState:_glyphPipeline];
+        [encoder setVertexBytes:_glyphStaging.data()
+                         length:glyphCount * sizeof(threebs::GlyphInstance) atIndex:0];
+        [encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:1];
+        [encoder setFragmentTexture:_glyphAtlas atIndex:0];
+        [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6
+                  instanceCount:glyphCount];
     }
     [encoder endEncoding];
     [command presentDrawable:view.currentDrawable];

@@ -208,6 +208,50 @@ void testNoteCleanup() {
     check(foundNoteOff, "transport stop emits active note-offs");
 }
 
+std::array<int, threebs::bodyCount> countNoteOnsPerBody(const threebs::EngineConfig& config) {
+    auto initial = threebs::makeInitialState(threebs::InitialSystem::FigureEight, 4242, 0.0);
+    threebs::MusicEngine engine(initial, config);
+    engine.prepare(48000.0);
+    std::array<int, threebs::bodyCount> counts{};
+    threebs::ProcessContext context;
+    context.sampleCount = 48000;
+    context.sampleRate = 48000.0;
+    context.beatsPerSample = 2.0 / 48000.0;
+    context.playing = true;
+    for (int block = 0; block < 4; ++block) {
+        context.beatAtStart = static_cast<double>(block) * 2.0;
+        context.transportStarted = block == 0;
+        threebs::MusicEngine::EventBuffer buffer;
+        engine.process(context, buffer);
+        for (const auto& event : buffer)
+            if (event.type == threebs::MidiEventType::NoteOn && event.sourceBody < threebs::bodyCount)
+                ++counts[event.sourceBody];
+    }
+    return counts;
+}
+
+void testPerVoiceGeneration() {
+    threebs::EngineConfig config;
+    for (std::size_t body = 0; body < threebs::bodyCount; ++body) {
+        auto& voice = config.voices[body];
+        voice.enabled = true;
+        voice.channel = static_cast<std::uint8_t>(body + 1);
+        voice.triggerMapping = threebs::TriggerMapping::Clock;
+        voice.clockDivisionBeats = 0.25;
+        voice.probability = 1.0;
+        voice.pitchMapping = threebs::PitchMapping::BarycentricRadius;
+    }
+    const auto counts = countNoteOnsPerBody(config);
+    check(counts[0] > 0 && counts[1] > 0 && counts[2] > 0,
+          "all three planets generate notes");
+
+    config.voices[1].enabled = false;
+    const auto disabled = countNoteOnsPerBody(config);
+    check(disabled[1] == 0, "disabled planet generates no notes");
+    check(disabled[0] > 0 && disabled[2] > 0,
+          "other planets still generate when one is disabled");
+}
+
 void testSnapshotQueue() {
     threebs::SpscQueue<threebs::RenderSnapshot, 4> queue;
     threebs::RenderSnapshot input;
@@ -375,6 +419,7 @@ int main() {
     testScales();
     testBlockSizeIndependentMidi();
     testNoteCleanup();
+    testPerVoiceGeneration();
     testSnapshotQueue();
     testNoteVisualizationQueue();
     testCameraTargetAndHitTesting();

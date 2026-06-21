@@ -32,6 +32,10 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncAttachment_;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>, 10> sliderAttachments_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> presetAttachment_;
+    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>, bodyCount> voiceEnableAttachments_;
+    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voiceScaleAttachments_;
+    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voicePitchAttachments_;
+    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voiceTriggerAttachments_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ThreeBSEditor)
 };

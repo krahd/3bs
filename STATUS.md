@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-20 14-57 GMT-3
+Last updated: 2026-06-20 18-12 GMT-3
 
 ## Project purpose
 
@@ -138,17 +138,29 @@ repository.
   manual-zoom override behavior shared by plugin and standalone.
 - Added a real-time-safe body-tagged note queue and a persistent, minimizable
   three-lane Metal piano-roll overlay.
+- Switched the Metal scene to reversed-Z depth (near=1/far=0 with a GreaterEqual
+  test) to remove the surface flicker seen when two planets nearly overlapped.
+- Added a CoreText-generated monospace glyph atlas and textured-quad glyph
+  pipeline, plus a vertical FastTracker II-style note view that scrolls actual
+  note names per planet and a pane button toggling horizontal/vertical style
+  (persisted via `notePaneStyle`, shared by plugin and standalone).
+- Exposed per-planet voice controls (enable, scale/mode, pitch mapping, trigger
+  mapping) on the VOICES deck page, backed by new plugin parameters with editor
+  attachments and standalone polling, and synchronized from factory presets.
+- Normalized all 24 factory presets so each preset's three voices share one
+  tonal center (common root, third-compatible scales) for coherent harmony.
+- Added a core test asserting all three planets generate notes and that
+  disabling a planet silences only that voice.
 
 ## Tests and verification status
 
-- `cmake --preset dev`: passed.
-- `cmake --build --preset dev -j4`: passed.
-- `ctest --preset dev --output-on-failure`: 2/2 passed.
-- `cmake --build --preset plugin-debug -j4`: passed for arm64 AU, VST3, and
-  standalone.
-- `ctest --preset plugin-debug --output-on-failure`: core, schema-v2 preset, and
-  processor/schema-v4 state tests passed; Metal smoke test skipped because the
-  sandbox returned no Metal device.
+- `cmake --build --preset dev -j8`: passed.
+- `ctest --preset dev --output-on-failure`: 2/2 passed (includes the new
+  per-voice generation/disable test).
+- `cmake --build --preset plugin-debug -j8`: passed with no warnings for arm64
+  AU, VST3, and standalone.
+- `ctest --preset plugin-debug --output-on-failure`: 4/4 passed; the Metal smoke
+  test ran (a Metal device was available) rather than being skipped.
 - Offline `xcrun metal` validation was attempted but the installed Xcode lacks
   the optional Metal Toolchain component.
 - Standalone was launched externally on Apple Silicon; runtime Metal shader
@@ -173,8 +185,12 @@ repository.
 - The pinned full HYG v4.1 payload could not be downloaded in this environment;
   the generator, provenance, optional embedded target, real bright-star fallback,
   and deterministic faint field are present.
-- User preset file import/export, detailed per-voice mapping UI, and advanced
-  graphics controls are not yet exposed.
+- User preset file import/export and advanced graphics controls are not yet
+  exposed. Per-planet enable/scale/pitch/trigger controls now exist; per-voice
+  root, range, and custom-scale editing remain available only through presets.
+- The reversed-Z depth fix, glyph atlas, and vertical FastTracker II note view
+  compile and pass the Metal smoke test but still need a clean foreground visual
+  check (legibility, scrolling, and the absence of z-fighting at close approach).
 - The corrected bloom orientation, automatic framing, note overlay, and pane
   hit testing need one clean foreground visual and interaction check.
 - Allocation/lock instrumentation and baseline 60 fps profiling have not run.
@@ -186,7 +202,8 @@ repository.
   inspection, and 60 fps profiling.
 - Install and validate AU with `auval`, then test it in Logic.
 - Run plugin validation and test VST3 MIDI routing in Ableton.
-- Complete advanced voice and user-preset controls.
+- Complete remaining voice controls (root, range, custom scale) and user-preset
+  import/export.
 - Profile processing allocation/locking and renderer frame time.
 
 ## Next steps
@@ -217,4 +234,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-20 14-57 GMT-3
+Last updated: 2026-06-20 18-12 GMT-3

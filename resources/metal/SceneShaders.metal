@@ -77,8 +77,11 @@ float4 projectWorld(float3 world, constant SceneUniforms& u) {
     const float tanHalfFov = tan(pi * 0.125);
     constexpr float nearPlane = 0.05;
     constexpr float farPlane = 120.0;
-    return float4(x / (tanHalfFov * aspect), y / tanHalfFov,
-                  (farPlane * z - nearPlane * farPlane) / (farPlane - nearPlane), z);
+    // Reversed-Z: depth is 1 at the near plane and 0 at the far plane. Paired with a
+    // GreaterEqual depth test this spreads floating-point precision across the whole scene
+    // and removes the surface flicker that appeared when two planets nearly overlapped.
+    const float reversedZ = nearPlane * (farPlane - z) / (farPlane - nearPlane);
+    return float4(x / (tanHalfFov * aspect), y / tanHalfFov, reversedZ, z);
 }
 
 float hash31(float3 p) {
@@ -163,8 +166,9 @@ vertex ColourOut starVertex(const device StarInstance* stars [[buffer(0)]],
     const float cameraZ = dot(direction, u.cameraForward.xyz);
     const float aspect = u.viewportTime.x / max(1.0, u.viewportTime.y);
     const float tanHalfFov = tan(pi * 0.125);
+    // Reversed-Z: park stars just above the far plane (depth ~0) so planets occlude them.
     float4 clip = float4(cameraX / (tanHalfFov * aspect), cameraY / tanHalfFov,
-                         cameraZ * 0.999, cameraZ);
+                         cameraZ * 0.0001, cameraZ);
     const float magnitude = star.directionMagnitude.w;
     const float catalogue = star.colourKind.w;
     const float brightness = clamp(exp2(-0.4 * (magnitude - 5.0)) * 0.12, 0.025, 0.72);
@@ -379,5 +383,35 @@ fragment float4 overlayFragment(ColourOut in [[stage_in]]) {
     const float2 q = abs(in.uv) - 0.92;
     const float distance = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 0.08;
     const float coverage = 1.0 - smoothstep(-0.025, 0.025, distance);
+    return float4(in.colour.rgb, in.colour.a * coverage);
+}
+
+struct GlyphInstance {
+    float4 bounds;   // x, y, width, height in pixels
+    float4 uvRect;   // u0, v0, du, dv into the glyph atlas
+    float4 colour;   // premultiplied tint applied to the glyph coverage
+};
+
+vertex ColourOut glyphVertex(const device GlyphInstance* glyphs [[buffer(0)]],
+                             constant SceneUniforms& u [[buffer(1)]],
+                             uint vertexId [[vertex_id]], uint instanceId [[instance_id]]) {
+    const float2 corners[6] = {
+        float2(0, 0), float2(1, 0), float2(0, 1),
+        float2(0, 1), float2(1, 0), float2(1, 1)
+    };
+    const GlyphInstance glyph = glyphs[instanceId];
+    const float2 corner = corners[vertexId];
+    const float2 pixel = glyph.bounds.xy + corner * glyph.bounds.zw;
+    ColourOut out;
+    out.position = float4(pixel.x * 2.0 / max(1.0, u.viewportTime.x) - 1.0,
+                          1.0 - pixel.y * 2.0 / max(1.0, u.viewportTime.y), 0.0, 1.0);
+    out.colour = glyph.colour;
+    out.uv = glyph.uvRect.xy + corner * glyph.uvRect.zw;
+    return out;
+}
+
+fragment float4 glyphFragment(ColourOut in [[stage_in]], texture2d<float> atlas [[texture(0)]]) {
+    constexpr sampler glyphSampler(filter::linear, address::clamp_to_edge);
+    const float coverage = atlas.sample(glyphSampler, in.uv).a;
     return float4(in.colour.rgb, in.colour.a * coverage);
 }

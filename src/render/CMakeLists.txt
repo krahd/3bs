@@ -19,7 +19,9 @@ target_link_libraries(threebs_presentation
     PRIVATE
         "-framework Metal"
         "-framework MetalKit"
-        "-framework QuartzCore")
+        "-framework QuartzCore"
+        "-framework CoreText"
+        "-framework CoreGraphics")
 
 if(THREEBS_BUILD_TESTS)
     add_executable(threebs_metal_smoke ../../tests/MetalSmoke.mm)

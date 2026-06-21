@@ -182,4 +182,18 @@ juce::StringArray PresetCatalog::names() const {
     return result;
 }
 
+juce::StringArray scaleDisplayNames() {
+    return {"Major", "Natural Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian", "Locrian",
+            "Major Pentatonic", "Minor Pentatonic", "Blues", "Chromatic", "Hungarian Minor",
+            "Whole Tone", "Diminished", "Custom"};
+}
+
+juce::StringArray pitchMappingDisplayNames() {
+    return {"Barycentric Radius", "Nearest Body", "Plane Distance", "Speed", "Orbital Phase"};
+}
+
+juce::StringArray triggerMappingDisplayNames() {
+    return {"Clock", "Plane Crossing", "Close Approach", "Turning Point"};
+}
+
 } // namespace threebs

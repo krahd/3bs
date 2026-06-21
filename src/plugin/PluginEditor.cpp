@@ -32,6 +32,22 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
         sliderAttachments_[i] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
             state, sliders[i].first, *sliders[i].second);
 
+    const auto enables = panel_.voiceEnableButtons();
+    const auto scales = panel_.voiceScaleSelectors();
+    const auto pitches = panel_.voicePitchSelectors();
+    const auto triggers = panel_.voiceTriggerSelectors();
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        const auto suffix = juce::String(body + 1);
+        voiceEnableAttachments_[body] = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            state, "voiceEnabled" + suffix, *enables[body]);
+        voiceScaleAttachments_[body] = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            state, "voiceScale" + suffix, *scales[body]);
+        voicePitchAttachments_[body] = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            state, "voicePitch" + suffix, *pitches[body]);
+        voiceTriggerAttachments_[body] = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            state, "voiceTrigger" + suffix, *triggers[body]);
+    }
+
     panel_.setPresetNames(presets_.names());
     presetAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         state, "preset", panel_.presetSelector());
@@ -45,6 +61,11 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
     };
     panel_.onNotePaneMinimizedChanged = [this](bool minimized) {
         presentation_.notePaneMinimized = minimized;
+        processor_.setPresentationState(presentation_);
+        processor_.updateHostDisplay(juce::AudioProcessorListener::ChangeDetails{}.withNonParameterStateChanged(true));
+    };
+    panel_.onNotePaneStyleChanged = [this](NotePaneStyle style) {
+        presentation_.notePaneStyle = style;
         processor_.setPresentationState(presentation_);
         processor_.updateHostDisplay(juce::AudioProcessorListener::ChangeDetails{}.withNonParameterStateChanged(true));
     };

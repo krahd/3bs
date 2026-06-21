@@ -53,12 +53,25 @@ public:
     std::array<juce::Slider*, bodyCount> planeTiltSliders() noexcept {
         return {&tiltOne_, &tiltTwo_, &tiltThree_};
     }
+    std::array<juce::ToggleButton*, bodyCount> voiceEnableButtons() noexcept {
+        return {&voiceEnable_[0], &voiceEnable_[1], &voiceEnable_[2]};
+    }
+    std::array<juce::ComboBox*, bodyCount> voiceScaleSelectors() noexcept {
+        return {&voiceScale_[0], &voiceScale_[1], &voiceScale_[2]};
+    }
+    std::array<juce::ComboBox*, bodyCount> voicePitchSelectors() noexcept {
+        return {&voicePitch_[0], &voicePitch_[1], &voicePitch_[2]};
+    }
+    std::array<juce::ComboBox*, bodyCount> voiceTriggerSelectors() noexcept {
+        return {&voiceTrigger_[0], &voiceTrigger_[1], &voiceTrigger_[2]};
+    }
 
     std::function<void()> onRandomize;
     std::function<void()> onReset;
     std::function<void()> onAdvanced;
     std::function<void(const CameraState&)> onCameraChanged;
     std::function<void(bool)> onNotePaneMinimizedChanged;
+    std::function<void(NotePaneStyle)> onNotePaneStyleChanged;
 
 private:
     class DeckLookAndFeel final : public juce::LookAndFeel_V4 {
@@ -98,6 +111,12 @@ private:
     juce::Slider tiltThree_;
     juce::Slider minimumCameraDistance_;
     juce::Slider maximumCameraDistance_;
+    std::array<juce::ToggleButton, bodyCount> voiceEnable_;
+    std::array<juce::ComboBox, bodyCount> voiceScale_;
+    std::array<juce::ComboBox, bodyCount> voicePitch_;
+    std::array<juce::ComboBox, bodyCount> voiceTrigger_;
+    std::array<juce::Label, bodyCount> voiceHeaders_;
+    std::array<juce::Label, 3> voiceRowLabels_;
     juce::ToggleButton autoFrame_{"AUTO FRAME"};
     juce::ComboBox presets_;
     juce::ComboBox midiOutput_;

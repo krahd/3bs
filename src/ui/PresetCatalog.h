@@ -25,6 +25,12 @@ struct ArtworkPreset {
     PresentationState presentation{};
 };
 
+// Display names ordered to match the ScaleId, PitchMapping, and TriggerMapping enums in Types.h,
+// so a combo box or choice-parameter index maps directly onto the enum value.
+juce::StringArray scaleDisplayNames();
+juce::StringArray pitchMappingDisplayNames();
+juce::StringArray triggerMappingDisplayNames();
+
 class PresetCatalog {
 public:
     PresetCatalog();

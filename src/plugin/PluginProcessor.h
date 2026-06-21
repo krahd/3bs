@@ -99,6 +99,7 @@ private:
         std::atomic<bool> autoFrame{true};
         std::atomic<std::uint64_t> visualSeed{0x334253ULL};
         std::atomic<bool> notePaneMinimized{};
+        std::atomic<int> notePaneStyle{static_cast<int>(NotePaneStyle::Horizontal)};
         void store(const PresentationState& state) noexcept;
         PresentationState load() const noexcept;
     } storedPresentation_;
@@ -114,6 +115,10 @@ private:
         std::atomic<float>* trail{};
         std::atomic<float>* bloom{};
         std::array<std::atomic<float>*, bodyCount> masses{};
+        std::array<std::atomic<float>*, bodyCount> voiceEnabled{};
+        std::array<std::atomic<float>*, bodyCount> voiceScale{};
+        std::array<std::atomic<float>*, bodyCount> voicePitch{};
+        std::array<std::atomic<float>*, bodyCount> voiceTrigger{};
         std::atomic<float>* inputMode{};
         std::atomic<float>* preset{};
     } parameterRefs_;
@@ -123,6 +128,7 @@ private:
     void publishSnapshot() noexcept;
     void publishNoteVisualization(const MusicEngine::EventBuffer&) noexcept;
     void setParameterValue(const juce::String& id, float plainValue);
+    void applyVoiceParameters(const std::array<VoiceConfig, bodyCount>& voices);
     static void addEvents(const MusicEngine::EventBuffer&, juce::MidiBuffer&);
 
     juce::AudioProcessorValueTreeState parameters_;

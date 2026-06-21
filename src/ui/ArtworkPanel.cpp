@@ -59,6 +59,11 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
         if (onNotePaneMinimizedChanged)
             onNotePaneMinimizedChanged(minimized);
     };
+    scene_.onNotePaneStyleChanged = [this](NotePaneStyle style) {
+        presentation_.notePaneStyle = style;
+        if (onNotePaneStyleChanged)
+            onNotePaneStyleChanged(style);
+    };
 
     title_.setText("THE THREE BODY SOLUTION", juce::dontSendNotification);
     title_.setFont(juce::Font(juce::FontOptions(22.0F).withStyle("Light")));
@@ -114,6 +119,40 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     maximumCameraDistance_.setRange(5.0, 80.0, 0.1); maximumCameraDistance_.setValue(40.0);
     autoFrame_.setToggleState(true, juce::dontSendNotification);
     addAndMakeVisible(autoFrame_);
+
+    const std::array<juce::String, bodyCount> voiceNames{"PLANET I", "PLANET II", "PLANET III"};
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        voiceHeaders_[body].setText(voiceNames[body], juce::dontSendNotification);
+        voiceHeaders_[body].setJustificationType(juce::Justification::centred);
+        voiceHeaders_[body].setFont(juce::Font(juce::FontOptions(10.0F).withStyle("Bold")));
+        voiceHeaders_[body].setColour(juce::Label::textColourId, juce::Colour(0xff9fb2c6));
+        addAndMakeVisible(voiceHeaders_[body]);
+
+        voiceEnable_[body].setButtonText("ON");
+        voiceEnable_[body].setToggleState(true, juce::dontSendNotification);
+        addAndMakeVisible(voiceEnable_[body]);
+
+        voiceScale_[body].addItemList(scaleDisplayNames(), 1);
+        voiceScale_[body].setSelectedId(static_cast<int>(ScaleId::MinorPentatonic) + 1,
+                                        juce::dontSendNotification);
+        addAndMakeVisible(voiceScale_[body]);
+
+        voicePitch_[body].addItemList(pitchMappingDisplayNames(), 1);
+        voicePitch_[body].setSelectedId(1, juce::dontSendNotification);
+        addAndMakeVisible(voicePitch_[body]);
+
+        voiceTrigger_[body].addItemList(triggerMappingDisplayNames(), 1);
+        voiceTrigger_[body].setSelectedId(1, juce::dontSendNotification);
+        addAndMakeVisible(voiceTrigger_[body]);
+    }
+    const std::array<juce::String, 3> voiceRowNames{"SCALE", "PITCH MAP", "TRIGGER"};
+    for (std::size_t i = 0; i < voiceRowLabels_.size(); ++i) {
+        voiceRowLabels_[i].setText(voiceRowNames[i], juce::dontSendNotification);
+        voiceRowLabels_[i].setJustificationType(juce::Justification::centredLeft);
+        voiceRowLabels_[i].setFont(juce::Font(juce::FontOptions(8.5F).withStyle("Bold")));
+        voiceRowLabels_[i].setColour(juce::Label::textColourId, juce::Colour(0xff63778d));
+        addAndMakeVisible(voiceRowLabels_[i]);
+    }
 
     const std::array<juce::String, 15> labels{
         "SPEED", "GRAVITY", "SOFTEN", "CHAOS", "DENSITY", "TRAIL", "BLOOM",
@@ -217,9 +256,36 @@ void ArtworkPanel::resized() {
         layoutKnobs({{0U, &speed_}, {1U, &gravity_}, {2U, &softening_}, {3U, &chaos_},
                      {7U, &massOne_}, {8U, &massTwo_}, {9U, &massThree_}}, content);
         break;
-    case DeckPage::Voices:
+    case DeckPage::Voices: {
         layoutKnobs({{4U, &density_}}, left.removeFromTop(96));
+        auto grid = content;
+        auto gutter = grid.removeFromLeft(70);
+        const auto columnWidth = grid.getWidth() / static_cast<int>(bodyCount);
+        auto headerRow = grid.removeFromTop(18);
+        gutter.removeFromTop(18);
+        for (std::size_t body = 0; body < bodyCount; ++body)
+            voiceHeaders_[body].setBounds(headerRow.removeFromLeft(columnWidth));
+        grid.removeFromTop(4);
+        gutter.removeFromTop(4);
+        auto enableRow = grid.removeFromTop(22);
+        gutter.removeFromTop(22);
+        for (std::size_t body = 0; body < bodyCount; ++body)
+            voiceEnable_[body].setBounds(enableRow.removeFromLeft(columnWidth).reduced(10, 1));
+        grid.removeFromTop(4);
+        gutter.removeFromTop(4);
+        const auto comboRow = [&](std::array<juce::ComboBox, bodyCount>& combos, std::size_t labelIndex) {
+            auto row = grid.removeFromTop(24);
+            voiceRowLabels_[labelIndex].setBounds(gutter.removeFromTop(24));
+            for (std::size_t body = 0; body < bodyCount; ++body)
+                combos[body].setBounds(row.removeFromLeft(columnWidth).reduced(4, 1));
+            grid.removeFromTop(4);
+            gutter.removeFromTop(4);
+        };
+        comboRow(voiceScale_, 0U);
+        comboRow(voicePitch_, 1U);
+        comboRow(voiceTrigger_, 2U);
         break;
+    }
     case DeckPage::Space:
         advanced_.setBounds(left.removeFromTop(28));
         left.removeFromTop(6);
@@ -307,6 +373,15 @@ void ArtworkPanel::updateDeckVisibility() {
     advanced_.setVisible(false);
     for (auto& label : knobLabels_)
         label.setVisible(false);
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        voiceHeaders_[body].setVisible(false);
+        voiceEnable_[body].setVisible(false);
+        voiceScale_[body].setVisible(false);
+        voicePitch_[body].setVisible(false);
+        voiceTrigger_[body].setVisible(false);
+    }
+    for (auto& label : voiceRowLabels_)
+        label.setVisible(false);
 
     if (!showBase)
         return;
@@ -332,9 +407,18 @@ void ArtworkPanel::updateDeckVisibility() {
         break;
     case DeckPage::Voices:
         pageTitle_.setText("VOICES", juce::dontSendNotification);
-        pageHelp_.setText("Global note density is live. Detailed voice mapping follows the selected preset for now.",
+        pageHelp_.setText("Per-planet enable, scale/mode, and movement-to-note mapping. Density is global.",
                           juce::dontSendNotification);
         showKnob(4U, density_);
+        for (std::size_t body = 0; body < bodyCount; ++body) {
+            voiceHeaders_[body].setVisible(true);
+            voiceEnable_[body].setVisible(true);
+            voiceScale_[body].setVisible(true);
+            voicePitch_[body].setVisible(true);
+            voiceTrigger_[body].setVisible(true);
+        }
+        for (auto& label : voiceRowLabels_)
+            label.setVisible(true);
         break;
     case DeckPage::Space:
         pageTitle_.setText("SPACE", juce::dontSendNotification);

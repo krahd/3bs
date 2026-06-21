@@ -4,6 +4,7 @@
 #include "plugin/PluginProcessor.h"
 
 #include "plugin/PluginEditor.h"
+#include "ui/PresetCatalog.h"
 
 #include <algorithm>
 #include <cmath>
@@ -103,6 +104,7 @@ void ThreeBSProcessor::AtomicPresentationState::store(const PresentationState& s
     autoFrame.store(camera.autoFrame, std::memory_order_relaxed);
     visualSeed.store(state.visualSeed, std::memory_order_relaxed);
     notePaneMinimized.store(state.notePaneMinimized, std::memory_order_relaxed);
+    notePaneStyle.store(static_cast<int>(state.notePaneStyle), std::memory_order_relaxed);
 }
 
 PresentationState ThreeBSProcessor::AtomicPresentationState::load() const noexcept {
@@ -124,6 +126,7 @@ PresentationState ThreeBSProcessor::AtomicPresentationState::load() const noexce
     state.camera.autoFrame = autoFrame.load(std::memory_order_relaxed);
     state.visualSeed = visualSeed.load(std::memory_order_relaxed);
     state.notePaneMinimized = notePaneMinimized.load(std::memory_order_relaxed);
+    state.notePaneStyle = static_cast<NotePaneStyle>(notePaneStyle.load(std::memory_order_relaxed));
     state.camera = sanitizedCameraState(state.camera);
     return state;
 }
@@ -147,6 +150,20 @@ juce::AudioProcessorValueTreeState::ParameterLayout ThreeBSProcessor::createPara
         values.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{"mass" + juce::String(i + 1), 1}, "Mass " + juce::String(i + 1),
             juce::NormalisableRange<float>(0.05F, 8.0F, 0.001F, 0.45F), 1.0F));
+    for (int i = 0; i < static_cast<int>(bodyCount); ++i) {
+        const auto suffix = juce::String(i + 1);
+        values.push_back(std::make_unique<juce::AudioParameterBool>(
+            juce::ParameterID{"voiceEnabled" + suffix, 1}, "Planet " + suffix + " Enabled", true));
+        values.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID{"voiceScale" + suffix, 1}, "Planet " + suffix + " Scale",
+            scaleDisplayNames(), static_cast<int>(ScaleId::MinorPentatonic)));
+        values.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID{"voicePitch" + suffix, 1}, "Planet " + suffix + " Pitch Map",
+            pitchMappingDisplayNames(), 0));
+        values.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID{"voiceTrigger" + suffix, 1}, "Planet " + suffix + " Trigger",
+            triggerMappingDisplayNames(), 0));
+    }
     values.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{"inputMode", 1}, "MIDI Input",
         juce::StringArray{"Off", "Transpose", "Gate"}, 0));
     juce::StringArray presetNames;
@@ -172,8 +189,14 @@ ThreeBSProcessor::ThreeBSProcessor()
     parameterRefs_.density = parameters_.getRawParameterValue("density");
     parameterRefs_.trail = parameters_.getRawParameterValue("trail");
     parameterRefs_.bloom = parameters_.getRawParameterValue("bloom");
-    for (std::size_t body = 0; body < bodyCount; ++body)
-        parameterRefs_.masses[body] = parameters_.getRawParameterValue("mass" + juce::String(body + 1));
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        const auto suffix = juce::String(body + 1);
+        parameterRefs_.masses[body] = parameters_.getRawParameterValue("mass" + suffix);
+        parameterRefs_.voiceEnabled[body] = parameters_.getRawParameterValue("voiceEnabled" + suffix);
+        parameterRefs_.voiceScale[body] = parameters_.getRawParameterValue("voiceScale" + suffix);
+        parameterRefs_.voicePitch[body] = parameters_.getRawParameterValue("voicePitch" + suffix);
+        parameterRefs_.voiceTrigger[body] = parameters_.getRawParameterValue("voiceTrigger" + suffix);
+    }
     parameterRefs_.inputMode = parameters_.getRawParameterValue("inputMode");
     parameterRefs_.preset = parameters_.getRawParameterValue("preset");
     engineConfig_ = engine_.config();
@@ -197,6 +220,7 @@ ThreeBSProcessor::ThreeBSProcessor()
         setParameterValue("speed", static_cast<float>(preset.simulation.speed));
         for (std::size_t body = 0; body < bodyCount; ++body)
             setParameterValue("mass" + juce::String(body + 1), static_cast<float>(initial.bodies[body].mass));
+        applyVoiceParameters(preset.voices);
     } else {
         storedInitial_.store(engine_.simulation().initialState());
         storedBaseInitial_.store(engine_.simulation().initialState());
@@ -241,13 +265,32 @@ void ThreeBSProcessor::consumeCommands(MusicEngine::EventBuffer& eventBuffer) no
     }
 }
 
+void ThreeBSProcessor::applyVoiceParameters(const std::array<VoiceConfig, bodyCount>& voices) {
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        const auto suffix = juce::String(body + 1);
+        setParameterValue("voiceEnabled" + suffix, voices[body].enabled ? 1.0F : 0.0F);
+        setParameterValue("voiceScale" + suffix, static_cast<float>(voices[body].scale));
+        setParameterValue("voicePitch" + suffix, static_cast<float>(voices[body].pitchMapping));
+        setParameterValue("voiceTrigger" + suffix, static_cast<float>(voices[body].triggerMapping));
+    }
+}
+
 void ThreeBSProcessor::updateEngineConfigFromParameters() noexcept {
     engineConfig_.simulation.gravitationalConstant = parameterRefs_.gravity->load(std::memory_order_relaxed);
     engineConfig_.simulation.softening = parameterRefs_.softening->load(std::memory_order_relaxed);
     engineConfig_.simulation.speed = parameterRefs_.speed->load(std::memory_order_relaxed);
     const auto density = static_cast<double>(parameterRefs_.density->load(std::memory_order_relaxed) / 100.0F);
-    for (auto& voice : engineConfig_.voices)
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        auto& voice = engineConfig_.voices[body];
         voice.probability = density;
+        voice.enabled = parameterRefs_.voiceEnabled[body]->load(std::memory_order_relaxed) >= 0.5F;
+        voice.scale = static_cast<ScaleId>(std::lround(
+            parameterRefs_.voiceScale[body]->load(std::memory_order_relaxed)));
+        voice.pitchMapping = static_cast<PitchMapping>(std::lround(
+            parameterRefs_.voicePitch[body]->load(std::memory_order_relaxed)));
+        voice.triggerMapping = static_cast<TriggerMapping>(std::lround(
+            parameterRefs_.voiceTrigger[body]->load(std::memory_order_relaxed)));
+    }
     const auto inputMode = static_cast<int>(parameterRefs_.inputMode->load(std::memory_order_relaxed));
     engineConfig_.inputTransposeEnabled = inputMode == 1;
     engineConfig_.inputGateEnabled = inputMode == 2;
@@ -431,6 +474,7 @@ void ThreeBSProcessor::requestPreset(const ArtworkPreset& preset, int presetInde
         averageProbability += static_cast<float>(preset.voices[i].probability);
     }
     setParameterValue("density", averageProbability * 100.0F / static_cast<float>(bodyCount));
+    applyVoiceParameters(preset.voices);
 }
 
 void ThreeBSProcessor::requestRandomize(double chaos) {
@@ -521,6 +565,7 @@ void ThreeBSProcessor::getStateInformation(juce::MemoryBlock& destination) {
     state.setProperty("cameraFocusBody", presentation.camera.focusBody, nullptr);
     state.setProperty("cameraAutoFrame", presentation.camera.autoFrame, nullptr);
     state.setProperty("notePaneMinimized", presentation.notePaneMinimized, nullptr);
+    state.setProperty("notePaneStyle", static_cast<int>(presentation.notePaneStyle), nullptr);
     state.setProperty("visualSeed", juce::String(presentation.visualSeed), nullptr);
     const auto initial = storedInitial_.load();
     const auto baseInitial = storedBaseInitial_.load();
@@ -642,6 +687,8 @@ void ThreeBSProcessor::setStateInformation(const void* data, int size) {
         state.getProperty("cameraAutoFrame", presentation.camera.autoFrame));
     presentation.notePaneMinimized = static_cast<bool>(
         state.getProperty("notePaneMinimized", presentation.notePaneMinimized));
+    presentation.notePaneStyle = static_cast<NotePaneStyle>(static_cast<int>(
+        state.getProperty("notePaneStyle", static_cast<int>(presentation.notePaneStyle))));
     presentation.camera = sanitizedCameraState(presentation.camera);
     presentation.visualSeed = static_cast<std::uint64_t>(state.getProperty(
         "visualSeed", juce::String(initial.seed)).toString().getLargeIntValue());

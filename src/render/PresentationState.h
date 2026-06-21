@@ -26,6 +26,11 @@ enum class GraphicsQuality : std::uint8_t {
     High,
 };
 
+enum class NotePaneStyle : std::uint8_t {
+    Horizontal,
+    Vertical,
+};
+
 struct Colour3 {
     float r{};
     float g{};
@@ -72,6 +77,7 @@ struct PresentationState {
     CameraState camera{};
     std::uint64_t visualSeed{0x334253ULL};
     bool notePaneMinimized{};
+    NotePaneStyle notePaneStyle{NotePaneStyle::Horizontal};
 
     bool operator==(const PresentationState&) const = default;
 };

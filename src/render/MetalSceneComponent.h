@@ -25,6 +25,7 @@ public:
 
     std::function<void(const CameraState&)> onCameraInteractionComplete;
     std::function<void(bool)> onNotePaneMinimizedChanged;
+    std::function<void(NotePaneStyle)> onNotePaneStyleChanged;
 
 private:
     class Impl;
