@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-21 14-20 GMT-3
+Last updated: 2026-06-21 14-34 GMT-3
 
 ## Project purpose
 
@@ -19,9 +19,8 @@ simulation, and presentation configurations across plugin and standalone.
 
 ## Active focus
 
-Publish the first private-repository alpha downloads and project website while
-continuing external Metal, Logic, and Ableton runtime validation before making
-the repository public.
+Continue external Metal, Logic, and Ableton runtime validation following the
+public `v0.1.0-alpha.1` binary release and GitHub Pages launch.
 
 ## Architecture overview
 
@@ -181,6 +180,9 @@ repository.
 - Reworked the README around the working three-format product, added an actual
   standalone screenshot and installation/release documentation, and created a
   responsive GitHub Pages showcase with versioned binary links.
+- Published the showcase from `main:/docs` at `https://krahd.github.io/3bs/`
+  and the `v0.1.0-alpha.1` prerelease with complete, AU, VST3, standalone, and
+  SHA-256 checksum downloads.
 - Added a reproducible arm64 Release packaging flow for the complete bundle and
   individual AU, VST3, and standalone archives, including build provenance,
   licence files, third-party notices, and SHA-256 checksums.
@@ -198,6 +200,9 @@ repository.
 - `node --check docs/script.js` passed. Local HTML served successfully; visual
   browser capture remains pending because installed GUI browsers could not be
   launched from the restricted process environment.
+- GitHub Pages built commit `9ed3485` successfully. The live homepage,
+  screenshot, public repository, four binary archives, and checksum download
+  each returned HTTP 200 after deployment.
 - `shasum -a 256 -c SHA256SUMS.txt` and `unzip -t` passed for the complete,
   AU, VST3, and standalone archives.
 - `codesign --verify --deep --strict` passed on the three packaged ad-hoc-signed
@@ -236,7 +241,8 @@ repository.
 
 ## Known issues, risks, and limitations
 
-- GitHub repository `krahd/3bs` exists and was verified private on `main`.
+- GitHub repository `krahd/3bs` is public on `main`; the alpha prerelease and
+  Pages site are live.
 - AU MIDI effects and VST3 MIDI generation still require real host validation.
 - Apple signing and notarization are blocked until Developer credentials exist.
 - Authored user-preset library management and advanced graphics controls are not
@@ -267,12 +273,13 @@ repository.
 
 1. Complete interaction/performance and host validation.
 2. Close the remaining control-surface gaps and rerun the full suite.
-3. Audit licences/secrets, tag `v0.1.0-alpha.1`, and make the repository public.
+3. Prepare the next prerelease after the remaining host and renderer checks.
 
 ## Longer-term steps
 
 1. Author and validate 24 complete artwork presets.
-2. Make the repository public after the vertical-slice publication audit.
+2. Maintain the public website, release notes, and binary checksums for each
+   published version.
 3. Add signed and notarized release packaging when credentials are available.
 
 ## Decisions and rationale
@@ -291,4 +298,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-21 14-20 GMT-3
+Last updated: 2026-06-21 14-34 GMT-3
