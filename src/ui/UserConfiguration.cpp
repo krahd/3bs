@@ -132,6 +132,7 @@ juce::var writeEngine(const EngineConfig& config) {
         set(item, "pitchMapping", static_cast<int>(voice.pitchMapping));
         set(item, "triggerMapping", static_cast<int>(voice.triggerMapping));
         set(item, "durationMapping", static_cast<int>(voice.durationMapping));
+        set(item, "durationGrid", static_cast<int>(voice.durationGrid));
         set(item, "clockDivision", voice.clockDivisionBeats);
         set(item, "probability", voice.probability);
         set(item, "durationMin", voice.minimumDurationBeats);
@@ -202,6 +203,8 @@ bool readEngine(const juce::var& source, EngineConfig& config) {
         voice.pitchMapping = static_cast<PitchMapping>(integer(item, "pitchMapping", 0, 0, 8));
         voice.triggerMapping = static_cast<TriggerMapping>(integer(item, "triggerMapping", 0, 0, 7));
         voice.durationMapping = static_cast<PitchMapping>(integer(item, "durationMapping", 3, 0, 8));
+        voice.durationGrid = static_cast<DurationGrid>(integer(
+            item, "durationGrid", static_cast<int>(DurationGrid::ContinuousLegacy), 0, 1));
         voice.clockDivisionBeats = number(item, "clockDivision", 0.25, 1.0 / 128.0, 16.0);
         voice.probability = number(item, "probability", 1.0, 0.0, 1.0);
         // Legacy schema-1 files store a single "duration"; fall back to it for both bounds.
@@ -302,6 +305,7 @@ juce::String serializeUserConfiguration(const UserConfiguration& configuration) 
     set(root, "chaosPercent", configuration.chaosPercent);
     set(root, "densityPercent", configuration.densityPercent);
     set(root, "presetIndex", configuration.presetIndex);
+    set(root, "voicingPresetIndex", configuration.voicingPresetIndex);
     set(root, "run", configuration.run);
     set(root, "sync", configuration.sync);
     return juce::JSON::toString(root, true);
@@ -345,6 +349,7 @@ bool deserializeUserConfiguration(const juce::String& json, UserConfiguration& c
     result.chaosPercent = number(root, "chaosPercent", 20.0, 0.0, 100.0);
     result.densityPercent = number(root, "densityPercent", 80.0, 0.0, 100.0);
     result.presetIndex = integer(root, "presetIndex", 0, 0, 23);
+    result.voicingPresetIndex = integer(root, "voicingPresetIndex", -1, -1, 11);
     result.run = boolean(root, "run", true);
     result.sync = boolean(root, "sync", true);
     configuration = result;

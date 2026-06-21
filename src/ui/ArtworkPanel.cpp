@@ -8,6 +8,42 @@
 
 namespace threebs {
 
+void ArtworkPanel::RhythmicLengthSlider::setStraightGrid(bool straight) {
+    straight_ = straight;
+    textFromValueFunction = [straight](double value) {
+        if (!straight)
+            return juce::String(value, 3) + " b";
+        const std::array<juce::String, 7> names{
+            "1/32", "1/16", "1/8", "1/4", "1/2", "1/1", "2/1"};
+        std::size_t nearest{};
+        auto distance = std::abs(value - straightDurationBeats.front());
+        for (std::size_t index = 1; index < straightDurationBeats.size(); ++index) {
+            const auto candidate = std::abs(value - straightDurationBeats[index]);
+            if (candidate < distance) {
+                nearest = index;
+                distance = candidate;
+            }
+        }
+        return names[nearest];
+    };
+    updateText();
+}
+
+double ArtworkPanel::RhythmicLengthSlider::snapValue(double attemptedValue, DragMode) {
+    if (!straight_)
+        return attemptedValue;
+    auto nearest = straightDurationBeats.front();
+    auto distance = std::abs(attemptedValue - nearest);
+    for (const auto candidate : straightDurationBeats) {
+        if (const auto candidateDistance = std::abs(attemptedValue - candidate);
+            candidateDistance < distance) {
+            nearest = candidate;
+            distance = candidateDistance;
+        }
+    }
+    return nearest;
+}
+
 ArtworkPanel::DeckLookAndFeel::DeckLookAndFeel() {
     setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff7bdce8));
     setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff20283a));
@@ -160,17 +196,30 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
                                          juce::dontSendNotification);
         addAndMakeVisible(voiceDurMap_[body]);
 
+        voiceDurGrid_[body].addItemList(durationGridDisplayNames(), 1);
+        voiceDurGrid_[body].setSelectedId(static_cast<int>(DurationGrid::Straight) + 1,
+                                          juce::dontSendNotification);
+        voiceDurGrid_[body].setTooltip("Straight Notes maps movement onto rhythmic values from 1/32 through 2/1. Continuous is retained for legacy sessions.");
+        voiceDurGrid_[body].addListener(this);
+        addAndMakeVisible(voiceDurGrid_[body]);
+
         for (auto* duration : {&voiceDurMin_[body], &voiceDurMax_[body]}) {
             duration->setSliderStyle(juce::Slider::LinearHorizontal);
             duration->setTextBoxStyle(juce::Slider::TextBoxRight, false, 46, 18);
             duration->setRange(0.02, 8.0, 0.001);
             duration->setValue(0.2);
-            duration->setTextValueSuffix(" b");
+            duration->setStraightGrid(true);
             addAndMakeVisible(*duration);
         }
+        for (auto* selector : {&voiceScale_[body], &voiceRoot_[body], &voicePitch_[body],
+                               &voiceTrigger_[body], &voiceOctave_[body], &voiceDurMap_[body]})
+            selector->addListener(this);
+        voiceEnable_[body].onClick = [this] { markVoicingCustom(); };
+        voiceDurMin_[body].onValueChange = [this] { markVoicingCustom(); };
+        voiceDurMax_[body].onValueChange = [this] { markVoicingCustom(); };
     }
-    const std::array<juce::String, 8> voiceRowNames{"ROOT", "SCALE", "OCTAVE", "PITCH MAP",
-                                                     "TRIGGER", "LEN MAP", "LEN MIN", "LEN MAX"};
+    const std::array<juce::String, 9> voiceRowNames{"ROOT", "SCALE", "OCTAVE", "PITCH MAP",
+        "TRIGGER", "LEN MAP", "LEN GRID", "LEN MIN", "LEN MAX"};
     for (std::size_t i = 0; i < voiceRowLabels_.size(); ++i) {
         voiceRowLabels_[i].setText(voiceRowNames[i], juce::dontSendNotification);
         voiceRowLabels_[i].setJustificationType(juce::Justification::centredLeft);
@@ -184,6 +233,11 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     voicingMode_.setTooltip("Independent triggers each planet separately. Chord and Strum generate scale triads from all enabled planets.");
     addAndMakeVisible(voicingMode_);
     voicingMode_.addListener(this);
+    voicingPreset_.addItem("CUSTOM", 1);
+    voicingPreset_.setSelectedId(1, juce::dontSendNotification);
+    voicingPreset_.setTooltip("Apply a voice-only preset without changing the system, visuals, transport, or time signature.");
+    voicingPreset_.addListener(this);
+    addAndMakeVisible(voicingPreset_);
     voiceModeContext_.setFont(juce::Font(juce::FontOptions(10.0F).withStyle("Bold")));
     voiceModeContext_.setColour(juce::Label::textColourId, juce::Colour(0xff8fa9bd));
     voiceModeContext_.setJustificationType(juce::Justification::centredLeft);
@@ -223,6 +277,8 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     chordScale_.setSelectedId(static_cast<int>(ScaleId::MinorPentatonic) + 1, juce::dontSendNotification);
     chordScale_.setTooltip("Global scale/mode for CHORD and STRUM voicings.");
     addAndMakeVisible(chordScale_);
+    chordRoot_.addListener(this);
+    chordScale_.addListener(this);
     configureContextLabel(chordRootLabel_, "CHORD ROOT");
     configureContextLabel(chordScaleLabel_, "CHORD SCALE");
 
@@ -238,6 +294,9 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     timeSigDenom_.setSelectedId(3, juce::dontSendNotification);
     addAndMakeVisible(timeSigDenom_);
     configureContextLabel(timeSigLabel_, "TIME SIGNATURE");
+    density_.onValueChange = [this] { markVoicingCustom(); };
+    chordStrum_.onValueChange = [this] { markVoicingCustom(); };
+    strumValue_.onValueChange = [this] { markVoicingCustom(); };
     addAndMakeVisible(autoReset_);
     autoReset_.setTooltip("Restart the simulation deterministically every chosen number of bars.");
     autoResetBars_.addItemList({"1/4", "1/2", "1", "2", "4", "8", "16"}, 1);
@@ -373,12 +432,6 @@ void ArtworkPanel::resized() {
         left.removeFromTop(5);
         advanced_.setBounds(left.removeFromTop(26).removeFromLeft(124));
         left.removeFromTop(8);
-        timeSigLabel_.setBounds(left.removeFromTop(12));
-        auto sigRow = left.removeFromTop(24);
-        timeSigSource_.setBounds(sigRow.removeFromLeft(80).reduced(0, 1));
-        timeSigNum_.setBounds(sigRow.removeFromLeft(48).reduced(2, 1));
-        timeSigDenom_.setBounds(sigRow.removeFromLeft(48).reduced(2, 1));
-        left.removeFromTop(6);
         autoReset_.setBounds(left.removeFromTop(24).removeFromLeft(124));
         autoResetLabel_.setBounds(left.removeFromTop(12));
         autoResetBars_.setBounds(left.removeFromTop(24).removeFromLeft(124));
@@ -387,7 +440,11 @@ void ArtworkPanel::resized() {
         break;
     }
     case DeckPage::Voices: {
-        voicingMode_.setBounds(left.removeFromTop(26));
+        timeSigLabel_.setBounds(left.removeFromTop(12));
+        auto sigRow = left.removeFromTop(24);
+        timeSigSource_.setBounds(sigRow.removeFromLeft(90).reduced(0, 1));
+        timeSigNum_.setBounds(sigRow.removeFromLeft(68).reduced(2, 1));
+        timeSigDenom_.setBounds(sigRow.removeFromLeft(68).reduced(2, 1));
         left.removeFromTop(3);
         strumUnit_.setBounds(left.removeFromTop(24));
         left.removeFromTop(3);
@@ -403,10 +460,17 @@ void ArtworkPanel::resized() {
         chordScaleLabel_.setBounds(scaleCell.removeFromTop(12));
         chordScale_.setBounds(scaleCell.removeFromTop(24));
         left.removeFromTop(3);
-        layoutKnobs({{4U, &density_}}, left.removeFromTop(72));
+        layoutKnobs({{4U, &density_}}, left.removeFromTop(58));
         auto grid = content;
         auto gutter = grid.removeFromLeft(70);
         const auto columnWidth = grid.getWidth() / static_cast<int>(bodyCount);
+        auto selectorRow = grid.removeFromTop(26);
+        gutter.removeFromTop(26);
+        voicingPreset_.setBounds(
+            selectorRow.removeFromLeft(selectorRow.getWidth() * 2 / 3).reduced(4, 1));
+        voicingMode_.setBounds(selectorRow.reduced(4, 1));
+        grid.removeFromTop(2);
+        gutter.removeFromTop(2);
         voiceModeContext_.setBounds(grid.removeFromTop(16));
         gutter.removeFromTop(16);
         auto headerRow = grid.removeFromTop(14);
@@ -429,7 +493,7 @@ void ArtworkPanel::resized() {
             grid.removeFromTop(2);
             gutter.removeFromTop(2);
         };
-        const auto sliderRow = [&](std::array<juce::Slider, bodyCount>& sliders, std::size_t labelIndex) {
+        const auto sliderRow = [&](auto& sliders, std::size_t labelIndex) {
             auto row = grid.removeFromTop(20);
             voiceRowLabels_[labelIndex].setBounds(gutter.removeFromTop(20));
             for (std::size_t body = 0; body < bodyCount; ++body)
@@ -443,8 +507,9 @@ void ArtworkPanel::resized() {
         comboRow(voicePitch_, 3U);
         comboRow(voiceTrigger_, 4U);
         comboRow(voiceDurMap_, 5U);
-        sliderRow(voiceDurMin_, 6U);
-        sliderRow(voiceDurMax_, 7U);
+        comboRow(voiceDurGrid_, 6U);
+        sliderRow(voiceDurMin_, 7U);
+        sliderRow(voiceDurMax_, 8U);
         break;
     }
     case DeckPage::Space:
@@ -555,9 +620,11 @@ void ArtworkPanel::updateDeckVisibility() {
         voiceTrigger_[body].setVisible(false);
         voiceOctave_[body].setVisible(false);
         voiceDurMap_[body].setVisible(false);
+        voiceDurGrid_[body].setVisible(false);
         voiceDurMin_[body].setVisible(false);
         voiceDurMax_[body].setVisible(false);
     }
+    voicingPreset_.setVisible(false);
     voicingMode_.setVisible(false);
     chordStrum_.setVisible(false);
     strumUnit_.setVisible(false);
@@ -586,14 +653,10 @@ void ArtworkPanel::updateDeckVisibility() {
     };
     switch (deckPage_) {
     case DeckPage::System:
-        pageHelp_.setText("Physics, masses, time signature, bar auto-reset, and exact body-state editing.",
+        pageHelp_.setText("Physics, masses, bar auto-reset, and exact body-state editing.",
                           juce::dontSendNotification);
         randomize_.setVisible(true);
         advanced_.setVisible(true);
-        timeSigSource_.setVisible(true);
-        timeSigNum_.setVisible(true);
-        timeSigDenom_.setVisible(true);
-        timeSigLabel_.setVisible(true);
         autoReset_.setVisible(true);
         autoResetBars_.setVisible(true);
         autoResetLabel_.setVisible(true);
@@ -606,10 +669,15 @@ void ArtworkPanel::updateDeckVisibility() {
         showKnob(9U, massThree_);
         break;
     case DeckPage::Voices:
-        pageHelp_.setText("Per-planet enable, scale/mode, and movement-to-note mapping. Density is global.",
+        pageHelp_.setText("Exclusive Independent, Chord, or Strum generation with deterministic rhythmic lengths.",
                           juce::dontSendNotification);
         showKnob(4U, density_);
+        voicingPreset_.setVisible(true);
         voicingMode_.setVisible(true);
+        timeSigSource_.setVisible(true);
+        timeSigNum_.setVisible(true);
+        timeSigDenom_.setVisible(true);
+        timeSigLabel_.setVisible(true);
         {
             const auto mode = voicingMode_.getSelectedItemIndex();
             const auto strumMode = mode == 2;
@@ -633,6 +701,7 @@ void ArtworkPanel::updateDeckVisibility() {
             voiceTrigger_[body].setVisible(true);
             voiceOctave_[body].setVisible(true);
             voiceDurMap_[body].setVisible(true);
+            voiceDurGrid_[body].setVisible(true);
             voiceDurMin_[body].setVisible(true);
             voiceDurMax_[body].setVisible(true);
         }
@@ -703,6 +772,12 @@ void ArtworkPanel::setPresetCatalog(const PresetCatalog& catalog) {
 }
 
 void ArtworkPanel::comboBoxChanged(juce::ComboBox* comboBox) {
+    if (comboBox == &voicingPreset_) {
+        const auto index = voicingPreset_.getSelectedId() - 2;
+        if (index >= 0 && onVoicingPresetSelected)
+            onVoicingPresetSelected(index);
+        return;
+    }
     if (comboBox == &voicingMode_) {
         updateVoiceModeControls();
     } else if (comboBox == &strumUnit_) {
@@ -710,6 +785,23 @@ void ArtworkPanel::comboBoxChanged(juce::ComboBox* comboBox) {
         resized();
         repaint();
     }
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        if (comboBox == &voiceDurGrid_[body]) {
+            const auto straight = voiceDurGrid_[body].getSelectedItemIndex()
+                == static_cast<int>(DurationGrid::Straight);
+            voiceDurMin_[body].setStraightGrid(straight);
+            voiceDurMax_[body].setStraightGrid(straight);
+        }
+    }
+    markVoicingCustom();
+}
+
+void ArtworkPanel::markVoicingCustom() {
+    if (suppressVoicingEdit_)
+        return;
+    voicingPreset_.setSelectedId(1, juce::dontSendNotification);
+    if (onVoicingEdited)
+        onVoicingEdited();
 }
 
 void ArtworkPanel::updateVoiceModeControls() {
@@ -743,6 +835,22 @@ void ArtworkPanel::setSelectedPresetIndex(int index) {
             contains = contains || selector.getItemId(item) == id;
         selector.setSelectedId(contains ? id : 0, juce::dontSendNotification);
     }
+}
+
+void ArtworkPanel::setVoicingPresetCatalog(const VoicingPresetCatalog& catalog) {
+    suppressVoicingEdit_ = true;
+    voicingPreset_.clear();
+    voicingPreset_.addItem("CUSTOM", 1);
+    for (std::size_t index = 0; index < catalog.size(); ++index)
+        voicingPreset_.addItem(catalog[index].name, static_cast<int>(index + 2U));
+    voicingPreset_.setSelectedId(1, juce::dontSendNotification);
+    suppressVoicingEdit_ = false;
+}
+
+void ArtworkPanel::setSelectedVoicingPresetIndex(int index) {
+    suppressVoicingEdit_ = true;
+    voicingPreset_.setSelectedId(index >= 0 ? index + 2 : 1, juce::dontSendNotification);
+    suppressVoicingEdit_ = false;
 }
 
 void ArtworkPanel::setStatus(const juce::String& status) {

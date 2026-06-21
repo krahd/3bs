@@ -26,6 +26,8 @@ public:
     PresentationState presentationState() const noexcept { return presentation_; }
     void setPresetCatalog(const PresetCatalog& catalog);
     void setSelectedPresetIndex(int index);
+    void setVoicingPresetCatalog(const VoicingPresetCatalog& catalog);
+    void setSelectedVoicingPresetIndex(int index);
     void setStatus(const juce::String& status);
     void setMidiOutputAvailable(bool available);
     void setPlaneTilts(const std::array<double, bodyCount>& tiltDegrees);
@@ -74,6 +76,9 @@ public:
     std::array<juce::ComboBox*, bodyCount> voiceDurationMapSelectors() noexcept {
         return {&voiceDurMap_[0], &voiceDurMap_[1], &voiceDurMap_[2]};
     }
+    std::array<juce::ComboBox*, bodyCount> voiceDurationGridSelectors() noexcept {
+        return {&voiceDurGrid_[0], &voiceDurGrid_[1], &voiceDurGrid_[2]};
+    }
     std::array<juce::Slider*, bodyCount> voiceDurationMinSliders() noexcept {
         return {&voiceDurMin_[0], &voiceDurMin_[1], &voiceDurMin_[2]};
     }
@@ -98,6 +103,8 @@ public:
     std::function<void()> onSaveConfiguration;
     std::function<void()> onLoadConfiguration;
     std::function<void(int)> onPresetSelected;
+    std::function<void(int)> onVoicingPresetSelected;
+    std::function<void()> onVoicingEdited;
     std::function<void(const CameraState&)> onCameraChanged;
     std::function<void(bool)> onNotePaneMinimizedChanged;
     std::function<void(NotePaneStyle)> onNotePaneStyleChanged;
@@ -110,6 +117,15 @@ private:
                               float, float, juce::Slider&) override;
     } lookAndFeel_;
 
+    class RhythmicLengthSlider final : public juce::Slider {
+    public:
+        void setStraightGrid(bool straight);
+        double snapValue(double attemptedValue, DragMode dragMode) override;
+
+    private:
+        bool straight_{};
+    };
+
     enum class DeckPage : std::size_t { System, Voices, Space, Presets, Settings };
 
     void configureKnob(juce::Slider& slider, const juce::String& suffix = {});
@@ -118,6 +134,7 @@ private:
     void selectDeckPage(DeckPage page);
     void updateDeckVisibility();
     void updateVoiceModeControls();
+    void markVoicingCustom();
     void comboBoxChanged(juce::ComboBox* comboBox) override;
 
     MetalSceneComponent scene_;
@@ -149,11 +166,13 @@ private:
     std::array<juce::ComboBox, bodyCount> voiceTrigger_;
     std::array<juce::ComboBox, bodyCount> voiceOctave_;
     std::array<juce::ComboBox, bodyCount> voiceDurMap_;
-    std::array<juce::Slider, bodyCount> voiceDurMin_;
-    std::array<juce::Slider, bodyCount> voiceDurMax_;
+    std::array<juce::ComboBox, bodyCount> voiceDurGrid_;
+    std::array<RhythmicLengthSlider, bodyCount> voiceDurMin_;
+    std::array<RhythmicLengthSlider, bodyCount> voiceDurMax_;
     std::array<juce::Label, bodyCount> voiceHeaders_;
-    std::array<juce::Label, 8> voiceRowLabels_;
+    std::array<juce::Label, 9> voiceRowLabels_;
     juce::Label voiceModeContext_;
+    juce::ComboBox voicingPreset_;
     juce::ComboBox voicingMode_;
     juce::Slider chordStrum_;
     juce::ComboBox strumUnit_;
@@ -186,6 +205,7 @@ private:
     DeckPage deckPage_{DeckPage::System};
     bool midiOutputAvailable_{};
     bool presentationMode_{};
+    bool suppressVoicingEdit_{};
     PresentationState presentation_{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ArtworkPanel)

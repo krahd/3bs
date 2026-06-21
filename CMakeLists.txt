@@ -43,6 +43,11 @@ if(THREEBS_BUILD_TESTS)
             -DPRESET_FILE=${CMAKE_CURRENT_SOURCE_DIR}/resources/presets/factory-presets.json
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ValidatePresets.cmake)
     add_test(
+        NAME threebs_voicing_presets
+        COMMAND ${CMAKE_COMMAND}
+            -DPRESET_FILE=${CMAKE_CURRENT_SOURCE_DIR}/resources/presets/voicing-presets.json
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ValidateVoicingPresets.cmake)
+    add_test(
         NAME threebs_star_catalog
         COMMAND ${CMAKE_COMMAND}
             -DSTAR_FILE=${CMAKE_CURRENT_SOURCE_DIR}/resources/stars/hyg-v41-mag65.csv
@@ -64,6 +69,7 @@ if(THREEBS_BUILD_PLUGINS)
         NAMESPACE ThreeBSAssets
         SOURCES
             resources/presets/factory-presets.json
+            resources/presets/voicing-presets.json
             resources/metal/SceneShaders.metal
             resources/stars/bright-stars.csv
             resources/stars/hyg-v41-mag65.csv)

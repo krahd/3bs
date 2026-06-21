@@ -87,6 +87,9 @@ struct BodyMeasurements {
     double angularMomentum{};
 };
 
+double mappedDurationBeats(double normalizedValue, double minimumBeats, double maximumBeats,
+                           DurationGrid grid) noexcept;
+
 class MusicEngine {
 public:
     static constexpr std::size_t maximumEventsPerBlock = 1024;

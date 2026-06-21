@@ -10,6 +10,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 
@@ -46,6 +47,10 @@ public:
     NoteVisualizationQueue& noteVisualizationEvents() noexcept { return noteVisualizationEvents_; }
     std::uint32_t escapePromptMask() const noexcept { return escapePromptMask_.load(std::memory_order_relaxed); }
     void requestPreset(const ArtworkPreset& preset, int presetIndex);
+    void requestVoicingPreset(const VoicingPreset& preset, int presetIndex);
+    void setSelectedVoicingPresetIndex(int index) noexcept {
+        selectedVoicingPreset_.store(std::clamp(index, -1, 11), std::memory_order_relaxed);
+    }
     void requestRandomize(double chaos);
     void requestReset();
     void requestExactState(const SimulationState& state);
@@ -60,7 +65,7 @@ public:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:
-    enum class CommandType : std::uint8_t { Reset, Replace };
+    enum class CommandType : std::uint8_t { Reset, Replace, Reconfigure };
     struct EngineCommand {
         CommandType type{CommandType::Reset};
         SimulationState state{};
@@ -125,6 +130,7 @@ private:
         std::array<std::atomic<float>*, bodyCount> voiceTrigger{};
         std::array<std::atomic<float>*, bodyCount> voiceOctave{};
         std::array<std::atomic<float>*, bodyCount> voiceDurMap{};
+        std::array<std::atomic<float>*, bodyCount> voiceDurGrid{};
         std::array<std::atomic<float>*, bodyCount> voiceDurMin{};
         std::array<std::atomic<float>*, bodyCount> voiceDurMax{};
         std::atomic<float>* voicingMode{};
@@ -158,6 +164,7 @@ private:
     NoteVisualizationQueue noteVisualizationEvents_;
     SpscQueue<EngineCommand, 8> commands_;
     std::atomic<std::uint64_t> nextSeed_{0x33425310ULL};
+    std::atomic<int> selectedVoicingPreset_{-1};
     std::atomic<int> loopPolicy_{static_cast<int>(LoopPolicy::Restart)};
     std::atomic<std::uint32_t> escapePromptMask_{};
     double sampleRate_{48000.0};

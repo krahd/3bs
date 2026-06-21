@@ -25,11 +25,25 @@ struct ArtworkPreset {
     PresentationState presentation{};
 };
 
+struct VoicingPreset {
+    juce::String id;
+    juce::String name;
+    juce::String description;
+    VoicingMode mode{VoicingMode::Independent};
+    double densityPercent{80.0};
+    double chordStrumMilliseconds{24.0};
+    StrumUnit chordStrumUnit{StrumUnit::Milliseconds};
+    double chordStrumValue{0.0625};
+    ChordSystemConfig chordSystem{};
+    std::array<VoiceConfig, bodyCount> voices{};
+};
+
 // Display names ordered to match the ScaleId, PitchMapping, and TriggerMapping enums in Types.h,
 // so a combo box or choice-parameter index maps directly onto the enum value.
 juce::StringArray scaleDisplayNames();
 juce::StringArray pitchMappingDisplayNames();
 juce::StringArray triggerMappingDisplayNames();
+juce::StringArray durationGridDisplayNames();
 
 class PresetCatalog {
 public:
@@ -42,6 +56,20 @@ public:
 
 private:
     std::vector<ArtworkPreset> presets_;
+    bool valid_{};
+};
+
+class VoicingPresetCatalog {
+public:
+    VoicingPresetCatalog();
+
+    bool valid() const noexcept { return valid_; }
+    std::size_t size() const noexcept { return presets_.size(); }
+    const VoicingPreset& operator[](std::size_t index) const;
+    juce::StringArray names() const;
+
+private:
+    std::vector<VoicingPreset> presets_;
     bool valid_{};
 };
 

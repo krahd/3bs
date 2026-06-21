@@ -199,6 +199,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout ThreeBSProcessor::createPara
         values.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID{"voiceDurMap" + suffix, 1}, "Planet " + suffix + " Length Map",
             pitchMappingDisplayNames(), static_cast<int>(PitchMapping::Speed)));
+        values.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID{"voiceDurGrid" + suffix, 1}, "Planet " + suffix + " Length Grid",
+            durationGridDisplayNames(), static_cast<int>(DurationGrid::Straight)));
         values.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{"voiceDurMin" + suffix, 1}, "Planet " + suffix + " Length Min",
             juce::NormalisableRange<float>(0.02F, 8.0F, 0.001F, 0.4F), 0.2F));
@@ -277,6 +280,7 @@ ThreeBSProcessor::ThreeBSProcessor()
         parameterRefs_.voiceTrigger[body] = parameters_.getRawParameterValue("voiceTrigger" + suffix);
         parameterRefs_.voiceOctave[body] = parameters_.getRawParameterValue("voiceOctave" + suffix);
         parameterRefs_.voiceDurMap[body] = parameters_.getRawParameterValue("voiceDurMap" + suffix);
+        parameterRefs_.voiceDurGrid[body] = parameters_.getRawParameterValue("voiceDurGrid" + suffix);
         parameterRefs_.voiceDurMin[body] = parameters_.getRawParameterValue("voiceDurMin" + suffix);
         parameterRefs_.voiceDurMax[body] = parameters_.getRawParameterValue("voiceDurMax" + suffix);
     }
@@ -347,6 +351,12 @@ bool ThreeBSProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const 
 void ThreeBSProcessor::consumeCommands(MusicEngine::EventBuffer& eventBuffer) noexcept {
     EngineCommand command;
     while (commands_.pop(command)) {
+        if (command.type == CommandType::Reconfigure) {
+            engine_.allNotesOff(0, eventBuffer);
+            engineConfig_ = command.config;
+            engine_.setConfig(engineConfig_);
+            continue;
+        }
         if (command.type == CommandType::Replace) {
             engineConfig_ = command.config;
             engine_.setConfig(engineConfig_);
@@ -371,6 +381,7 @@ void ThreeBSProcessor::applyVoiceParameters(const std::array<VoiceConfig, bodyCo
         setParameterValue("voiceTrigger" + suffix, static_cast<float>(voices[body].triggerMapping));
         setParameterValue("voiceOctave" + suffix, static_cast<float>(voices[body].octave));
         setParameterValue("voiceDurMap" + suffix, static_cast<float>(voices[body].durationMapping));
+        setParameterValue("voiceDurGrid" + suffix, static_cast<float>(voices[body].durationGrid));
         setParameterValue("voiceDurMin" + suffix, static_cast<float>(voices[body].minimumDurationBeats));
         setParameterValue("voiceDurMax" + suffix, static_cast<float>(voices[body].maximumDurationBeats));
     }
@@ -414,6 +425,8 @@ void ThreeBSProcessor::updateEngineConfigFromParameters() noexcept {
             static_cast<int>(std::lround(parameterRefs_.voiceOctave[body]->load(std::memory_order_relaxed))), -4, 4));
         voice.durationMapping = static_cast<PitchMapping>(std::lround(
             parameterRefs_.voiceDurMap[body]->load(std::memory_order_relaxed)));
+        voice.durationGrid = static_cast<DurationGrid>(std::clamp(static_cast<int>(std::lround(
+            parameterRefs_.voiceDurGrid[body]->load(std::memory_order_relaxed))), 0, 1));
         voice.minimumDurationBeats = parameterRefs_.voiceDurMin[body]->load(std::memory_order_relaxed);
         voice.maximumDurationBeats = parameterRefs_.voiceDurMax[body]->load(std::memory_order_relaxed);
     }
@@ -606,6 +619,7 @@ void ThreeBSProcessor::requestPreset(const ArtworkPreset& preset, int presetInde
     storedBaseInitial_.store(command.state);
     storedPlaneTilts_.store({});
     storedPresentation_.store(preset.presentation);
+    selectedVoicingPreset_.store(-1, std::memory_order_relaxed);
     setParameterValue("preset", static_cast<float>(presetIndex));
     setParameterValue("gravity", static_cast<float>(preset.simulation.gravitationalConstant));
     setParameterValue("softening", static_cast<float>(preset.simulation.softening));
@@ -619,6 +633,32 @@ void ThreeBSProcessor::requestPreset(const ArtworkPreset& preset, int presetInde
     }
     setParameterValue("density", averageProbability * 100.0F / static_cast<float>(bodyCount));
     applyVoiceParameters(preset.voices);
+}
+
+void ThreeBSProcessor::requestVoicingPreset(const VoicingPreset& preset, int presetIndex) {
+    auto configuration = currentUserConfiguration().engine;
+    configuration.voices = preset.voices;
+    configuration.voicingMode = preset.mode;
+    configuration.chordStrumMilliseconds = preset.chordStrumMilliseconds;
+    configuration.chordStrumUnit = preset.chordStrumUnit;
+    configuration.chordStrumValue = preset.chordStrumValue;
+    configuration.chordSystem = preset.chordSystem;
+    storedConfigurationTemplate_ = configuration;
+    selectedVoicingPreset_.store(std::clamp(presetIndex, 0, 11), std::memory_order_relaxed);
+
+    setParameterValue("density", static_cast<float>(preset.densityPercent));
+    setParameterValue("voicingMode", static_cast<float>(preset.mode));
+    setParameterValue("chordStrum", static_cast<float>(preset.chordStrumMilliseconds));
+    setParameterValue("strumUnit", static_cast<float>(preset.chordStrumUnit));
+    setParameterValue("strumValue", static_cast<float>(preset.chordStrumValue));
+    setParameterValue("chordRoot", static_cast<float>(preset.chordSystem.root));
+    setParameterValue("chordScale", static_cast<float>(preset.chordSystem.scale));
+    applyVoiceParameters(preset.voices);
+
+    EngineCommand command;
+    command.type = CommandType::Reconfigure;
+    command.config = configuration;
+    commands_.push(command);
 }
 
 void ThreeBSProcessor::requestRandomize(double chaos) {
@@ -696,6 +736,7 @@ UserConfiguration ThreeBSProcessor::currentUserConfiguration() const {
     result.densityPercent = parameterRefs_.density->load(std::memory_order_relaxed);
     result.presetIndex = std::clamp(static_cast<int>(std::lround(
         parameterRefs_.preset->load(std::memory_order_relaxed))), 0, 23);
+    result.voicingPresetIndex = selectedVoicingPreset_.load(std::memory_order_relaxed);
     result.run = parameterRefs_.run->load(std::memory_order_relaxed) >= 0.5F;
     result.sync = parameterRefs_.sync->load(std::memory_order_relaxed) >= 0.5F;
     result.engine = storedConfigurationTemplate_;
@@ -737,6 +778,8 @@ UserConfiguration ThreeBSProcessor::currentUserConfiguration() const {
             parameterRefs_.voiceOctave[body]->load(std::memory_order_relaxed))), -4, 4));
         voice.durationMapping = static_cast<PitchMapping>(std::clamp(static_cast<int>(std::lround(
             parameterRefs_.voiceDurMap[body]->load(std::memory_order_relaxed))), 0, 8));
+        voice.durationGrid = static_cast<DurationGrid>(std::clamp(static_cast<int>(std::lround(
+            parameterRefs_.voiceDurGrid[body]->load(std::memory_order_relaxed))), 0, 1));
         voice.minimumDurationBeats = parameterRefs_.voiceDurMin[body]->load(std::memory_order_relaxed);
         voice.maximumDurationBeats = parameterRefs_.voiceDurMax[body]->load(std::memory_order_relaxed);
         voice.probability = result.densityPercent / 100.0;
@@ -755,6 +798,7 @@ void ThreeBSProcessor::applyUserConfiguration(const UserConfiguration& configura
     storedPlaneTilts_.store(configuration.planeTilts);
     storedPresentation_.store(configuration.presentation);
     storedConfigurationTemplate_ = configuration.engine;
+    selectedVoicingPreset_.store(configuration.voicingPresetIndex, std::memory_order_relaxed);
     loopPolicy_.store(static_cast<int>(configuration.loopPolicy), std::memory_order_relaxed);
     commands_.push(command);
 
@@ -891,6 +935,11 @@ void ThreeBSProcessor::setStateInformation(const void* data, int size) {
         ensureStateParameterValue(state, "autoReset", 0.0F);
         ensureStateParameterValue(state, "autoResetBars", 2.0F);
     }
+    if (schema < 7) {
+        for (std::size_t body = 0; body < bodyCount; ++body)
+            ensureStateParameterValue(state, "voiceDurGrid" + juce::String(body + 1),
+                                      static_cast<float>(DurationGrid::ContinuousLegacy));
+    }
     parameters_.replaceState(state);
     auto initial = storedInitial_.load();
     initial.seed = static_cast<std::uint64_t>(
@@ -938,8 +987,13 @@ void ThreeBSProcessor::setStateInformation(const void* data, int size) {
     juce::String configurationError;
     const auto configurationJson = state.getProperty("configurationTemplateJson").toString();
     if (configurationJson.isNotEmpty()
-        && deserializeUserConfiguration(configurationJson, configurationTemplate, configurationError))
+        && deserializeUserConfiguration(configurationJson, configurationTemplate, configurationError)) {
         command.config = configurationTemplate.engine;
+        selectedVoicingPreset_.store(configurationTemplate.voicingPresetIndex,
+                                     std::memory_order_relaxed);
+    } else {
+        selectedVoicingPreset_.store(-1, std::memory_order_relaxed);
+    }
     command.loopPolicy = static_cast<LoopPolicy>(static_cast<int>(
         state.getProperty("loopPolicy", static_cast<int>(command.loopPolicy))));
     storedConfigurationTemplate_ = command.config;

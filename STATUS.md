@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-21 14-43 GMT-3
+Last updated: 2026-06-21 16-52 GMT-3
 
 ## Project purpose
 
@@ -12,9 +12,10 @@ standalone artwork driven by a normalized three-body gravitational simulation.
 The repository builds a deterministic core library, Logic AU MIDI effect,
 Ableton-oriented VST3 instrument, and standalone CoreMIDI application. It has a
 native interactive HDR Metal presentation layer, shared control deck, 24
-schema-v2 factory presets, schema-v5 host state serialization, automatic camera
-framing, live note-stream visualization, automated tests, and macOS CI.
-Portable schema-v1 `.3bs` JSON files save and restore complete musical,
+schema-v2 factory presets, 12 schema-v1 voicing presets, schema-v7 host state
+serialization, automatic camera framing, live note-stream visualization,
+automated tests, and macOS CI.
+Portable schema-v3 `.3bs` JSON files save and restore complete musical,
 simulation, and presentation configurations across plugin and standalone.
 
 ## Active focus
@@ -192,9 +193,23 @@ repository.
 - Corrected the plugin configuration test tolerance to match the duration host
   parameter's declared 0.001-beat precision instead of requiring impossible
   double precision after an atomic-float round trip.
+- Added 12 voice-only factory presets split evenly across Independent, Chord,
+  and Strum modes; applying one preserves simulation, presentation, transport,
+  and time signature while flushing active and pending notes at a block boundary.
+- Added per-voice Straight length grids mapping simulation measurements onto
+  1/32 through two-whole-note durations, with schema-v7 host and schema-v3
+  `.3bs` migration preserving old sessions as Continuous Legacy.
+- Moved time signature to Voices, moved the exclusive voicing-mode selector over
+  the planet grid, and added contextual voicing-preset and length-grid controls.
 
 ## Tests and verification status
 
+- Debug core and plugin configurations, full builds, and all automated tests
+  passed after the voicing-preset and rhythmic-length changes. The Metal smoke
+  test skipped because this process exposed no Metal device.
+- Standalone captures at 1280x820 visually confirmed readable time-signature and
+  legacy-duration values, straight-grid note labels, and non-overlapping
+  Independent and Chord layouts.
 - A fresh arm64 macOS 13 Release configuration and complete build passed for
   the AU, VST3, standalone, and test targets.
 - Fresh Release and rebuilt plugin-debug test runs passed all executable tests
@@ -306,4 +321,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-21 14-43 GMT-3
+Last updated: 2026-06-21 16-52 GMT-3

@@ -66,10 +66,12 @@ int main() {
     fileConfiguration.engine.voicingMode = threebs::VoicingMode::Strum;
     fileConfiguration.engine.voices[1].triggerMapping = threebs::TriggerMapping::Apsis;
     fileConfiguration.engine.voices[1].octave = -2;
+    fileConfiguration.engine.voices[1].durationGrid = threebs::DurationGrid::Straight;
     fileConfiguration.engine.voices[1].minimumDurationBeats = 0.77;
     fileConfiguration.engine.voices[1].maximumDurationBeats = 0.77;
     fileConfiguration.engine.chordSystem.root = 5;
     fileConfiguration.engine.chordStrumUnit = threebs::StrumUnit::BarFraction;
+    fileConfiguration.voicingPresetIndex = 7;
     fileConfiguration.presentation.camera.yaw = 0.73F;
     fileConfiguration.planeTilts = {12.0, -8.0, 4.0};
     const auto configurationJson = threebs::serializeUserConfiguration(fileConfiguration);
@@ -82,8 +84,10 @@ int main() {
               && decodedConfiguration.engine.voicingMode == threebs::VoicingMode::Strum
               && decodedConfiguration.engine.voices[1].triggerMapping == threebs::TriggerMapping::Apsis
               && decodedConfiguration.engine.voices[1].octave == -2
+              && decodedConfiguration.engine.voices[1].durationGrid == threebs::DurationGrid::Straight
               && decodedConfiguration.engine.chordSystem.root == 5
               && decodedConfiguration.engine.chordStrumUnit == threebs::StrumUnit::BarFraction
+              && decodedConfiguration.voicingPresetIndex == 7
               && std::abs(decodedConfiguration.presentation.camera.yaw - 0.73F) < 1.0e-6F,
           ".3bs JSON must preserve body, music, and presentation settings");
     check(!threebs::deserializeUserConfiguration("{\"format\":\"wrong\"}",
@@ -92,6 +96,28 @@ int main() {
     processor.applyUserConfiguration(decodedConfiguration);
     check(std::abs(processor.currentUserConfiguration().engine.voices[1].maximumDurationBeats - 0.77) < 1.0e-6,
           "loaded hidden voice fields must survive a subsequent save");
+
+    auto legacyConfigurationJson = juce::JSON::parse(configurationJson);
+    if (auto* root = legacyConfigurationJson.getDynamicObject()) {
+        root->setProperty("schemaVersion", 2);
+        root->removeProperty("voicingPresetIndex");
+        const auto engine = root->getProperty("engine");
+        if (auto* engineObject = engine.getDynamicObject()) {
+            if (auto* voices = engineObject->getProperty("voices").getArray()) {
+                for (auto& voice : *voices)
+                    if (auto* object = voice.getDynamicObject())
+                        object->removeProperty("durationGrid");
+            }
+        }
+    }
+    threebs::UserConfiguration migratedConfiguration;
+    check(threebs::deserializeUserConfiguration(
+              juce::JSON::toString(legacyConfigurationJson), migratedConfiguration,
+              configurationError)
+              && migratedConfiguration.voicingPresetIndex == -1
+              && migratedConfiguration.engine.voices[1].durationGrid
+                  == threebs::DurationGrid::ContinuousLegacy,
+          "schema-v2 .3bs files must migrate to continuous lengths and Custom voicing");
 
     juce::AudioBuffer<float> audio(2, 512);
     juce::MidiBuffer midi;
@@ -120,6 +146,50 @@ int main() {
     }
     check(visualizedNote, "generated notes must retain source-body visualization metadata");
 
+    threebs::VoicingPresetCatalog voicingPresets;
+    check(voicingPresets.valid() && voicingPresets.size() == 12,
+          "dedicated voicing preset catalog must load all twelve entries");
+    threebs::RenderSnapshot beforeVoicing;
+    while (processor.snapshots().pop(beforeVoicing)) {}
+    const auto beforeVoicingConfiguration = processor.currentUserConfiguration();
+    const auto beforeVoicingPresentation = processor.presentationState();
+    const auto beforeTimeSigSource = parameterValue(processor, "timeSigSource");
+    const auto beforeTimeSigNum = parameterValue(processor, "timeSigNum");
+    const auto beforeTimeSigDenom = parameterValue(processor, "timeSigDenom");
+    processor.requestVoicingPreset(voicingPresets[8], 8);
+    midi.clear();
+    processor.processBlock(audio, midi);
+    bool reconfigurationNoteOff{};
+    for (const auto metadata : midi)
+        reconfigurationNoteOff = reconfigurationNoteOff || metadata.getMessage().isNoteOff();
+    threebs::RenderSnapshot afterVoicing;
+    while (processor.snapshots().pop(afterVoicing)) {}
+    const auto afterVoicingConfiguration = processor.currentUserConfiguration();
+    check(reconfigurationNoteOff,
+          "voicing preset application must flush active notes at the audio-block boundary");
+    check(afterVoicingConfiguration.voicingPresetIndex == 8
+              && afterVoicingConfiguration.engine.voicingMode == threebs::VoicingMode::Strum
+              && afterVoicingConfiguration.engine.voices[0].durationGrid
+                  == threebs::DurationGrid::Straight,
+          "voicing preset application must install its mode and rhythmic voice definitions");
+    check(std::abs(afterVoicingConfiguration.engine.simulation.gravitationalConstant
+                   - beforeVoicingConfiguration.engine.simulation.gravitationalConstant) < 1.0e-9
+              && processor.presentationState().visualSeed == beforeVoicingPresentation.visualSeed
+              && std::abs(parameterValue(processor, "timeSigSource") - beforeTimeSigSource) < 1.0e-6F
+              && std::abs(parameterValue(processor, "timeSigNum") - beforeTimeSigNum) < 1.0e-6F
+              && std::abs(parameterValue(processor, "timeSigDenom") - beforeTimeSigDenom) < 1.0e-6F,
+          "voicing presets must preserve simulation, presentation, and time signature");
+    check(afterVoicing.trajectoryRevision == beforeVoicing.trajectoryRevision,
+          "voicing preset application must not reset the simulation trajectory");
+
+    bool activeBeforeBypass{};
+    for (int block = 0; block < 96 && !activeBeforeBypass; ++block) {
+        midi.clear();
+        processor.processBlock(audio, midi);
+        for (const auto metadata : midi)
+            activeBeforeBypass = activeBeforeBypass || metadata.getMessage().isNoteOn();
+    }
+    check(activeBeforeBypass, "bypass test must establish an active generated note");
     midi.clear();
     processor.processBlockBypassed(audio, midi);
     bool noteOff{};
@@ -173,6 +243,10 @@ int main() {
     check(parameterValue(restored, "voicingMode") == 2.0F
               && parameterValue(restored, "chordStrum") == 37.0F,
           "chord mode controls must survive schema-v5 recall");
+    check(std::abs(parameterValue(restored, "voiceDurGrid1")
+                   - static_cast<float>(threebs::DurationGrid::Straight)) < 1.0e-6F
+              && restored.currentUserConfiguration().voicingPresetIndex == 8,
+          "duration grids and voicing preset provenance must survive schema-v7 recall");
     check(restoredPresentation.visual.palette == threebs::PaletteId::Violet
               && restoredPresentation.visualSeed == 20260620,
           "planet appearance must survive state recall");
@@ -212,6 +286,26 @@ int main() {
         check(parameterValue(legacyRestored, "voicingMode") == 0.0F
                   && parameterValue(legacyRestored, "chordStrum") == 24.0F,
               "schema-v3 state must receive schema-v5 chord defaults");
+    }
+
+    auto schemaSixXml = juce::AudioProcessor::getXmlFromBinary(
+        state.getData(), static_cast<int>(state.getSize()));
+    check(schemaSixXml != nullptr, "schema-v7 state must decode for duration-grid migration test");
+    if (schemaSixXml != nullptr) {
+        schemaSixXml->setAttribute("schemaVersion", 6);
+        for (int index = schemaSixXml->getNumChildElements() - 1; index >= 0; --index) {
+            auto* child = schemaSixXml->getChildElement(index);
+            if (child->getStringAttribute("id").startsWith("voiceDurGrid"))
+                schemaSixXml->removeChildElement(child, true);
+        }
+        juce::MemoryBlock schemaSixState;
+        juce::AudioProcessor::copyXmlToBinary(*schemaSixXml, schemaSixState);
+        threebs::ThreeBSProcessor schemaSixRestored;
+        schemaSixRestored.setStateInformation(schemaSixState.getData(),
+                                              static_cast<int>(schemaSixState.getSize()));
+        check(std::abs(parameterValue(schemaSixRestored, "voiceDurGrid1")
+                       - static_cast<float>(threebs::DurationGrid::ContinuousLegacy)) < 1.0e-6F,
+              "schema-v6 host state must migrate voice lengths to continuous legacy mode");
     }
     processor.requestReset();
     const auto originalSequence = renderBlocks(processor, 32);

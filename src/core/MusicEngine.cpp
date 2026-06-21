@@ -11,6 +11,19 @@ namespace {
 
 constexpr double pi = 3.14159265358979323846;
 
+std::size_t nearestStraightDurationIndex(double beats) noexcept {
+    std::size_t nearest{};
+    auto distance = std::abs(beats - straightDurationBeats.front());
+    for (std::size_t index = 1; index < straightDurationBeats.size(); ++index) {
+        const auto candidate = std::abs(beats - straightDurationBeats[index]);
+        if (candidate < distance) {
+            nearest = index;
+            distance = candidate;
+        }
+    }
+    return nearest;
+}
+
 std::array<VoiceConfig, bodyCount> defaultVoices() noexcept {
     std::array<VoiceConfig, bodyCount> voices{};
     voices[0].channel = 1;
@@ -36,6 +49,21 @@ std::array<VoiceConfig, bodyCount> defaultVoices() noexcept {
 }
 
 } // namespace
+
+double mappedDurationBeats(double normalizedValue, double minimumBeats, double maximumBeats,
+                           DurationGrid grid) noexcept {
+    const auto minimum = std::max(1.0 / 1024.0, minimumBeats);
+    const auto maximum = std::max(minimum, maximumBeats);
+    const auto t = clamp01(normalizedValue);
+    if (grid == DurationGrid::ContinuousLegacy)
+        return minimum + t * (maximum - minimum);
+
+    const auto lower = nearestStraightDurationIndex(minimum);
+    const auto upper = std::max(lower, nearestStraightDurationIndex(maximum));
+    const auto span = static_cast<double>(upper - lower);
+    const auto offset = static_cast<std::size_t>(std::llround(t * span));
+    return straightDurationBeats[lower + std::min(offset, upper - lower)];
+}
 
 MusicEngine::MusicEngine()
     : MusicEngine(makeInitialState(InitialSystem::FigureEight, 0x334253ULL), [] {
@@ -229,9 +257,8 @@ double MusicEngine::durationBeatsFor(
     std::size_t bodyIndex, const std::array<BodyMeasurements, bodyCount>& values) const noexcept {
     const auto& voice = config_.voices[bodyIndex];
     const auto t = clamp01(mappingValue(bodyIndex, voice.durationMapping, values));
-    const auto duration = voice.minimumDurationBeats
-        + t * (voice.maximumDurationBeats - voice.minimumDurationBeats);
-    return std::max(1.0 / 1024.0, duration);
+    return mappedDurationBeats(t, voice.minimumDurationBeats, voice.maximumDurationBeats,
+                               voice.durationGrid);
 }
 
 void MusicEngine::triggerVoice(std::size_t bodyIndex, std::uint32_t sampleOffset, double beat,

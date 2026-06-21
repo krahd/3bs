@@ -25,6 +25,7 @@ private:
     ThreeBSProcessor& processor_;
     ArtworkPanel panel_;
     PresetCatalog presets_;
+    VoicingPresetCatalog voicingPresets_;
     PresentationState presentation_{};
     std::array<double, bodyCount> lastPlaneTilts_{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> runAttachment_;
@@ -38,6 +39,7 @@ private:
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voiceTriggerAttachments_;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voiceOctaveAttachments_;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voiceDurMapAttachments_;
+    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voiceDurGridAttachments_;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>, bodyCount> voiceDurMinAttachments_;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>, bodyCount> voiceDurMaxAttachments_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> strumValueAttachment_;

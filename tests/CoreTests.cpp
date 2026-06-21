@@ -301,6 +301,25 @@ void testChordAndStrumModes() {
     const auto chord = render(threebs::VoicingMode::Chord, 0.0);
     check(chord[0] == chord[1] && chord[1] == chord[2],
           "chord mode starts all enabled planets together");
+    const auto initialNoteCount = [&](threebs::VoicingMode mode) {
+        config.voicingMode = mode;
+        config.chordStrumMilliseconds = 0.0;
+        threebs::MusicEngine engine(initial, config);
+        threebs::ProcessContext context;
+        context.sampleCount = 1;
+        context.sampleRate = 48000.0;
+        context.beatsPerSample = 2.0 / 48000.0;
+        context.transportStarted = true;
+        threebs::MusicEngine::EventBuffer events;
+        engine.process(context, events);
+        return static_cast<std::size_t>(std::count_if(
+            events.begin(), events.end(), [](const auto& event) {
+                return event.type == threebs::MidiEventType::NoteOn;
+            }));
+    };
+    check(initialNoteCount(threebs::VoicingMode::Independent) == threebs::bodyCount
+              && initialNoteCount(threebs::VoicingMode::Chord) == threebs::bodyCount,
+          "chord mode replaces rather than layers over independent note generation");
     const auto strum = render(threebs::VoicingMode::Strum, 10.0);
     check(strum[0] == 0 && strum[1] == 480 && strum[2] == 960,
           "strum mode schedules deterministic notes across processing blocks");
@@ -520,11 +539,13 @@ void testOctaveTranspose() {
           "per-voice octave shifts notes down by twelve semitones");
 }
 
-std::vector<int> noteDurationsInSamples(double minDuration, double maxDuration) {
+std::vector<int> noteDurationsInSamples(double minDuration, double maxDuration,
+                                        threebs::DurationGrid grid) {
     auto config = singleClockVoiceConfig();
     config.voices[0].minimumDurationBeats = minDuration;
     config.voices[0].maximumDurationBeats = maxDuration;
     config.voices[0].durationMapping = threebs::PitchMapping::Speed;
+    config.voices[0].durationGrid = grid;
     const auto initial = threebs::makeInitialState(threebs::InitialSystem::FigureEight, 4242, 0.0);
     threebs::MusicEngine engine(initial, config);
     engine.prepare(48000.0);
@@ -559,14 +580,14 @@ std::vector<int> noteDurationsInSamples(double minDuration, double maxDuration) 
 }
 
 void testDurationMapping() {
-    const auto fixed = noteDurationsInSamples(0.5, 0.5);
+    const auto fixed = noteDurationsInSamples(0.5, 0.5, threebs::DurationGrid::Straight);
     check(fixed.size() > 3, "fixed-length voice produces multiple notes");
     bool allEqual = true;
     for (const auto duration : fixed)
         allEqual = allEqual && std::abs(duration - fixed.front()) <= 1;
     check(allEqual, "equal min/max duration yields constant note lengths");
 
-    const auto varying = noteDurationsInSamples(0.1, 2.0);
+    const auto varying = noteDurationsInSamples(0.1, 0.4, threebs::DurationGrid::ContinuousLegacy);
     int minimum = std::numeric_limits<int>::max();
     int maximum = 0;
     for (const auto duration : varying) {
@@ -574,7 +595,23 @@ void testDurationMapping() {
         maximum = std::max(maximum, duration);
     }
     check(varying.size() > 3 && maximum - minimum > 1000,
-          "duration mapping with a min/max range produces varied note lengths");
+          "legacy continuous duration mapping preserves varied note lengths");
+
+    for (const auto value : {0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0}) {
+        const auto duration = threebs::mappedDurationBeats(
+            value, 0.125, 8.0, threebs::DurationGrid::Straight);
+        check(std::find(threebs::straightDurationBeats.begin(),
+                        threebs::straightDurationBeats.end(), duration)
+                  != threebs::straightDurationBeats.end(),
+              "straight duration mapping emits only rhythmic grid values");
+    }
+    check(threebs::mappedDurationBeats(0.0, 0.5, 2.0, threebs::DurationGrid::Straight) == 0.5
+              && threebs::mappedDurationBeats(1.0, 0.5, 2.0,
+                                              threebs::DurationGrid::Straight) == 2.0,
+          "straight duration mapping respects its minimum and maximum");
+    check(threebs::mappedDurationBeats(0.73, 1.0, 1.0,
+                                      threebs::DurationGrid::Straight) == 1.0,
+          "equal rhythmic duration bounds remain fixed");
 }
 
 void testGlobalChordFrame() {

@@ -39,6 +39,7 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
     const auto triggers = panel_.voiceTriggerSelectors();
     const auto octaves = panel_.voiceOctaveSelectors();
     const auto durMaps = panel_.voiceDurationMapSelectors();
+    const auto durGrids = panel_.voiceDurationGridSelectors();
     const auto durMins = panel_.voiceDurationMinSliders();
     const auto durMaxs = panel_.voiceDurationMaxSliders();
     for (std::size_t body = 0; body < bodyCount; ++body) {
@@ -57,6 +58,8 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
             state, "voiceOctave" + suffix, *octaves[body]);
         voiceDurMapAttachments_[body] = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             state, "voiceDurMap" + suffix, *durMaps[body]);
+        voiceDurGridAttachments_[body] = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            state, "voiceDurGrid" + suffix, *durGrids[body]);
         voiceDurMinAttachments_[body] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
             state, "voiceDurMin" + suffix, *durMins[body]);
         voiceDurMaxAttachments_[body] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
@@ -85,6 +88,7 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
         state, "autoResetBars", panel_.autoResetBarsSelector());
 
     panel_.setPresetCatalog(presets_);
+    panel_.setVoicingPresetCatalog(voicingPresets_);
     panel_.onPresetSelected = [this](int index) {
         if (!presets_.valid() || index < 0 || static_cast<std::size_t>(index) >= presets_.size())
             return;
@@ -93,8 +97,17 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
         panel_.setPresentationState(presentation_);
         lastPlaneTilts_.fill(0.0);
         panel_.setPlaneTilts(lastPlaneTilts_);
+        panel_.setSelectedVoicingPresetIndex(-1);
         processor_.requestPreset(preset, index);
     };
+    panel_.onVoicingPresetSelected = [this](int index) {
+        if (!voicingPresets_.valid() || index < 0
+            || static_cast<std::size_t>(index) >= voicingPresets_.size())
+            return;
+        processor_.requestVoicingPreset(voicingPresets_[static_cast<std::size_t>(index)], index);
+        panel_.setSelectedVoicingPresetIndex(index);
+    };
+    panel_.onVoicingEdited = [this] { processor_.setSelectedVoicingPresetIndex(-1); };
     panel_.onRandomize = [this] { processor_.requestRandomize(panel_.chaosSlider().getValue() / 100.0); };
     panel_.onReset = [this] { processor_.requestReset(); };
     panel_.onCameraChanged = [this](const CameraState& camera) {
@@ -160,6 +173,7 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
                 panel_.setPresentationState(presentation_);
                 panel_.setPlaneTilts(lastPlaneTilts_);
                 panel_.setSelectedPresetIndex(configuration.presetIndex);
+                panel_.setSelectedVoicingPresetIndex(configuration.voicingPresetIndex);
                 panel_.setStatus("LOADED / " + file.getFileName());
             });
     };
@@ -168,6 +182,7 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
     panel_.setPresentationState(presentation_);
     lastPlaneTilts_ = processor_.initialPlaneTilts();
     panel_.setPlaneTilts(lastPlaneTilts_);
+    panel_.setSelectedVoicingPresetIndex(processor_.currentUserConfiguration().voicingPresetIndex);
     startTimerHz(30);
 }
 

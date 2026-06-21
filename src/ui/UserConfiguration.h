@@ -10,7 +10,7 @@
 
 namespace threebs {
 
-inline constexpr int userConfigurationSchemaVersion = 2;
+inline constexpr int userConfigurationSchemaVersion = 3;
 
 struct UserConfiguration {
     SimulationState initial{};
@@ -22,6 +22,7 @@ struct UserConfiguration {
     double chaosPercent{20.0};
     double densityPercent{80.0};
     int presetIndex{};
+    int voicingPresetIndex{-1};
     bool run{true};
     bool sync{true};
 };

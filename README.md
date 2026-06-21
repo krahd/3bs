@@ -34,11 +34,15 @@ independent of audio block size.
   artistic units.
 - Maps orbital relationships to pitch, trigger, velocity, duration, and CC
   streams across three independently configurable voices.
-- Provides independent, chord, and strum modes with deterministic scheduling.
+- Provides mutually exclusive independent, chord, and strum modes with
+  deterministic scheduling, plus 12 voice-only factory presets.
+- Maps orbital measurements to note lengths quantized onto straight rhythmic
+  values from 1/32 through two whole notes; legacy sessions retain continuous
+  duration mapping.
 - Renders procedural planets, atmospheres, trajectories, a pinned HYG star
   catalogue, HDR bloom, and six seconds of live body-coloured note history.
-- Ships 24 deterministic factory systems and portable, human-readable `.3bs`
-  configuration files.
+- Ships 24 deterministic factory systems, 12 dedicated voicing presets, and
+  portable, human-readable `.3bs` configuration files.
 - Keeps rendering off the MIDI processing thread and uses fixed-capacity queues
   for real-time communication.
 
@@ -114,9 +118,11 @@ state, and bounded queues. JUCE adapters translate host transport and MIDI for
 the plugin and standalone surfaces. Metal consumes immutable render snapshots
 and a separate note-event queue, so renderer failure is non-fatal to MIDI.
 
-Schema-v5 host state stores exact simulation vectors, musical mappings, camera
-and pane state, and non-automatable presentation controls. Schemas v1-v4 migrate
-with compatible defaults. Factory presets remain schema v2. See
+Schema-v7 host state stores exact simulation vectors, musical mappings, rhythmic
+length grids, camera and pane state, and non-automatable presentation controls.
+Schemas v1-v6 migrate with compatible defaults, and portable `.3bs` files use
+schema v3. Complete factory presets remain schema v2; dedicated voicing presets
+use their own schema v1 catalog. See
 [`STATUS.md`](STATUS.md) for diagrams, test records, and current risks.
 
 ## Host Routing

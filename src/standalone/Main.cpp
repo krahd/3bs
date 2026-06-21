@@ -24,7 +24,10 @@ public:
         setWantsKeyboardFocus(true);
         addAndMakeVisible(panel_);
         panel_.setPresetCatalog(presets_);
+        panel_.setVoicingPresetCatalog(voicingPresets_);
         panel_.onPresetSelected = [this](int index) { applyPreset(index); };
+        panel_.onVoicingPresetSelected = [this](int index) { applyVoicingPreset(index); };
+        panel_.onVoicingEdited = [this] { selectedVoicingPresetIndex_ = -1; };
         panel_.onRandomize = [this] {
             baseInitial_ = makeInitialState(InitialSystem::ControlledChaos, ++seed_,
                                             panel_.chaosSlider().getValue() / 100.0);
@@ -121,6 +124,8 @@ private:
             return;
         const auto& preset = presets_[static_cast<std::size_t>(index)];
         selectedPresetIndex_ = index;
+        selectedVoicingPresetIndex_ = -1;
+        panel_.setSelectedVoicingPresetIndex(-1);
         baseInitial_ = makeInitialState(preset.system, preset.seed, preset.chaos);
         planeTilts_.fill(0.0);
         panel_.setPlaneTilts(planeTilts_);
@@ -143,6 +148,11 @@ private:
         const auto roots = panel_.voiceRootSelectors();
         const auto pitches = panel_.voicePitchSelectors();
         const auto triggers = panel_.voiceTriggerSelectors();
+        const auto octaves = panel_.voiceOctaveSelectors();
+        const auto durationMaps = panel_.voiceDurationMapSelectors();
+        const auto durationGrids = panel_.voiceDurationGridSelectors();
+        const auto durationMins = panel_.voiceDurationMinSliders();
+        const auto durationMaxs = panel_.voiceDurationMaxSliders();
         for (std::size_t body = 0; body < bodyCount; ++body) {
             enables[body]->setToggleState(preset.voices[body].enabled, juce::dontSendNotification);
             scales[body]->setSelectedId(static_cast<int>(preset.voices[body].scale) + 1,
@@ -153,7 +163,73 @@ private:
                                          juce::dontSendNotification);
             triggers[body]->setSelectedId(static_cast<int>(preset.voices[body].triggerMapping) + 1,
                                           juce::dontSendNotification);
+            octaves[body]->setSelectedId(preset.voices[body].octave + 5, juce::dontSendNotification);
+            durationMaps[body]->setSelectedId(static_cast<int>(preset.voices[body].durationMapping) + 1,
+                                              juce::dontSendNotification);
+            durationGrids[body]->setSelectedId(static_cast<int>(preset.voices[body].durationGrid) + 1,
+                                               juce::sendNotificationSync);
+            durationMins[body]->setValue(preset.voices[body].minimumDurationBeats,
+                                         juce::dontSendNotification);
+            durationMaxs[body]->setValue(preset.voices[body].maximumDurationBeats,
+                                         juce::dontSendNotification);
         }
+    }
+
+    void applyVoicingPreset(int index) {
+        if (!voicingPresets_.valid() || index < 0
+            || static_cast<std::size_t>(index) >= voicingPresets_.size())
+            return;
+        MusicEngine::EventBuffer noteOffs;
+        engine_.allNotesOff(0, noteOffs);
+        sendMidiEvents(noteOffs);
+
+        const auto& preset = voicingPresets_[static_cast<std::size_t>(index)];
+        selectedVoicingPresetIndex_ = index;
+        config_.voices = preset.voices;
+        config_.voicingMode = preset.mode;
+        config_.chordStrumMilliseconds = preset.chordStrumMilliseconds;
+        config_.chordStrumUnit = preset.chordStrumUnit;
+        config_.chordStrumValue = preset.chordStrumValue;
+        config_.chordSystem = preset.chordSystem;
+        engine_.setConfig(config_);
+
+        panel_.densitySlider().setValue(preset.densityPercent, juce::dontSendNotification);
+        panel_.voicingModeSelector().setSelectedId(static_cast<int>(preset.mode) + 1,
+                                                   juce::sendNotificationSync);
+        panel_.chordStrumSlider().setValue(preset.chordStrumMilliseconds, juce::dontSendNotification);
+        panel_.strumUnitSelector().setSelectedId(static_cast<int>(preset.chordStrumUnit) + 1,
+                                                juce::dontSendNotification);
+        panel_.strumValueSlider().setValue(preset.chordStrumValue, juce::dontSendNotification);
+        panel_.chordRootSelector().setSelectedId(static_cast<int>(preset.chordSystem.root) + 1,
+                                                juce::dontSendNotification);
+        panel_.chordScaleSelector().setSelectedId(static_cast<int>(preset.chordSystem.scale) + 1,
+                                                 juce::dontSendNotification);
+        const auto enables = panel_.voiceEnableButtons();
+        const auto roots = panel_.voiceRootSelectors();
+        const auto scales = panel_.voiceScaleSelectors();
+        const auto pitches = panel_.voicePitchSelectors();
+        const auto triggers = panel_.voiceTriggerSelectors();
+        const auto octaves = panel_.voiceOctaveSelectors();
+        const auto durationMaps = panel_.voiceDurationMapSelectors();
+        const auto durationGrids = panel_.voiceDurationGridSelectors();
+        const auto durationMins = panel_.voiceDurationMinSliders();
+        const auto durationMaxs = panel_.voiceDurationMaxSliders();
+        for (std::size_t body = 0; body < bodyCount; ++body) {
+            const auto& voice = preset.voices[body];
+            enables[body]->setToggleState(voice.enabled, juce::dontSendNotification);
+            roots[body]->setSelectedId(static_cast<int>(voice.root) + 1, juce::dontSendNotification);
+            scales[body]->setSelectedId(static_cast<int>(voice.scale) + 1, juce::dontSendNotification);
+            pitches[body]->setSelectedId(static_cast<int>(voice.pitchMapping) + 1, juce::dontSendNotification);
+            triggers[body]->setSelectedId(static_cast<int>(voice.triggerMapping) + 1, juce::dontSendNotification);
+            octaves[body]->setSelectedId(voice.octave + 5, juce::dontSendNotification);
+            durationMaps[body]->setSelectedId(static_cast<int>(voice.durationMapping) + 1,
+                                              juce::dontSendNotification);
+            durationGrids[body]->setSelectedId(static_cast<int>(voice.durationGrid) + 1,
+                                               juce::sendNotificationSync);
+            durationMins[body]->setValue(voice.minimumDurationBeats, juce::dontSendNotification);
+            durationMaxs[body]->setValue(voice.maximumDurationBeats, juce::dontSendNotification);
+        }
+        panel_.setSelectedVoicingPresetIndex(index);
     }
 
     UserConfiguration currentConfiguration() {
@@ -166,6 +242,7 @@ private:
         result.chaosPercent = panel_.chaosSlider().getValue();
         result.densityPercent = panel_.densitySlider().getValue();
         result.presetIndex = selectedPresetIndex_;
+        result.voicingPresetIndex = selectedVoicingPresetIndex_;
         result.run = panel_.runButton().getToggleState();
         result.sync = false;
         return result;
@@ -178,6 +255,7 @@ private:
         config_ = configuration.engine;
         presentation_ = configuration.presentation;
         selectedPresetIndex_ = configuration.presetIndex;
+        selectedVoicingPresetIndex_ = configuration.voicingPresetIndex;
         engine_.setConfig(config_);
         engine_.reset(initial_);
         ++trajectoryRevision_;
@@ -223,6 +301,7 @@ private:
         const auto triggers = panel_.voiceTriggerSelectors();
         const auto octaves = panel_.voiceOctaveSelectors();
         const auto durationMaps = panel_.voiceDurationMapSelectors();
+        const auto durationGrids = panel_.voiceDurationGridSelectors();
         const auto durationMins = panel_.voiceDurationMinSliders();
         const auto durationMaxs = panel_.voiceDurationMaxSliders();
         for (std::size_t body = 0; body < bodyCount; ++body) {
@@ -239,9 +318,12 @@ private:
             octaves[body]->setSelectedId(config_.voices[body].octave + 5, juce::dontSendNotification);
             durationMaps[body]->setSelectedId(static_cast<int>(config_.voices[body].durationMapping) + 1,
                                               juce::dontSendNotification);
+            durationGrids[body]->setSelectedId(static_cast<int>(config_.voices[body].durationGrid) + 1,
+                                               juce::sendNotificationSync);
             durationMins[body]->setValue(config_.voices[body].minimumDurationBeats, juce::dontSendNotification);
             durationMaxs[body]->setValue(config_.voices[body].maximumDurationBeats, juce::dontSendNotification);
         }
+        panel_.setSelectedVoicingPresetIndex(selectedVoicingPresetIndex_);
     }
 
     void saveConfiguration() {
@@ -294,6 +376,7 @@ private:
         const auto triggers = panel_.voiceTriggerSelectors();
         const auto octaves = panel_.voiceOctaveSelectors();
         const auto durationMaps = panel_.voiceDurationMapSelectors();
+        const auto durationGrids = panel_.voiceDurationGridSelectors();
         const auto durationMins = panel_.voiceDurationMinSliders();
         const auto durationMaxs = panel_.voiceDurationMaxSliders();
         for (std::size_t body = 0; body < bodyCount; ++body) {
@@ -306,6 +389,8 @@ private:
             voice.triggerMapping = static_cast<TriggerMapping>(std::max(0, triggers[body]->getSelectedItemIndex()));
             voice.octave = static_cast<std::int8_t>(octaves[body]->getSelectedItemIndex() - 4);
             voice.durationMapping = static_cast<PitchMapping>(std::max(0, durationMaps[body]->getSelectedItemIndex()));
+            voice.durationGrid = static_cast<DurationGrid>(std::clamp(
+                durationGrids[body]->getSelectedItemIndex(), 0, 1));
             voice.minimumDurationBeats = durationMins[body]->getValue();
             voice.maximumDurationBeats = durationMaxs[body]->getValue();
         }
@@ -378,20 +463,7 @@ private:
             (void)noteVisualizationEvents_.push(visual);
         }
 
-        if (midiOutput_ != nullptr && events.size() > 0) {
-            juce::MidiBuffer buffer;
-            for (const auto& event : events) {
-                juce::MidiMessage message;
-                if (event.type == MidiEventType::NoteOn)
-                    message = juce::MidiMessage::noteOn(event.channel, event.data1, event.data2);
-                else if (event.type == MidiEventType::NoteOff)
-                    message = juce::MidiMessage::noteOff(event.channel, event.data1);
-                else
-                    message = juce::MidiMessage::controllerEvent(event.channel, event.data1, event.data2);
-                buffer.addEvent(message, static_cast<int>(event.sampleOffset));
-            }
-            midiOutput_->sendBlockOfMessages(buffer, juce::Time::getMillisecondCounterHiRes() + 2.0, sampleRate_);
-        }
+        sendMidiEvents(events);
 
         RenderSnapshot snapshot;
         snapshot.bodies = engine_.simulation().state().bodies;
@@ -427,6 +499,23 @@ private:
         }
     }
 
+    void sendMidiEvents(const MusicEngine::EventBuffer& events) {
+        if (midiOutput_ != nullptr && events.size() > 0) {
+            juce::MidiBuffer buffer;
+            for (const auto& event : events) {
+                juce::MidiMessage message;
+                if (event.type == MidiEventType::NoteOn)
+                    message = juce::MidiMessage::noteOn(event.channel, event.data1, event.data2);
+                else if (event.type == MidiEventType::NoteOff)
+                    message = juce::MidiMessage::noteOff(event.channel, event.data1);
+                else
+                    message = juce::MidiMessage::controllerEvent(event.channel, event.data1, event.data2);
+                buffer.addEvent(message, static_cast<int>(event.sampleOffset));
+            }
+            midiOutput_->sendBlockOfMessages(buffer, juce::Time::getMillisecondCounterHiRes() + 2.0, sampleRate_);
+        }
+    }
+
     static constexpr double sampleRate_ = 48000.0;
     static constexpr int timerRate_ = 100;
     static constexpr double tempo_ = 120.0;
@@ -434,6 +523,7 @@ private:
     NoteVisualizationQueue noteVisualizationEvents_;
     ArtworkPanel panel_;
     PresetCatalog presets_;
+    VoicingPresetCatalog voicingPresets_;
     MusicEngine engine_;
     EngineConfig config_{engine_.config()};
     SimulationState baseInitial_{};
@@ -446,6 +536,7 @@ private:
     std::uint64_t sequence_{};
     std::uint64_t noteVisualizationSequence_{};
     int selectedPresetIndex_{};
+    int selectedVoicingPresetIndex_{-1};
     std::uint64_t trajectoryRevision_{1};
     std::array<std::uint32_t, bodyCount> lastRespawnCounts_{};
     std::array<double, bodyCount> planeTilts_{};

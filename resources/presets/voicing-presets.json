@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "presets": [
+    {
+      "id": "orbital-counterpoint", "name": "Orbital Counterpoint", "description": "Three balanced clock and motion voices in D Dorian.",
+      "mode": "independent", "density": 78,
+      "chord": { "root": 2, "scale": "dorian" }, "strum": { "unit": "milliseconds", "milliseconds": 24, "value": 0.0625 },
+      "voices": [
+        { "enabled": true, "channel": 1, "root": 2, "scale": "dorian", "octave": -1, "pitch": "radius", "trigger": "clock", "minimum": 36, "maximum": 72, "division": 0.5, "durationMap": "speed", "durationMin": 0.25, "durationMax": 1.0, "minimumTriggerInterval": 0.0625, "closeApproachDistance": 1.0, "minimumVelocity": 44, "maximumVelocity": 108 },
+        { "enabled": true, "channel": 2, "root": 2, "scale": "dorian", "octave": 0, "pitch": "nearest", "trigger": "plane", "minimum": 43, "maximum": 79, "division": 0.25, "durationMap": "nearest", "durationMin": 0.25, "durationMax": 2.0, "minimumTriggerInterval": 0.0625, "closeApproachDistance": 1.0, "minimumVelocity": 48, "maximumVelocity": 112 },
+        { "enabled": true, "channel": 3, "root": 2, "scale": "dorian", "octave": 1, "pitch": "phase", "trigger": "turning", "minimum": 48, "maximum": 84, "division": 0.25, "durationMap": "phase", "durationMin": 0.5, "durationMax": 2.0, "minimumTriggerInterval": 0.125, "closeApproachDistance": 1.0, "minimumVelocity": 52, "maximumVelocity": 116 }
+      ]
+    },
+    {
+      "id": "sparse-periapsis", "name": "Sparse Periapsis", "description": "Long E Phrygian notes driven by close approaches and apsides.",
+      "mode": "independent", "density": 48,
+      "chord": { "root": 4, "scale": "phrygian" }, "strum": { "unit": "milliseconds", "milliseconds": 36, "value": 0.125 },
+      "voices": [
+        { "enabled": true, "channel": 1, "root": 4, "scale": "phrygian", "octave": -2, "pitch": "nearest", "trigger": "close", "minimum": 24, "maximum": 60, "division": 1.0, "durationMap": "nearest", "durationMin": 1.0, "durationMax": 4.0, "minimumTriggerInterval": 0.5, "closeApproachDistance": 0.8, "minimumVelocity": 38, "maximumVelocity": 96 },
+        { "enabled": true, "channel": 2, "root": 4, "scale": "phrygian", "octave": -1, "pitch": "radialVelocity", "trigger": "apsis", "minimum": 36, "maximum": 72, "division": 1.0, "durationMap": "radialVelocity", "durationMin": 0.5, "durationMax": 4.0, "minimumTriggerInterval": 0.5, "closeApproachDistance": 1.0, "minimumVelocity": 42, "maximumVelocity": 102 },
+        { "enabled": true, "channel": 3, "root": 4, "scale": "phrygian", "octave": 0, "pitch": "acceleration", "trigger": "receding", "minimum": 48, "maximum": 84, "division": 1.0, "durationMap": "acceleration", "durationMin": 1.0, "durationMax": 8.0, "minimumTriggerInterval": 0.5, "closeApproachDistance": 1.2, "minimumVelocity": 46, "maximumVelocity": 108 }
+      ]
+    },
+    {
+      "id": "phase-canon", "name": "Phase Canon", "description": "Fast F Lydian phase steps spread across three octaves.",
+      "mode": "independent", "density": 88,
+      "chord": { "root": 5, "scale": "lydian" }, "strum": { "unit": "beats", "milliseconds": 24, "value": 0.0625 },
+      "voices": [
+        { "enabled": true, "channel": 1, "root": 5, "scale": "lydian", "octave": -1, "pitch": "phase", "trigger": "phaseStep", "minimum": 36, "maximum": 72, "division": 0.25, "durationMap": "phase", "durationMin": 0.125, "durationMax": 0.5, "minimumTriggerInterval": 0.0625, "closeApproachDistance": 1.0, "minimumVelocity": 48, "maximumVelocity": 110 },
+        { "enabled": true, "channel": 2, "root": 5, "scale": "lydian", "octave": 0, "pitch": "phase", "trigger": "phaseStep", "minimum": 43, "maximum": 79, "division": 0.25, "durationMap": "speed", "durationMin": 0.25, "durationMax": 1.0, "minimumTriggerInterval": 0.125, "closeApproachDistance": 1.0, "minimumVelocity": 52, "maximumVelocity": 114 },
+        { "enabled": true, "channel": 3, "root": 5, "scale": "lydian", "octave": 1, "pitch": "angularMomentum", "trigger": "phaseStep", "minimum": 48, "maximum": 84, "division": 0.25, "durationMap": "angularMomentum", "durationMin": 0.5, "durationMax": 2.0, "minimumTriggerInterval": 0.25, "closeApproachDistance": 1.0, "minimumVelocity": 56, "maximumVelocity": 118 }
+      ]
+    },
+    {
+      "id": "kinetic-relay", "name": "Kinetic Relay", "description": "Short A minor-pentatonic gestures passed between changing velocities.",
+      "mode": "independent", "density": 70,
+      "chord": { "root": 9, "scale": "minorPentatonic" }, "strum": { "unit": "milliseconds", "milliseconds": 18, "value": 0.0625 },
+      "voices": [
+        { "enabled": true, "channel": 1, "root": 9, "scale": "minorPentatonic", "octave": -1, "pitch": "speed", "trigger": "speedPeak", "minimum": 32, "maximum": 68, "division": 0.5, "durationMap": "speed", "durationMin": 0.125, "durationMax": 0.5, "minimumTriggerInterval": 0.125, "closeApproachDistance": 1.0, "minimumVelocity": 52, "maximumVelocity": 120 },
+        { "enabled": true, "channel": 2, "root": 9, "scale": "minorPentatonic", "octave": 0, "pitch": "relativeSpeed", "trigger": "turning", "minimum": 44, "maximum": 80, "division": 0.25, "durationMap": "relativeSpeed", "durationMin": 0.125, "durationMax": 1.0, "minimumTriggerInterval": 0.125, "closeApproachDistance": 1.0, "minimumVelocity": 48, "maximumVelocity": 116 },
+        { "enabled": true, "channel": 3, "root": 9, "scale": "minorPentatonic", "octave": 1, "pitch": "nearest", "trigger": "plane", "minimum": 51, "maximum": 87, "division": 0.25, "durationMap": "nearest", "durationMin": 0.25, "durationMax": 1.0, "minimumTriggerInterval": 0.125, "closeApproachDistance": 1.0, "minimumVelocity": 44, "maximumVelocity": 112 }
+      ]
+    },
+    {
+      "id": "open-triads", "name": "Open Triads", "description": "Wide C-major triads with a clear clock pulse.",
+      "mode": "chord", "density": 72,
+      "chord": { "root": 0, "scale": "major" }, "strum": { "unit": "milliseconds", "milliseconds": 24, "value": 0.0625 },
+      "voices": [
+        { "enabled": true, "channel": 1, "root": 0, "scale": "major", "octave": -1, "pitch": "radius", "trigger": "clock", "minimum": 36, "maximum": 72, "division": 1.0, "durationMap": "radius", "durationMin": 0.5, "durationMax": 2.0, "minimumTriggerInterval": 0.25, "closeApproachDistance": 1.0, "minimumVelocity": 46, "maximumVelocity": 106 },
+        { "enabled": true, "channel": 2, "root": 0, "scale": "major", "octave": 0, "pitch": "radius", "trigger": "clock", "minimum": 43, "maximum": 79, "division": 1.0, "durationMap": "speed", "durationMin": 0.5, "durationMax": 2.0, "minimumTriggerInterval": 0.25, "closeApproachDistance": 1.0, "minimumVelocity": 50, "maximumVelocity": 110 },
+        { "enabled": true, "channel": 3, "root": 0, "scale": "major", "octave": 1, "pitch": "radius", "trigger": "clock", "minimum": 48, "maximum": 84, "division": 1.0, "durationMap": "phase", "durationMin": 1.0, "durationMax": 4.0, "minimumTriggerInterval": 0.25, "closeApproachDistance": 1.0, "minimumVelocity": 54, "maximumVelocity": 114 }
+      ]
+    },
+    {
+      "id": "low-gravity", "name": "Low Gravity", "description": "Low D-minor chords that expand around close approaches.",
+      "mode": "chord", "density": 54,
+      "chord": { "root": 2, "scale": "naturalMinor" }, "strum": { "unit": "milliseconds", "milliseconds": 32, "value": 0.125 },
+      "voices": [
+        { "enabled": true, "channel": 1, "root": 2, "scale": "naturalMinor", "octave": -2, "pitch": "nearest", "trigger": "close", "minimum": 24, "maximum": 60, "division": 2.0, "durationMap": "nearest", "durationMin": 1.0, "durationMax": 4.0, "minimumTriggerInterval": 0.5, "closeApproachDistance": 0.9, "minimumVelocity": 38, "maximumVelocity": 98 },
+        { "enabled": true, "channel": 2, "root": 2, "scale": "naturalMinor", "octave": -1, "pitch": "nearest", "trigger": "apsis", "minimum": 36, "maximum": 72, "division": 1.0, "durationMap": "radialVelocity", "durationMin": 1.0, "durationMax": 4.0, "minimumTriggerInterval": 0.5, "closeApproachDistance": 1.0, "minimumVelocity": 42, "maximumVelocity": 102 },
+        { "enabled": true, "channel": 3, "root": 2, "scale": "naturalMinor", "octave": 0, "pitch": "nearest", "trigger": "turning", "minimum": 43, "maximum": 79, "division": 1.0, "durationMap": "acceleration", "durationMin": 2.0, "durationMax": 8.0, "minimumTriggerInterval": 0.5, "closeApproachDistance": 1.0, "minimumVelocity": 46, "maximumVelocity": 106 }
+      ]
+    },
+    {
+      "id": "pulse-stack", "name": "Pulse Stack", "description": "Compact E minor-pentatonic chords with clipped rhythmic lengths.",
+      "mode": "chord", "density": 92,
+      "chord": { "root": 4, "scale": "minorPentatonic" }, "strum": { "unit": "milliseconds", "milliseconds": 12, "value": 0.0625 },
+      "voices": [
+        { "enabled": true, "channel": 1, "root": 4, "scale": "minorPentatonic", "octave": -1, "pitch": "speed", "trigger": "clock", "minimum": 32, "maximum": 68, "division": 0.25, "durationMap": "speed", "durationMin": 0.125, "durationMax": 0.5, "minimumTriggerInterval": 0.0625, "closeApproachDistance": 1.0, "minimumVelocity": 56, "maximumVelocity": 122 },
+        { "enabled": true, "channel": 2, "root": 4, "scale": "minorPentatonic", "octave": 0, "pitch": "relativeSpeed", "trigger": "clock", "minimum": 44, "maximum": 80, "division": 0.25, "durationMap": "relativeSpeed", "durationMin": 0.125, "durationMax": 0.5, "minimumTriggerInterval": 0.0625, "closeApproachDistance": 1.0, "minimumVelocity": 52, "maximumVelocity": 118 },
+        { "enabled": true, "channel": 3, "root": 4, "scale": "minorPentatonic", "octave": 1, "pitch": "acceleration", "trigger": "clock", "minimum": 51, "maximum": 87, "division": 0.25, "durationMap": "acceleration", "durationMin": 0.25, "durationMax": 1.0, "minimumTriggerInterval": 0.0625, "closeApproachDistance": 1.0, "minimumVelocity": 48, "maximumVelocity": 114 }
+      ]
+    },
+    {
+      "id": "slow-conjunction", "name": "Slow Conjunction", "description": "Sustained G Lydian harmony triggered by physical turning points.",
+      "mode": "chord", "density": 60,
+      "chord": { "root": 7, "scale": "lydian" }, "strum": { "unit": "beats", "milliseconds": 24, "value": 0.125 },
+      "voices": [
+        { "enabled": true, "channel": 1, "root": 7, "scale": "lydian", "octave": -1, "pitch": "angularMomentum", "trigger": "turning", "minimum": 31, "maximum": 67, "division": 1.0, "durationMap": "angularMomentum", "durationMin": 1.0, "durationMax": 4.0, "minimumTriggerInterval": 0.5, "closeApproachDistance": 1.0, "minimumVelocity": 42, "maximumVelocity": 102 },
+        { "enabled": true, "channel": 2, "root": 7, "scale": "lydian", "octave": 0, "pitch": "phase", "trigger": "apsis", "minimum": 43, "maximum": 79, "division": 1.0, "durationMap": "phase", "durationMin": 2.0, "durationMax": 8.0, "minimumTriggerInterval": 0.5, "closeApproachDistance": 1.0, "minimumVelocity": 46, "maximumVelocity": 106 },
+        { "enabled": true, "channel": 3, "root": 7, "scale": "lydian", "octave": 1, "pitch": "radius", "trigger": "plane", "minimum": 50, "maximum": 86, "division": 1.0, "durationMap": "radius", "durationMin": 1.0, "durationMax": 8.0, "minimumTriggerInterval": 0.5, "closeApproachDistance": 1.0, "minimumVelocity": 50, "maximumVelocity": 110 }
+      ]
+    },
+    {
+      "id": "short-arc", "name": "Short Arc", "description": "A tight C minor-pentatonic millisecond strum.",
+      "mode": "strum", "density": 84,
+      "chord": { "root": 0, "scale": "minorPentatonic" }, "strum": { "unit": "milliseconds", "milliseconds": 24, "value": 0.0625 },
+      "voices": [
+        { "enabled": true, "channel": 1, "root": 0, "scale": "minorPentatonic", "octave": -1, "pitch": "radius", "trigger": "clock", "minimum": 36, "maximum": 72, "division": 0.5, "durationMap": "speed", "durationMin": 0.25, "durationMax": 1.0, "minimumTriggerInterval": 0.125, "closeApproachDistance": 1.0, "minimumVelocity": 50, "maximumVelocity": 116 },
+        { "enabled": true, "channel": 2, "root": 0, "scale": "minorPentatonic", "octave": 0, "pitch": "nearest", "trigger": "clock", "minimum": 43, "maximum": 79, "division": 0.5, "durationMap": "nearest", "durationMin": 0.25, "durationMax": 1.0, "minimumTriggerInterval": 0.125, "closeApproachDistance": 1.0, "minimumVelocity": 48, "maximumVelocity": 112 },
+        { "enabled": true, "channel": 3, "root": 0, "scale": "minorPentatonic", "octave": 1, "pitch": "phase", "trigger": "clock", "minimum": 48, "maximum": 84, "division": 0.5, "durationMap": "phase", "durationMin": 0.5, "durationMax": 2.0, "minimumTriggerInterval": 0.125, "closeApproachDistance": 1.0, "minimumVelocity": 46, "maximumVelocity": 108 }
+      ]
+    },
+    {
+      "id": "rotating-descent", "name": "Rotating Descent", "description": "A descending A-minor beat strum with rotating planet order.",
+      "mode": "strum", "density": 76,
+      "chord": { "root": 9, "scale": "naturalMinor" }, "strum": { "unit": "beats", "milliseconds": 24, "value": 0.125 },
+      "voices": [
+        { "enabled": true, "channel": 1, "root": 9, "scale": "naturalMinor", "octave": 1, "pitch": "phase", "trigger": "clock", "minimum": 45, "maximum": 81, "division": 1.0, "durationMap": "phase", "durationMin": 0.5, "durationMax": 2.0, "minimumTriggerInterval": 0.25, "closeApproachDistance": 1.0, "minimumVelocity": 48, "maximumVelocity": 112 },
+        { "enabled": true, "channel": 2, "root": 9, "scale": "naturalMinor", "octave": 0, "pitch": "radius", "trigger": "clock", "minimum": 33, "maximum": 69, "division": 1.0, "durationMap": "radius", "durationMin": 0.5, "durationMax": 2.0, "minimumTriggerInterval": 0.25, "closeApproachDistance": 1.0, "minimumVelocity": 46, "maximumVelocity": 108 },
+        { "enabled": true, "channel": 3, "root": 9, "scale": "naturalMinor", "octave": -1, "pitch": "nearest", "trigger": "clock", "minimum": 28, "maximum": 64, "division": 1.0, "durationMap": "nearest", "durationMin": 1.0, "durationMax": 4.0, "minimumTriggerInterval": 0.25, "closeApproachDistance": 1.0, "minimumVelocity": 44, "maximumVelocity": 104 }
+      ]
+    },
+    {
+      "id": "beat-sweep", "name": "Beat Sweep", "description": "A measured D Dorian strum spaced by a quarter beat.",
+      "mode": "strum", "density": 68,
+      "chord": { "root": 2, "scale": "dorian" }, "strum": { "unit": "beats", "milliseconds": 24, "value": 0.25 },
+      "voices": [
+        { "enabled": true, "channel": 1, "root": 2, "scale": "dorian", "octave": -1, "pitch": "angularMomentum", "trigger": "apsis", "minimum": 38, "maximum": 74, "division": 1.0, "durationMap": "angularMomentum", "durationMin": 1.0, "durationMax": 4.0, "minimumTriggerInterval": 0.5, "closeApproachDistance": 1.0, "minimumVelocity": 42, "maximumVelocity": 104 },
+        { "enabled": true, "channel": 2, "root": 2, "scale": "dorian", "octave": 0, "pitch": "relativeSpeed", "trigger": "turning", "minimum": 45, "maximum": 81, "division": 1.0, "durationMap": "relativeSpeed", "durationMin": 0.5, "durationMax": 2.0, "minimumTriggerInterval": 0.5, "closeApproachDistance": 1.0, "minimumVelocity": 46, "maximumVelocity": 108 },
+        { "enabled": true, "channel": 3, "root": 2, "scale": "dorian", "octave": 1, "pitch": "acceleration", "trigger": "plane", "minimum": 50, "maximum": 86, "division": 1.0, "durationMap": "acceleration", "durationMin": 0.5, "durationMax": 2.0, "minimumTriggerInterval": 0.5, "closeApproachDistance": 1.0, "minimumVelocity": 50, "maximumVelocity": 112 }
+      ]
+    },
+    {
+      "id": "bar-sweep", "name": "Bar Sweep", "description": "A broad F Lydian strum whose spacing follows the active bar.",
+      "mode": "strum", "density": 58,
+      "chord": { "root": 5, "scale": "lydian" }, "strum": { "unit": "barFraction", "milliseconds": 24, "value": 0.125 },
+      "voices": [
+        { "enabled": true, "channel": 1, "root": 5, "scale": "lydian", "octave": -1, "pitch": "radius", "trigger": "close", "minimum": 36, "maximum": 72, "division": 2.0, "durationMap": "radius", "durationMin": 1.0, "durationMax": 4.0, "minimumTriggerInterval": 1.0, "closeApproachDistance": 0.9, "minimumVelocity": 40, "maximumVelocity": 100 },
+        { "enabled": true, "channel": 2, "root": 5, "scale": "lydian", "octave": 0, "pitch": "phase", "trigger": "apsis", "minimum": 43, "maximum": 79, "division": 2.0, "durationMap": "phase", "durationMin": 1.0, "durationMax": 4.0, "minimumTriggerInterval": 1.0, "closeApproachDistance": 1.0, "minimumVelocity": 44, "maximumVelocity": 104 },
+        { "enabled": true, "channel": 3, "root": 5, "scale": "lydian", "octave": 1, "pitch": "angularMomentum", "trigger": "turning", "minimum": 50, "maximum": 86, "division": 2.0, "durationMap": "angularMomentum", "durationMin": 2.0, "durationMax": 8.0, "minimumTriggerInterval": 1.0, "closeApproachDistance": 1.0, "minimumVelocity": 48, "maximumVelocity": 108 }
+      ]
+    }
+  ]
+}

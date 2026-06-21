@@ -12,7 +12,7 @@
 namespace threebs {
 
 inline constexpr std::size_t bodyCount = 3;
-inline constexpr std::uint32_t stateSchemaVersion = 6;
+inline constexpr std::uint32_t stateSchemaVersion = 7;
 
 enum class InitialSystem : std::uint8_t {
     FigureEight,
@@ -61,6 +61,11 @@ enum class VoicingMode : std::uint8_t { Independent, Chord, Strum };
 enum class StrumUnit : std::uint8_t { Milliseconds, Beats, BarFraction };
 
 enum class TimeSignatureSource : std::uint8_t { Host, Manual };
+
+enum class DurationGrid : std::uint8_t { ContinuousLegacy, Straight };
+
+inline constexpr std::array<double, 7> straightDurationBeats{
+    0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0};
 
 enum class ScaleId : std::uint8_t {
     Major,
@@ -127,6 +132,7 @@ struct VoiceConfig {
     double clockDivisionBeats{0.25};
     double probability{1.0};
     PitchMapping durationMapping{PitchMapping::Speed};
+    DurationGrid durationGrid{DurationGrid::Straight};
     double minimumDurationBeats{0.20};
     double maximumDurationBeats{0.20};
     double minimumTriggerIntervalBeats{0.0625};
