@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-21 14-34 GMT-3
+Last updated: 2026-06-21 14-43 GMT-3
 
 ## Project purpose
 
@@ -183,6 +183,9 @@ repository.
 - Published the showcase from `main:/docs` at `https://krahd.github.io/3bs/`
   and the `v0.1.0-alpha.1` prerelease with complete, AU, VST3, standalone, and
   SHA-256 checksum downloads.
+- Simplified the Pages site into a sober, single-column project overview with
+  one correctly proportioned screenshot and direct source, documentation,
+  release, and binary links.
 - Added a reproducible arm64 Release packaging flow for the complete bundle and
   individual AU, VST3, and standalone archives, including build provenance,
   licence files, third-party notices, and SHA-256 checksums.
@@ -203,6 +206,11 @@ repository.
 - GitHub Pages built commit `9ed3485` successfully. The live homepage,
   screenshot, public repository, four binary archives, and checksum download
   each returned HTTP 200 after deployment.
+- The simplified page and its local screenshot asset returned HTTP 200. A
+  1400-pixel macOS Quick Look render confirmed the desktop layout and uncropped
+  image aspect; automated mobile capture remains unavailable because the local
+  Playwright launcher references a removed interpreter and Safari WebDriver is
+  disabled at the OS level.
 - `shasum -a 256 -c SHA256SUMS.txt` and `unzip -t` passed for the complete,
   AU, VST3, and standalone archives.
 - `codesign --verify --deep --strict` passed on the three packaged ad-hoc-signed
@@ -298,4 +306,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-21 14-34 GMT-3
+Last updated: 2026-06-21 14-43 GMT-3

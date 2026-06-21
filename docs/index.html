@@ -3,118 +3,63 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#060914">
-  <meta name="description" content="The Three Body Solution turns a deterministic gravitational simulation into evolving MIDI and a cinematic Metal visualization.">
+  <meta name="theme-color" content="#101214">
+  <meta name="description" content="The Three Body Solution is a deterministic three-body simulation mapped to generative MIDI.">
   <meta property="og:title" content="The Three Body Solution">
-  <meta property="og:description" content="Gravity becomes music. A deterministic generative MIDI instrument for macOS.">
+  <meta property="og:description" content="A deterministic three-body simulation mapped to generative MIDI.">
   <meta property="og:image" content="https://krahd.github.io/3bs/assets/three-body-solution-app.jpg">
   <meta property="og:type" content="website">
-  <title>The Three Body Solution | Generative MIDI</title>
+  <title>The Three Body Solution</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <header class="site-header" data-header>
-    <a class="wordmark" href="#top" aria-label="The Three Body Solution home">The Three Body Solution</a>
-    <nav class="nav" aria-label="Main navigation">
-      <a href="#overview">Overview</a>
-      <a href="#system">How it works</a>
-      <a href="#download">Download</a>
-      <a href="https://github.com/krahd/3bs#readme">Docs</a>
+  <header>
+    <a class="project-name" href="./">The Three Body Solution</a>
+    <nav aria-label="Project links">
+      <a href="https://github.com/krahd/3bs">Source</a>
+      <a href="https://github.com/krahd/3bs#readme">Documentation</a>
+      <a href="https://github.com/krahd/3bs/releases">Releases</a>
     </nav>
-    <a class="source-link" href="https://github.com/krahd/3bs">View source <span aria-hidden="true">↗</span></a>
   </header>
 
-  <main id="main">
-    <section class="hero" id="top">
-      <div class="orbit orbit-a" aria-hidden="true"></div>
-      <div class="orbit orbit-b" aria-hidden="true"></div>
-      <div class="hero-copy reveal">
-        <p class="eyebrow">Deterministic generative MIDI</p>
-        <h1>Gravity<br>becomes music.</h1>
-        <p class="lede">A three-body simulation that turns orbital motion into evolving MIDI. Run it as an Audio Unit, VST3, or standalone instrument on macOS.</p>
-        <div class="actions">
-          <a class="button button-primary" href="#download">Download alpha <span aria-hidden="true">↓</span></a>
-          <a class="text-link" href="#system">Explore the system <span aria-hidden="true">→</span></a>
-        </div>
-      </div>
-      <figure class="product-frame reveal">
-        <img src="assets/three-body-solution-app.jpg" width="2560" height="1704" alt="The Three Body Solution standalone application showing three planets, luminous trails, live note lanes, and its control deck">
-      </figure>
+  <main>
+    <section class="introduction">
+      <h1>The Three Body Solution</h1>
+      <p>A deterministic three-body simulation mapped to generative MIDI and a real-time Metal visualization.</p>
+      <p class="platform">macOS 13 or newer · Apple silicon · Audio Unit, VST3, and standalone</p>
     </section>
 
-    <section class="statement section" id="overview">
-      <div class="section-heading reveal">
-        <p class="eyebrow">Reproducible by design</p>
-        <h2>Three bodies.<br>One deterministic instrument.</h2>
-        <p>The same seed, state, and transport produce the same musical result. Change a law, rerun time, or nudge a mass, and every difference remains audible and reproducible.</p>
-      </div>
-      <div class="principles reveal">
-        <article>
-          <span class="principle-index">01</span>
-          <div><h3>Physics is the score</h3><p>A fixed-step, double-precision simulation drives every event. No hidden random state.</p></div>
-        </article>
-        <article>
-          <span class="principle-index">02</span>
-          <div><h3>Musical time stays exact</h3><p>Host transport defines the timeline. Equivalent inputs produce equivalent MIDI across block sizes.</p></div>
-        </article>
-        <article>
-          <span class="principle-index">03</span>
-          <div><h3>Shape the system</h3><p>Tune gravity, chaos, masses, mappings, scales, triggers, and orbital planes while the scene responds.</p></div>
-        </article>
-      </div>
+    <figure>
+      <img src="assets/three-body-solution-app.jpg" width="2560" height="1704" alt="The Three Body Solution standalone application showing three simulated bodies, their trajectories, note history, and controls">
+      <figcaption>The standalone application.</figcaption>
+    </figure>
+
+    <section>
+      <h2>About</h2>
+      <p>The project uses a fixed-step gravitational simulation to generate notes, rhythms, durations, and control data. The same initial state and transport timeline produce the same MIDI output.</p>
+      <p>The simulation engine is shared by the Logic Audio Unit MIDI effect, VST3 instrument, and standalone CoreMIDI application. It includes 24 factory systems and portable <code>.3bs</code> configuration files.</p>
     </section>
 
-    <section class="formats" aria-label="Available formats">
-      <article><span>AU</span><div><h3>Audio Unit</h3><p>A MIDI effect for Logic Pro.</p></div></article>
-      <article><span>V3</span><div><h3>VST3</h3><p>A MIDI-generating instrument for compatible hosts.</p></div></article>
-      <article><span>CM</span><div><h3>Standalone</h3><p>A CoreMIDI artwork that runs without a host.</p></div></article>
+    <section id="download">
+      <h2>Downloads</h2>
+      <p><strong>v0.1.0-alpha.1</strong> is an unsigned alpha build for Apple silicon. The binaries are ad-hoc signed but not notarized.</p>
+      <ul class="downloads">
+        <li><a href="https://github.com/krahd/3bs/releases/download/v0.1.0-alpha.1/The-Three-Body-Solution-0.1.0-alpha.1-macOS-arm64.zip">Complete bundle <span>AU, VST3, and standalone</span></a></li>
+        <li><a href="https://github.com/krahd/3bs/releases/download/v0.1.0-alpha.1/ThreeBS-AU-0.1.0-alpha.1-macOS-arm64.zip">Audio Unit <span>.component</span></a></li>
+        <li><a href="https://github.com/krahd/3bs/releases/download/v0.1.0-alpha.1/ThreeBS-VST3-0.1.0-alpha.1-macOS-arm64.zip">VST3 <span>.vst3</span></a></li>
+        <li><a href="https://github.com/krahd/3bs/releases/download/v0.1.0-alpha.1/ThreeBS-Standalone-0.1.0-alpha.1-macOS-arm64.zip">Standalone <span>.app</span></a></li>
+      </ul>
+      <p class="small">See the <a href="https://github.com/krahd/3bs/blob/main/doc/INSTALL.md">installation notes</a> and <a href="https://github.com/krahd/3bs/releases/download/v0.1.0-alpha.1/SHA256SUMS.txt">SHA-256 checksums</a>.</p>
     </section>
 
-    <section class="system section" id="system">
-      <div class="system-copy reveal">
-        <p class="eyebrow">One continuous signal path</p>
-        <h2>Motion, mapped.</h2>
-        <dl>
-          <div><dt>Simulation</dt><dd>Three bodies move under gravity in normalized artistic units.</dd></div>
-          <div><dt>Mapping</dt><dd>Distances, phases, crossings, and velocity become notes, rhythms, durations, and CCs.</dd></div>
-          <div><dt>Voices</dt><dd>Independent, chord, and strum modes turn motion into interlocking polyphony.</dd></div>
-          <div><dt>Visualization</dt><dd>Metal renders the same state with live, body-coloured note history.</dd></div>
-        </dl>
-      </div>
-      <figure class="detail-frame reveal">
-        <img src="assets/three-body-solution-app.jpg" width="2560" height="1704" alt="Close view of the planetary renderer and three-lane note visualization">
-      </figure>
-    </section>
-
-    <section class="download section" id="download">
-      <div class="download-heading reveal">
-        <p class="eyebrow">v0.1.0-alpha.1</p>
-        <h2>Build a system that never repeats itself by accident.</h2>
-        <p class="requirements">macOS 13+ <span>·</span> Apple silicon <span>·</span> Alpha software</p>
-      </div>
-      <div class="downloads reveal">
-        <a class="download-primary" href="https://github.com/krahd/3bs/releases/download/v0.1.0-alpha.1/The-Three-Body-Solution-0.1.0-alpha.1-macOS-arm64.zip"><strong>Complete bundle</strong><span>AU, VST3, and standalone · ZIP</span></a>
-        <div class="download-grid">
-          <a href="https://github.com/krahd/3bs/releases/download/v0.1.0-alpha.1/ThreeBS-AU-0.1.0-alpha.1-macOS-arm64.zip"><strong>Audio Unit</strong><span>.component · ZIP</span></a>
-          <a href="https://github.com/krahd/3bs/releases/download/v0.1.0-alpha.1/ThreeBS-VST3-0.1.0-alpha.1-macOS-arm64.zip"><strong>VST3</strong><span>.vst3 · ZIP</span></a>
-          <a href="https://github.com/krahd/3bs/releases/download/v0.1.0-alpha.1/ThreeBS-Standalone-0.1.0-alpha.1-macOS-arm64.zip"><strong>Standalone</strong><span>.app · ZIP</span></a>
-        </div>
-        <p class="release-note">These binaries are ad-hoc signed, not notarized, and have not completed Logic or Ableton host validation. Review the <a href="https://github.com/krahd/3bs/blob/main/doc/INSTALL.md">installation notes</a> and verify the published <a href="https://github.com/krahd/3bs/releases/download/v0.1.0-alpha.1/SHA256SUMS.txt">SHA-256 checksums</a>.</p>
-      </div>
+    <section>
+      <h2>Source</h2>
+      <p>The source code is available on <a href="https://github.com/krahd/3bs">GitHub</a> under the <a href="https://github.com/krahd/3bs/blob/main/LICENSE">AGPL-3.0-only license</a>.</p>
     </section>
   </main>
 
   <footer>
-    <a class="wordmark" href="#top">The Three Body Solution</a>
-    <p>Free software under <a href="https://github.com/krahd/3bs/blob/main/LICENSE">AGPL-3.0-only</a>.</p>
-    <nav aria-label="Footer navigation">
-      <a href="https://github.com/krahd/3bs#readme">Documentation</a>
-      <a href="https://github.com/krahd/3bs">GitHub</a>
-      <a href="https://github.com/krahd/3bs/releases">Releases</a>
-    </nav>
     <p>Copyright © 2026 Tomas Laurenzo</p>
   </footer>
-  <script src="script.js"></script>
 </body>
 </html>
