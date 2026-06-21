@@ -21,7 +21,6 @@ public:
 
 private:
     void timerCallback() override;
-    void applySelectedPreset();
 
     ThreeBSProcessor& processor_;
     ArtworkPanel panel_;
@@ -30,10 +29,11 @@ private:
     std::array<double, bodyCount> lastPlaneTilts_{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> runAttachment_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncAttachment_;
-    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>, 10> sliderAttachments_;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> presetAttachment_;
+    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>, 11> sliderAttachments_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> voicingModeAttachment_;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>, bodyCount> voiceEnableAttachments_;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voiceScaleAttachments_;
+    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voiceRootAttachments_;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voicePitchAttachments_;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voiceTriggerAttachments_;
 

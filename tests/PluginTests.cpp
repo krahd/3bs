@@ -19,6 +19,17 @@ void check(bool condition, const char* message) {
     }
 }
 
+void setParameter(threebs::ThreeBSProcessor& processor, const juce::String& id, float value) {
+    if (auto* parameter = processor.parameters().getParameter(id))
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+}
+
+float parameterValue(threebs::ThreeBSProcessor& processor, const juce::String& id) {
+    if (auto* value = processor.parameters().getRawParameterValue(id))
+        return value->load();
+    return -1.0F;
+}
+
 struct CapturedMidi {
     int sample{};
     std::vector<std::uint8_t> bytes;
@@ -97,6 +108,11 @@ int main() {
     presentation.notePaneMinimized = true;
     processor.setPresentationState(presentation);
     processor.requestPlaneTilts({14.0, -18.0, 9.5});
+    setParameter(processor, "voiceRoot1", 9.0F);
+    setParameter(processor, "voiceRoot2", 10.0F);
+    setParameter(processor, "voiceRoot3", 11.0F);
+    setParameter(processor, "voicingMode", 2.0F);
+    setParameter(processor, "chordStrum", 37.0F);
 
     juce::MemoryBlock state;
     processor.getStateInformation(state);
@@ -117,6 +133,13 @@ int main() {
           "camera framing settings must survive state recall");
     check(restoredPresentation.notePaneMinimized,
           "note-pane minimization must survive state recall");
+    check(parameterValue(restored, "voiceRoot1") == 9.0F
+              && parameterValue(restored, "voiceRoot2") == 10.0F
+              && parameterValue(restored, "voiceRoot3") == 11.0F,
+          "per-planet roots must survive schema-v5 recall");
+    check(parameterValue(restored, "voicingMode") == 2.0F
+              && parameterValue(restored, "chordStrum") == 37.0F,
+          "chord mode controls must survive schema-v5 recall");
     check(restoredPresentation.visual.palette == threebs::PaletteId::Violet
               && restoredPresentation.visualSeed == 20260620,
           "planet appearance must survive state recall");
@@ -131,13 +154,19 @@ int main() {
 
     auto legacyXml = juce::AudioProcessor::getXmlFromBinary(
         state.getData(), static_cast<int>(state.getSize()));
-    check(legacyXml != nullptr, "schema-v4 state must decode as XML for migration test");
+    check(legacyXml != nullptr, "schema-v5 state must decode as XML for migration test");
     if (legacyXml != nullptr) {
         legacyXml->setAttribute("schemaVersion", 3);
         legacyXml->removeAttribute("cameraMinimumDistance");
         legacyXml->removeAttribute("cameraMaximumDistance");
         legacyXml->removeAttribute("cameraAutoFrame");
         legacyXml->removeAttribute("notePaneMinimized");
+        for (int index = legacyXml->getNumChildElements() - 1; index >= 0; --index) {
+            auto* child = legacyXml->getChildElement(index);
+            const auto id = child->getStringAttribute("id");
+            if (id.startsWith("voiceRoot") || id == "voicingMode" || id == "chordStrum")
+                legacyXml->removeChildElement(child, true);
+        }
         juce::MemoryBlock legacyState;
         juce::AudioProcessor::copyXmlToBinary(*legacyXml, legacyState);
         threebs::ThreeBSProcessor legacyRestored;
@@ -147,6 +176,9 @@ int main() {
                   && std::abs(legacyPresentation.camera.maximumDistance - 40.0F) < 1.0e-6F
                   && legacyPresentation.camera.autoFrame && !legacyPresentation.notePaneMinimized,
               "schema-v3 state must receive schema-v4 presentation defaults");
+        check(parameterValue(legacyRestored, "voicingMode") == 0.0F
+                  && parameterValue(legacyRestored, "chordStrum") == 24.0F,
+              "schema-v3 state must receive schema-v5 chord defaults");
     }
     processor.requestReset();
     const auto originalSequence = renderBlocks(processor, 32);

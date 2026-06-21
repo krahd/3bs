@@ -74,4 +74,21 @@ std::uint8_t quantizeNormalizedPitch(double normalizedValue, const VoiceConfig& 
     return candidates[index];
 }
 
+std::uint8_t quantizeScaleDegree(double normalizedValue, int degreeOffset,
+                                 const VoiceConfig& voice) noexcept {
+    const auto low = std::min(voice.minimumNote, voice.maximumNote);
+    const auto high = std::max(voice.minimumNote, voice.maximumNote);
+    std::array<std::uint8_t, 128> candidates{};
+    int count{};
+    for (std::uint16_t note = low; note <= high; ++note) {
+        const auto midiNote = static_cast<std::uint8_t>(note);
+        if (noteIsInScale(midiNote, voice.root, voice.scale, voice.customScale))
+            candidates[static_cast<std::size_t>(count++)] = midiNote;
+    }
+    if (count == 0)
+        return low;
+    const auto base = std::min(count - 1, static_cast<int>(clamp01(normalizedValue) * count));
+    return candidates[static_cast<std::size_t>(std::clamp(base + degreeOffset, 0, count - 1))];
+}
+
 } // namespace threebs

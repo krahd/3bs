@@ -24,7 +24,8 @@ public:
 
     void setPresentationState(const PresentationState& state);
     PresentationState presentationState() const noexcept { return presentation_; }
-    void setPresetNames(const juce::StringArray& names);
+    void setPresetCatalog(const PresetCatalog& catalog);
+    void setSelectedPresetIndex(int index);
     void setStatus(const juce::String& status);
     void setMidiOutputAvailable(bool available);
     void setPlaneTilts(const std::array<double, bodyCount>& tiltDegrees);
@@ -42,7 +43,6 @@ public:
     juce::Slider& minimumCameraDistanceSlider() noexcept { return minimumCameraDistance_; }
     juce::Slider& maximumCameraDistanceSlider() noexcept { return maximumCameraDistance_; }
     juce::ToggleButton& autoFrameButton() noexcept { return autoFrame_; }
-    juce::ComboBox& presetSelector() noexcept { return presets_; }
     juce::ComboBox& midiOutputSelector() noexcept { return midiOutput_; }
     juce::TextButton& randomizeButton() noexcept { return randomize_; }
     juce::TextButton& resetButton() noexcept { return reset_; }
@@ -59,16 +59,22 @@ public:
     std::array<juce::ComboBox*, bodyCount> voiceScaleSelectors() noexcept {
         return {&voiceScale_[0], &voiceScale_[1], &voiceScale_[2]};
     }
+    std::array<juce::ComboBox*, bodyCount> voiceRootSelectors() noexcept {
+        return {&voiceRoot_[0], &voiceRoot_[1], &voiceRoot_[2]};
+    }
     std::array<juce::ComboBox*, bodyCount> voicePitchSelectors() noexcept {
         return {&voicePitch_[0], &voicePitch_[1], &voicePitch_[2]};
     }
     std::array<juce::ComboBox*, bodyCount> voiceTriggerSelectors() noexcept {
         return {&voiceTrigger_[0], &voiceTrigger_[1], &voiceTrigger_[2]};
     }
+    juce::ComboBox& voicingModeSelector() noexcept { return voicingMode_; }
+    juce::Slider& chordStrumSlider() noexcept { return chordStrum_; }
 
     std::function<void()> onRandomize;
     std::function<void()> onReset;
     std::function<void()> onAdvanced;
+    std::function<void(int)> onPresetSelected;
     std::function<void(const CameraState&)> onCameraChanged;
     std::function<void(bool)> onNotePaneMinimizedChanged;
     std::function<void(NotePaneStyle)> onNotePaneStyleChanged;
@@ -92,7 +98,6 @@ private:
     juce::Label title_;
     juce::Label subtitle_;
     juce::Label status_;
-    juce::Label pageTitle_;
     juce::Label pageHelp_;
     juce::ToggleButton run_{"RUN"};
     juce::ToggleButton sync_{"HOST SYNC"};
@@ -113,16 +118,19 @@ private:
     juce::Slider maximumCameraDistance_;
     std::array<juce::ToggleButton, bodyCount> voiceEnable_;
     std::array<juce::ComboBox, bodyCount> voiceScale_;
+    std::array<juce::ComboBox, bodyCount> voiceRoot_;
     std::array<juce::ComboBox, bodyCount> voicePitch_;
     std::array<juce::ComboBox, bodyCount> voiceTrigger_;
     std::array<juce::Label, bodyCount> voiceHeaders_;
-    std::array<juce::Label, 3> voiceRowLabels_;
+    std::array<juce::Label, 4> voiceRowLabels_;
+    juce::ComboBox voicingMode_;
+    juce::Slider chordStrum_;
     juce::ToggleButton autoFrame_{"AUTO FRAME"};
-    juce::ComboBox presets_;
+    std::array<juce::ComboBox, 4> presetCategories_;
     juce::ComboBox midiOutput_;
     juce::TextButton randomize_{"NEW SYSTEM"};
     juce::TextButton reset_{"RESET"};
-    juce::TextButton advanced_{"ADVANCED STATE"};
+    juce::TextButton advanced_{"SET STATE"};
     juce::TextButton present_{"PRESENT"};
     std::array<juce::TextButton, 5> tabs_{
         juce::TextButton{"SYSTEM"}, juce::TextButton{"VOICES"}, juce::TextButton{"SPACE"},

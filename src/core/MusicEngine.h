@@ -63,6 +63,9 @@ struct EngineConfig {
     bool inputGateEnabled{};
     std::int8_t inputTranspose{};
     bool inputGateOpen{true};
+    VoicingMode voicingMode{VoicingMode::Independent};
+    double chordStrumMilliseconds{24.0};
+    double minimumChordIntervalBeats{0.125};
 };
 
 struct BodyMeasurements {
@@ -72,6 +75,9 @@ struct BodyMeasurements {
     double speed{};
     double orbitalPhase{};
     double radialVelocity{};
+    double relativeSpeed{};
+    double acceleration{};
+    double angularMomentum{};
 };
 
 class MusicEngine {
@@ -101,10 +107,20 @@ private:
         double noteOffBeat{};
         double lastTriggerBeat{-1.0e12};
         double lastClockIndex{-1.0};
+        double lastPhaseStep{-1.0};
+        double previousSpeedDelta{};
         BodyMeasurements previous{};
         std::array<double, 2> smoothedCc{};
         std::array<std::uint8_t, 2> lastCc{255, 255};
         std::array<std::uint64_t, 2> lastCcSample{};
+    };
+
+    struct PendingNote {
+        bool active{};
+        std::uint64_t dueSample{};
+        std::size_t body{};
+        std::uint8_t note{};
+        std::uint8_t velocity{};
     };
 
     double mappingValue(std::size_t bodyIndex, PitchMapping mapping,
@@ -113,6 +129,11 @@ private:
                        const BodyMeasurements& current, double absoluteBeat) noexcept;
     void triggerVoice(std::size_t bodyIndex, std::uint32_t sampleOffset, double beat,
                       const BodyMeasurements& measurement, EventBuffer& output) noexcept;
+    void triggerChord(std::size_t triggerBody, std::uint32_t sampleOffset, double beat,
+                      const std::array<BodyMeasurements, bodyCount>& values,
+                      EventBuffer& output) noexcept;
+    void startNote(std::size_t bodyIndex, std::uint8_t note, std::uint8_t velocity,
+                   std::uint32_t sampleOffset, double beat, EventBuffer& output) noexcept;
     void emitContinuousControllers(std::size_t bodyIndex, std::uint32_t sampleOffset,
                                    const std::array<BodyMeasurements, bodyCount>& values,
                                    EventBuffer& output) noexcept;
@@ -122,12 +143,15 @@ private:
     ThreeBodySimulation simulation_{};
     EngineConfig config_{};
     std::array<VoiceRuntime, bodyCount> runtime_{};
+    std::array<PendingNote, bodyCount> pendingNotes_{};
     Pcg32 random_{};
     double sampleRate_{48000.0};
     bool wasPlaying_{};
     bool hasTimelineBeat_{};
     double timelineBeat_{};
     std::uint64_t processedSamples_{};
+    double lastChordTriggerBeat_{-1.0e12};
+    std::uint64_t chordIndex_{};
 };
 
 } // namespace threebs

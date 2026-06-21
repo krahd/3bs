@@ -117,8 +117,11 @@ private:
         std::array<std::atomic<float>*, bodyCount> masses{};
         std::array<std::atomic<float>*, bodyCount> voiceEnabled{};
         std::array<std::atomic<float>*, bodyCount> voiceScale{};
+        std::array<std::atomic<float>*, bodyCount> voiceRoot{};
         std::array<std::atomic<float>*, bodyCount> voicePitch{};
         std::array<std::atomic<float>*, bodyCount> voiceTrigger{};
+        std::atomic<float>* voicingMode{};
+        std::atomic<float>* chordStrum{};
         std::atomic<float>* inputMode{};
         std::atomic<float>* preset{};
     } parameterRefs_;

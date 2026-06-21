@@ -23,7 +23,7 @@ source tree. Apple SDK use is governed by the applicable Apple developer terms.
 
 ## HYG Star Database
 
-When populated, the optional generated `resources/stars/hyg-v41-mag65.csv` is
+The generated `resources/stars/hyg-v41-mag65.csv` is
 derived from HYG v4.1 by David Nash and contributors. HYG data is licensed
 separately under Creative Commons Attribution-ShareAlike 4.0 International and
 is not covered by the 3bs AGPL licence.
@@ -32,9 +32,9 @@ is not covered by the 3bs AGPL licence.
 - Pinned source commit: `c7f7f883fe678cc7680169a50ccd7dcc49b060ce`
 - Licence: <https://creativecommons.org/licenses/by-sa/4.0/>
 
-The checked-in generated file is currently an empty placeholder; the renderer
-uses `bright-stars.csv` and its original deterministic deep-sky generator until
-the pinned source catalogue is processed.
+The checked-in generated file contains the 8,921 catalogue entries at apparent
+magnitude 6.5 or brighter. The original `bright-stars.csv` remains as a
+defensive fallback.
 
 ## Visual References
 

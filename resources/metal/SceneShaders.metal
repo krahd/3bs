@@ -171,9 +171,9 @@ vertex ColourOut starVertex(const device StarInstance* stars [[buffer(0)]],
                          cameraZ * 0.0001, cameraZ);
     const float magnitude = star.directionMagnitude.w;
     const float catalogue = star.colourKind.w;
-    const float brightness = clamp(exp2(-0.4 * (magnitude - 5.0)) * 0.12, 0.025, 0.72);
+    const float brightness = clamp(exp2(-0.4 * (magnitude - 5.0)) * 0.18, 0.035, 0.90);
     const float faintScale = mix(u.renderSettings.y, 1.0, catalogue);
-    const float size = (0.42 + sqrt(brightness) * 0.62) * mix(0.68, 0.92, faintScale);
+    const float size = (0.85 + sqrt(brightness) * 1.55) * mix(0.72, 1.0, faintScale);
     const float2 corner = corners[vertexId];
     clip.xy += corner * float2(size * 2.0 / max(1.0, u.viewportTime.x),
                                size * 2.0 / max(1.0, u.viewportTime.y)) * clip.w;
@@ -188,10 +188,12 @@ vertex ColourOut starVertex(const device StarInstance* stars [[buffer(0)]],
 
 fragment float4 starFragment(ColourOut in [[stage_in]]) {
     const float radius = length(in.uv);
-    const float core = pow(saturate(1.0 - radius), 5.8);
+    const float core = pow(saturate(1.0 - radius), 3.0);
     const float spike = pow(saturate(1.0 - min(abs(in.uv.x), abs(in.uv.y)) * 6.0), 9.0)
                         * saturate(1.0 - radius) * step(0.45, in.colour.a);
-    return float4(in.colour.rgb * (core + spike * 0.05), core);
+    const float whiteCore = pow(saturate(1.0 - radius * 2.2), 3.0);
+    const float3 colour = mix(in.colour.rgb, float3(in.colour.a), whiteCore);
+    return float4(colour * (core + spike * 0.05), core);
 }
 
 vertex PlanetOut planetVertex(const device SphereVertex* vertices [[buffer(0)]],

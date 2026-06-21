@@ -16,7 +16,9 @@ ArtworkPanel::DeckLookAndFeel::DeckLookAndFeel() {
     setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff111725));
     setColour(juce::ComboBox::outlineColourId, juce::Colour(0xff29334a));
     setColour(juce::TextButton::buttonColourId, juce::Colour(0xff151c2c));
+    setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff276675));
     setColour(juce::TextButton::textColourOffId, juce::Colour(0xffb9c9d8));
+    setColour(juce::TextButton::textColourOnId, juce::Colour(0xfff2fbff));
 }
 
 void ArtworkPanel::DeckLookAndFeel::drawRotarySlider(
@@ -77,9 +79,6 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     status_.setJustificationType(juce::Justification::centredRight);
     status_.setColour(juce::Label::textColourId, juce::Colour(0xff63778d));
     addAndMakeVisible(status_);
-    pageTitle_.setFont(juce::Font(juce::FontOptions(13.0F).withStyle("Bold")));
-    pageTitle_.setColour(juce::Label::textColourId, juce::Colour(0xffdce7ef));
-    addAndMakeVisible(pageTitle_);
     pageHelp_.setFont(juce::Font(juce::FontOptions(10.5F)));
     pageHelp_.setColour(juce::Label::textColourId, juce::Colour(0xff7f93a8));
     pageHelp_.setJustificationType(juce::Justification::centredLeft);
@@ -87,6 +86,7 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
 
     run_.setToggleState(true, juce::dontSendNotification);
     sync_.setToggleState(true, juce::dontSendNotification);
+    sync_.setTooltip("When enabled, generation follows host play, seek, and loop state. When disabled, RUN advances independently using the current tempo.");
     addAndMakeVisible(run_);
     addAndMakeVisible(sync_);
 
@@ -137,6 +137,10 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
                                         juce::dontSendNotification);
         addAndMakeVisible(voiceScale_[body]);
 
+        voiceRoot_[body].addItemList({"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}, 1);
+        voiceRoot_[body].setSelectedId(1, juce::dontSendNotification);
+        addAndMakeVisible(voiceRoot_[body]);
+
         voicePitch_[body].addItemList(pitchMappingDisplayNames(), 1);
         voicePitch_[body].setSelectedId(1, juce::dontSendNotification);
         addAndMakeVisible(voicePitch_[body]);
@@ -145,7 +149,7 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
         voiceTrigger_[body].setSelectedId(1, juce::dontSendNotification);
         addAndMakeVisible(voiceTrigger_[body]);
     }
-    const std::array<juce::String, 3> voiceRowNames{"SCALE", "PITCH MAP", "TRIGGER"};
+    const std::array<juce::String, 4> voiceRowNames{"ROOT", "SCALE", "PITCH MAP", "TRIGGER"};
     for (std::size_t i = 0; i < voiceRowLabels_.size(); ++i) {
         voiceRowLabels_[i].setText(voiceRowNames[i], juce::dontSendNotification);
         voiceRowLabels_[i].setJustificationType(juce::Justification::centredLeft);
@@ -154,6 +158,18 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
         addAndMakeVisible(voiceRowLabels_[i]);
     }
 
+    voicingMode_.addItemList({"INDEPENDENT", "CHORD", "STRUM"}, 1);
+    voicingMode_.setSelectedId(1, juce::dontSendNotification);
+    voicingMode_.setTooltip("Independent triggers each planet separately. Chord and Strum generate scale triads from all enabled planets.");
+    addAndMakeVisible(voicingMode_);
+    chordStrum_.setSliderStyle(juce::Slider::LinearHorizontal);
+    chordStrum_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 58, 20);
+    chordStrum_.setRange(0.0, 120.0, 1.0);
+    chordStrum_.setValue(24.0);
+    chordStrum_.setTextValueSuffix(" ms");
+    chordStrum_.setTooltip("Delay between planets in STRUM mode.");
+    addAndMakeVisible(chordStrum_);
+
     const std::array<juce::String, 15> labels{
         "SPEED", "GRAVITY", "SOFTEN", "CHAOS", "DENSITY", "TRAIL", "BLOOM",
         "MASS I", "MASS II", "MASS III", "TILT I", "TILT II", "TILT III",
@@ -161,14 +177,27 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     for (std::size_t i = 0; i < knobLabels_.size(); ++i) {
         knobLabels_[i].setText(labels[i], juce::dontSendNotification);
         knobLabels_[i].setJustificationType(juce::Justification::centred);
-        knobLabels_[i].setFont(juce::Font(juce::FontOptions(9.0F).withStyle("Bold")));
+        knobLabels_[i].setFont(juce::Font(juce::FontOptions(11.5F).withStyle("Bold")));
         knobLabels_[i].setColour(juce::Label::textColourId, juce::Colour(0xff73869b));
         addAndMakeVisible(knobLabels_[i]);
     }
 
-    presets_.setTextWhenNothingSelected("Select a system");
     midiOutput_.setTextWhenNothingSelected("MIDI output");
-    addAndMakeVisible(presets_);
+    for (auto& selector : presetCategories_) {
+        selector.setTextWhenNothingSelected("SELECT");
+        addAndMakeVisible(selector);
+        auto* selectedBox = &selector;
+        selector.onChange = [this, selectedBox] {
+            const auto id = selectedBox->getSelectedId();
+            if (id <= 0)
+                return;
+            for (auto& other : presetCategories_)
+                if (&other != selectedBox)
+                    other.setSelectedId(0, juce::dontSendNotification);
+            if (onPresetSelected)
+                onPresetSelected(id - 1);
+        };
+    }
     addAndMakeVisible(midiOutput_);
     midiOutput_.setVisible(false);
     addAndMakeVisible(randomize_);
@@ -231,9 +260,9 @@ void ArtworkPanel::resized() {
 
     auto content = deck.reduced(18, 8);
     auto left = content.removeFromLeft(262);
-    pageTitle_.setBounds(left.removeFromTop(24));
     pageHelp_.setBounds(left.removeFromTop(50));
     left.removeFromTop(6);
+    reset_.setBounds(left.removeFromBottom(28).removeFromLeft(124));
 
     const auto layoutKnobs = [this](std::initializer_list<std::pair<std::size_t, juce::Slider*>> knobs,
                                     juce::Rectangle<int> area) {
@@ -250,14 +279,16 @@ void ArtworkPanel::resized() {
     switch (deckPage_) {
     case DeckPage::System:
         randomize_.setBounds(left.removeFromTop(28).removeFromLeft(124));
-        reset_.setBounds(left.removeFromTop(28).removeFromLeft(124));
         left.removeFromTop(6);
-        advanced_.setBounds(left.removeFromTop(28));
+        advanced_.setBounds(left.removeFromTop(28).removeFromLeft(124));
         layoutKnobs({{0U, &speed_}, {1U, &gravity_}, {2U, &softening_}, {3U, &chaos_},
                      {7U, &massOne_}, {8U, &massTwo_}, {9U, &massThree_}}, content);
         break;
     case DeckPage::Voices: {
-        layoutKnobs({{4U, &density_}}, left.removeFromTop(96));
+        voicingMode_.setBounds(left.removeFromTop(28));
+        left.removeFromTop(4);
+        chordStrum_.setBounds(left.removeFromTop(28));
+        layoutKnobs({{4U, &density_}}, left.removeFromTop(82));
         auto grid = content;
         auto gutter = grid.removeFromLeft(70);
         const auto columnWidth = grid.getWidth() / static_cast<int>(bodyCount);
@@ -281,13 +312,14 @@ void ArtworkPanel::resized() {
             grid.removeFromTop(4);
             gutter.removeFromTop(4);
         };
-        comboRow(voiceScale_, 0U);
-        comboRow(voicePitch_, 1U);
-        comboRow(voiceTrigger_, 2U);
+        comboRow(voiceRoot_, 0U);
+        comboRow(voiceScale_, 1U);
+        comboRow(voicePitch_, 2U);
+        comboRow(voiceTrigger_, 3U);
         break;
     }
     case DeckPage::Space:
-        advanced_.setBounds(left.removeFromTop(28));
+        advanced_.setBounds(left.removeFromTop(28).removeFromLeft(124));
         left.removeFromTop(6);
         autoFrame_.setBounds(left.removeFromTop(28));
         layoutKnobs({{5U, &trail_}, {6U, &bloom_}, {10U, &tiltOne_}, {11U, &tiltTwo_}, {12U, &tiltThree_},
@@ -295,10 +327,11 @@ void ArtworkPanel::resized() {
                     content);
         break;
     case DeckPage::Presets:
-        presets_.setBounds(left.removeFromTop(30));
-        left.removeFromTop(8);
+        for (auto& selector : presetCategories_) {
+            selector.setBounds(left.removeFromTop(26));
+            left.removeFromTop(3);
+        }
         randomize_.setBounds(left.removeFromTop(28).removeFromLeft(124));
-        reset_.setBounds(left.removeFromTop(28).removeFromLeft(124));
         break;
     case DeckPage::Settings:
         if (midiOutputAvailable_)
@@ -342,7 +375,6 @@ void ArtworkPanel::updateDeckVisibility() {
     title_.setVisible(showBase);
     subtitle_.setVisible(showBase);
     status_.setVisible(showBase);
-    pageTitle_.setVisible(showBase);
     pageHelp_.setVisible(showBase);
     run_.setVisible(showBase);
     sync_.setVisible(showBase);
@@ -366,10 +398,10 @@ void ArtworkPanel::updateDeckVisibility() {
     minimumCameraDistance_.setVisible(false);
     maximumCameraDistance_.setVisible(false);
     autoFrame_.setVisible(false);
-    presets_.setVisible(false);
+    for (auto& selector : presetCategories_) selector.setVisible(false);
     midiOutput_.setVisible(false);
     randomize_.setVisible(false);
-    reset_.setVisible(false);
+    reset_.setVisible(showBase);
     advanced_.setVisible(false);
     for (auto& label : knobLabels_)
         label.setVisible(false);
@@ -377,9 +409,12 @@ void ArtworkPanel::updateDeckVisibility() {
         voiceHeaders_[body].setVisible(false);
         voiceEnable_[body].setVisible(false);
         voiceScale_[body].setVisible(false);
+        voiceRoot_[body].setVisible(false);
         voicePitch_[body].setVisible(false);
         voiceTrigger_[body].setVisible(false);
     }
+    voicingMode_.setVisible(false);
+    chordStrum_.setVisible(false);
     for (auto& label : voiceRowLabels_)
         label.setVisible(false);
 
@@ -392,10 +427,8 @@ void ArtworkPanel::updateDeckVisibility() {
     };
     switch (deckPage_) {
     case DeckPage::System:
-        pageTitle_.setText("SYSTEM", juce::dontSendNotification);
         pageHelp_.setText("Physics, masses, reset, and exact body-state editing.", juce::dontSendNotification);
         randomize_.setVisible(true);
-        reset_.setVisible(true);
         advanced_.setVisible(true);
         showKnob(0U, speed_);
         showKnob(1U, gravity_);
@@ -406,14 +439,16 @@ void ArtworkPanel::updateDeckVisibility() {
         showKnob(9U, massThree_);
         break;
     case DeckPage::Voices:
-        pageTitle_.setText("VOICES", juce::dontSendNotification);
         pageHelp_.setText("Per-planet enable, scale/mode, and movement-to-note mapping. Density is global.",
                           juce::dontSendNotification);
         showKnob(4U, density_);
+        voicingMode_.setVisible(true);
+        chordStrum_.setVisible(true);
         for (std::size_t body = 0; body < bodyCount; ++body) {
             voiceHeaders_[body].setVisible(true);
             voiceEnable_[body].setVisible(true);
             voiceScale_[body].setVisible(true);
+            voiceRoot_[body].setVisible(true);
             voicePitch_[body].setVisible(true);
             voiceTrigger_[body].setVisible(true);
         }
@@ -421,7 +456,6 @@ void ArtworkPanel::updateDeckVisibility() {
             label.setVisible(true);
         break;
     case DeckPage::Space:
-        pageTitle_.setText("SPACE", juce::dontSendNotification);
         pageHelp_.setText("Visuals, orbital-plane tilt, and automatic camera framing limits.",
                           juce::dontSendNotification);
         advanced_.setVisible(true);
@@ -435,15 +469,12 @@ void ArtworkPanel::updateDeckVisibility() {
         showKnob(14U, maximumCameraDistance_);
         break;
     case DeckPage::Presets:
-        pageTitle_.setText("PRESETS", juce::dontSendNotification);
         pageHelp_.setText("Choose a deterministic authored system, randomize from the current chaos amount, or reset.",
                           juce::dontSendNotification);
-        presets_.setVisible(true);
+        for (auto& selector : presetCategories_) selector.setVisible(true);
         randomize_.setVisible(true);
-        reset_.setVisible(true);
         break;
     case DeckPage::Settings:
-        pageTitle_.setText("SETTINGS", juce::dontSendNotification);
         pageHelp_.setText(midiOutputAvailable_ ? "Standalone CoreMIDI destination. Host plugins route MIDI through the host."
                                                 : "Host plugins route MIDI through the host. Standalone exposes CoreMIDI here.",
                           juce::dontSendNotification);
@@ -462,10 +493,34 @@ void ArtworkPanel::setPresentationState(const PresentationState& state) {
     autoFrame_.setToggleState(presentation_.camera.autoFrame, juce::dontSendNotification);
 }
 
-void ArtworkPanel::setPresetNames(const juce::StringArray& names) {
-    presets_.clear();
-    presets_.addItemList(names, 1);
-    if (!names.isEmpty()) presets_.setSelectedId(1, juce::dontSendNotification);
+void ArtworkPanel::setPresetCatalog(const PresetCatalog& catalog) {
+    for (auto& selector : presetCategories_)
+        selector.clear();
+    for (std::size_t index = 0; index < catalog.size(); ++index) {
+        const auto system = catalog[index].system;
+        std::size_t category{};
+        if (system == InitialSystem::Hierarchical) category = 1U;
+        else if (system == InitialSystem::Stable) category = 2U;
+        else if (system == InitialSystem::ControlledChaos || system == InitialSystem::Unbound) category = 3U;
+        presetCategories_[category].addItem(catalog[index].name, static_cast<int>(index + 1U));
+    }
+    for (std::size_t category = 0; category < presetCategories_.size(); ++category) {
+        const std::array<InitialSystem, 4> systems{InitialSystem::FigureEight, InitialSystem::Hierarchical,
+            InitialSystem::Stable, InitialSystem::ControlledChaos};
+        presetCategories_[category].setTextWhenNothingSelected(presetCategoryName(systems[category]));
+    }
+    if (catalog.size() > 0U)
+        setSelectedPresetIndex(0);
+}
+
+void ArtworkPanel::setSelectedPresetIndex(int index) {
+    const auto id = index + 1;
+    for (auto& selector : presetCategories_) {
+        bool contains{};
+        for (int item = 0; item < selector.getNumItems(); ++item)
+            contains = contains || selector.getItemId(item) == id;
+        selector.setSelectedId(contains ? id : 0, juce::dontSendNotification);
+    }
 }
 
 void ArtworkPanel::setStatus(const juce::String& status) {

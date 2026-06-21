@@ -45,6 +45,16 @@ void setStateParameterValue(juce::ValueTree& state, const juce::String& id, floa
     }
 }
 
+void ensureStateParameterValue(juce::ValueTree& state, const juce::String& id, float value) {
+    for (int index = 0; index < state.getNumChildren(); ++index)
+        if (state.getChild(index).getProperty("id").toString() == id)
+            return;
+    juce::ValueTree parameter{"PARAM"};
+    parameter.setProperty("id", id, nullptr);
+    parameter.setProperty("value", value, nullptr);
+    state.addChild(parameter, -1, nullptr);
+}
+
 } // namespace
 
 void ThreeBSProcessor::AtomicState::store(const SimulationState& state) noexcept {
@@ -158,12 +168,21 @@ juce::AudioProcessorValueTreeState::ParameterLayout ThreeBSProcessor::createPara
             juce::ParameterID{"voiceScale" + suffix, 1}, "Planet " + suffix + " Scale",
             scaleDisplayNames(), static_cast<int>(ScaleId::MinorPentatonic)));
         values.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID{"voiceRoot" + suffix, 1}, "Planet " + suffix + " Root",
+            juce::StringArray{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}, 0));
+        values.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID{"voicePitch" + suffix, 1}, "Planet " + suffix + " Pitch Map",
             pitchMappingDisplayNames(), 0));
         values.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID{"voiceTrigger" + suffix, 1}, "Planet " + suffix + " Trigger",
             triggerMappingDisplayNames(), 0));
     }
+    values.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"voicingMode", 1}, "Voicing Mode",
+        juce::StringArray{"Independent", "Chord", "Strum"}, 0));
+    values.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"chordStrum", 1}, "Chord Strum",
+        juce::NormalisableRange<float>(0.0F, 120.0F, 1.0F), 24.0F));
     values.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{"inputMode", 1}, "MIDI Input",
         juce::StringArray{"Off", "Transpose", "Gate"}, 0));
     juce::StringArray presetNames;
@@ -194,9 +213,12 @@ ThreeBSProcessor::ThreeBSProcessor()
         parameterRefs_.masses[body] = parameters_.getRawParameterValue("mass" + suffix);
         parameterRefs_.voiceEnabled[body] = parameters_.getRawParameterValue("voiceEnabled" + suffix);
         parameterRefs_.voiceScale[body] = parameters_.getRawParameterValue("voiceScale" + suffix);
+        parameterRefs_.voiceRoot[body] = parameters_.getRawParameterValue("voiceRoot" + suffix);
         parameterRefs_.voicePitch[body] = parameters_.getRawParameterValue("voicePitch" + suffix);
         parameterRefs_.voiceTrigger[body] = parameters_.getRawParameterValue("voiceTrigger" + suffix);
     }
+    parameterRefs_.voicingMode = parameters_.getRawParameterValue("voicingMode");
+    parameterRefs_.chordStrum = parameters_.getRawParameterValue("chordStrum");
     parameterRefs_.inputMode = parameters_.getRawParameterValue("inputMode");
     parameterRefs_.preset = parameters_.getRawParameterValue("preset");
     engineConfig_ = engine_.config();
@@ -270,6 +292,7 @@ void ThreeBSProcessor::applyVoiceParameters(const std::array<VoiceConfig, bodyCo
         const auto suffix = juce::String(body + 1);
         setParameterValue("voiceEnabled" + suffix, voices[body].enabled ? 1.0F : 0.0F);
         setParameterValue("voiceScale" + suffix, static_cast<float>(voices[body].scale));
+        setParameterValue("voiceRoot" + suffix, static_cast<float>(voices[body].root));
         setParameterValue("voicePitch" + suffix, static_cast<float>(voices[body].pitchMapping));
         setParameterValue("voiceTrigger" + suffix, static_cast<float>(voices[body].triggerMapping));
     }
@@ -280,12 +303,17 @@ void ThreeBSProcessor::updateEngineConfigFromParameters() noexcept {
     engineConfig_.simulation.softening = parameterRefs_.softening->load(std::memory_order_relaxed);
     engineConfig_.simulation.speed = parameterRefs_.speed->load(std::memory_order_relaxed);
     const auto density = static_cast<double>(parameterRefs_.density->load(std::memory_order_relaxed) / 100.0F);
+    engineConfig_.voicingMode = static_cast<VoicingMode>(std::clamp(
+        static_cast<int>(std::lround(parameterRefs_.voicingMode->load(std::memory_order_relaxed))), 0, 2));
+    engineConfig_.chordStrumMilliseconds = parameterRefs_.chordStrum->load(std::memory_order_relaxed);
     for (std::size_t body = 0; body < bodyCount; ++body) {
         auto& voice = engineConfig_.voices[body];
         voice.probability = density;
         voice.enabled = parameterRefs_.voiceEnabled[body]->load(std::memory_order_relaxed) >= 0.5F;
         voice.scale = static_cast<ScaleId>(std::lround(
             parameterRefs_.voiceScale[body]->load(std::memory_order_relaxed)));
+        voice.root = static_cast<std::uint8_t>(std::clamp(
+            static_cast<int>(std::lround(parameterRefs_.voiceRoot[body]->load(std::memory_order_relaxed))), 0, 11));
         voice.pitchMapping = static_cast<PitchMapping>(std::lround(
             parameterRefs_.voicePitch[body]->load(std::memory_order_relaxed)));
         voice.triggerMapping = static_cast<TriggerMapping>(std::lround(
@@ -607,6 +635,19 @@ void ThreeBSProcessor::setStateInformation(const void* data, int size) {
         const auto oldTrail = stateParameterValue(state, "trail", 82.0F);
         const auto normalized = oldTrail <= 1.0F ? oldTrail : oldTrail / 100.0F;
         setStateParameterValue(state, "trail", migrateV1TrailLength(normalized));
+    }
+    if (schema < 5) {
+        PresetCatalog catalog;
+        const auto selected = static_cast<int>(stateParameterValue(state, "preset", 0.0F));
+        for (std::size_t body = 0; body < bodyCount; ++body) {
+            const auto root = catalog.valid() && selected >= 0
+                    && static_cast<std::size_t>(selected) < catalog.size()
+                ? catalog[static_cast<std::size_t>(selected)].voices[body].root : 0U;
+            ensureStateParameterValue(state, "voiceRoot" + juce::String(body + 1),
+                                      static_cast<float>(root));
+        }
+        ensureStateParameterValue(state, "voicingMode", 0.0F);
+        ensureStateParameterValue(state, "chordStrum", 24.0F);
     }
     parameters_.replaceState(state);
     auto initial = storedInitial_.load();

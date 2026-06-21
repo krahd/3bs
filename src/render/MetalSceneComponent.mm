@@ -365,6 +365,7 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
 - (void)orbitByX:(double)x y:(double)y width:(double)width;
 - (void)zoomBy:(double)delta;
 - (void)selectAtX:(double)x y:(double)y width:(double)width height:(double)height;
+- (void)resetViewAtX:(double)x y:(double)y width:(double)width height:(double)height;
 - (void)finishCameraInteraction;
 - (BOOL)notePaneContainsX:(double)x y:(double)y width:(double)width height:(double)height;
 - (void)notePaneClickAtX:(double)x y:(double)y width:(double)width height:(double)height;
@@ -415,8 +416,14 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
         _notePaneInteraction = NO;
         return;
     }
-    if (!_dragged)
-        [_sceneDelegate selectAtX:point.x y:point.y width:self.bounds.size.width height:self.bounds.size.height];
+    if (!_dragged) {
+        if (event.clickCount >= 2)
+            [_sceneDelegate resetViewAtX:point.x y:point.y
+                                   width:self.bounds.size.width height:self.bounds.size.height];
+        else
+            [_sceneDelegate selectAtX:point.x y:point.y
+                                width:self.bounds.size.width height:self.bounds.size.height];
+    }
     [_sceneDelegate finishCameraInteraction];
 }
 
@@ -527,7 +534,9 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
         descriptor.depthAttachmentPixelFormat = depth ? MTLPixelFormatDepth32Float : MTLPixelFormatInvalid;
         if (blend) {
             descriptor.colorAttachments[0].blendingEnabled = YES;
-            descriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
+            descriptor.colorAttachments[0].sourceRGBBlendFactor =
+                [vertexName isEqualToString:@"starVertex"] ? MTLBlendFactorOne
+                                                           : MTLBlendFactorSourceAlpha;
             descriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOne;
             descriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
             descriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
@@ -701,7 +710,13 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
 }
 
 - (void)zoomBy:(double)delta {
-    _camera.zoom(delta, CACurrentMediaTime() - _startTime);
+    _camera.zoom(delta, _latest.bodies, CACurrentMediaTime() - _startTime);
+}
+
+- (void)resetViewAtX:(double)x y:(double)y width:(double)width height:(double)height {
+    if (_camera.hitTest(x, y, width, height, _latest.bodies) < 0)
+        _camera.resetView(_latest.bodies, width / std::max(1.0, height),
+                          CACurrentMediaTime() - _startTime);
 }
 
 - (void)selectAtX:(double)x y:(double)y width:(double)width height:(double)height {
@@ -940,7 +955,10 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     };
     const auto bodyTint = [&](std::size_t body, float alpha) {
         const auto bodyColour = _styles[body].colours[2];
-        return simd_make_float4(bodyColour.r, bodyColour.g, bodyColour.b, alpha);
+        const auto lift = body == 2U ? 0.30F : 0.0F;
+        return simd_make_float4(bodyColour.r + (1.0F - bodyColour.r) * lift,
+                                bodyColour.g + (1.0F - bodyColour.g) * lift,
+                                bodyColour.b + (1.0F - bodyColour.b) * lift, alpha);
     };
     const auto layout = threebs::computeNotePaneLayout(_presentation.notePaneStyle,
         _presentation.notePaneMinimized, static_cast<double>(_targetWidth),
@@ -973,11 +991,17 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
         appendOverlay(static_cast<float>(layout.styleX), static_cast<float>(layout.styleY),
                       static_cast<float>(layout.buttonSize), static_cast<float>(layout.buttonSize),
                       simd_make_float4(0.18F, 0.23F, 0.34F, 0.72F));
-        const char styleLetter[2] = {
-            _presentation.notePaneStyle == threebs::NotePaneStyle::Vertical ? 'V' : 'H', '\0'};
-        appendText(static_cast<float>(layout.styleX) + 6.5F * s,
-                   static_cast<float>(layout.styleY) + 4.0F * s, 15.0F * s,
-                   simd_make_float4(0.80F, 0.87F, 0.95F, 0.95F), styleLetter);
+        const auto iconColour = simd_make_float4(0.80F, 0.87F, 0.95F, 0.95F);
+        for (int line = 0; line < 3; ++line) {
+            if (_presentation.notePaneStyle == threebs::NotePaneStyle::Horizontal)
+                appendOverlay(static_cast<float>(layout.styleX) + 5.0F * s,
+                              static_cast<float>(layout.styleY) + (6.0F + line * 5.0F) * s,
+                              14.0F * s, 2.0F * s, iconColour);
+            else
+                appendOverlay(static_cast<float>(layout.styleX) + (6.0F + line * 5.0F) * s,
+                              static_cast<float>(layout.styleY) + 5.0F * s,
+                              2.0F * s, 14.0F * s, iconColour);
+        }
 
         if (_presentation.notePaneStyle == threebs::NotePaneStyle::Vertical) {
             const auto headerHeight = 26.0F * s;
@@ -1087,6 +1111,14 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     [encoder setFragmentBytes:&uniforms length:sizeof(uniforms) atIndex:0];
     [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
 
+    // Draw the sky before opaque geometry. This keeps stars additive and lets planets occlude them.
+    [encoder setDepthStencilState:_depthNone];
+    [encoder setRenderPipelineState:_starPipeline];
+    [encoder setVertexBuffer:_starInstances offset:0 atIndex:0];
+    [encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:1];
+    [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6
+              instanceCount:_starCount];
+
     [encoder setDepthStencilState:_depthRead];
     [encoder setRenderPipelineState:_trailPipeline];
     [encoder setVertexBuffer:_trailVertices offset:0 atIndex:0];
@@ -1129,22 +1161,6 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     [encoder setRenderPipelineState:_bloomExtractPipeline];
     [encoder setFragmentTexture:_sceneTexture atIndex:0];
     [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
-    [encoder endEncoding];
-
-    // Stars are composited after bloom extraction so bright catalogue entries remain point-like.
-    MTLRenderPassDescriptor* starPass = [MTLRenderPassDescriptor renderPassDescriptor];
-    starPass.colorAttachments[0].texture = _sceneTexture;
-    starPass.colorAttachments[0].loadAction = MTLLoadActionLoad;
-    starPass.colorAttachments[0].storeAction = MTLStoreActionStore;
-    starPass.depthAttachment.texture = _depthTexture;
-    starPass.depthAttachment.loadAction = MTLLoadActionLoad;
-    starPass.depthAttachment.storeAction = MTLStoreActionDontCare;
-    encoder = [command renderCommandEncoderWithDescriptor:starPass];
-    [encoder setDepthStencilState:_depthRead];
-    [encoder setRenderPipelineState:_starPipeline];
-    [encoder setVertexBuffer:_starInstances offset:0 atIndex:0];
-    [encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:1];
-    [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:_starCount];
     [encoder endEncoding];
 
     threebs::PostUniforms post;

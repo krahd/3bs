@@ -15,5 +15,7 @@ std::span<const std::uint8_t> scaleIntervals(ScaleId scale) noexcept;
 bool noteIsInScale(std::uint8_t note, std::uint8_t root, ScaleId scale,
                    const std::array<bool, 12>& custom) noexcept;
 std::uint8_t quantizeNormalizedPitch(double normalizedValue, const VoiceConfig& voice) noexcept;
+std::uint8_t quantizeScaleDegree(double normalizedValue, int degreeOffset,
+                                 const VoiceConfig& voice) noexcept;
 
 } // namespace threebs

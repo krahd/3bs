@@ -45,4 +45,6 @@ private:
     bool valid_{};
 };
 
+juce::String presetCategoryName(InitialSystem system);
+
 } // namespace threebs

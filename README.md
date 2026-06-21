@@ -26,10 +26,11 @@ public under AGPL-3.0-only.
 ## Design
 
 The simulation uses normalized artistic units and fixed-step deterministic
-integration. Each body has independent pitch, trigger, scale, range, channel,
+integration. Each body has independent pitch, trigger, root, scale, range, channel,
 velocity, duration, and optional continuous-controller mappings. Host-synced
 operation follows musical beat time; standalone and free-run operation follow
-elapsed time.
+an internal musical clock. Chord and strum modes turn a physical trigger into
+deterministic three-body scale triads.
 
 The visual identity is an eclipse-like gallery scene: seeded procedural planet
 surfaces, subtle cloud layers, atmospheres, distant light, a catalogue-aware
@@ -95,10 +96,13 @@ The shared control deck is split into System, Voices, Space, Presets, and
 Settings pages. It exposes run/sync, speed, gravity, softening, chaos, density,
 trail duration, bloom, body masses, non-automatable initial orbital-plane tilt
 macros, automatic framing and zoom limits, deterministic randomization, reset,
-and the 24-scene factory catalog.
+and the 24-scene factory catalog grouped by orbital family. `RESET` remains
+available on every deck page.
 Drag the scene to orbit around the active target, scroll to zoom, click a
 planet to follow it, and click the background to return to the mass-weighted
-barycenter. Manual input pauses cinematic auto-orbit for three seconds before
+barycenter. Double-click the background to restore the default orientation and
+fit every planet. Scroll zoom also returns to the barycenter. Manual input
+pauses cinematic auto-orbit for three seconds before
 it eases back in. Barycenter auto-frame keeps all bodies visible as the system
 expands and contracts. Manual scroll zoom disables it until `AUTO FRAME` is
 enabled again on the Space page.
@@ -108,15 +112,16 @@ one body-coloured stream per generated voice. Note position, duration, and
 velocity control each bar. Its minimize control collapses it to a small
 three-lane icon; this preference is recalled with plugin state.
 
-`ADVANCED STATE` opens a nonmodal numerical editor for every mass and initial
-position/velocity vector. Schema-v4 host state stores parameters, simulation
+`SET STATE` opens a separate nonmodal numerical window for every mass and
+initial position/velocity vector. Schema-v5 host state stores parameters, simulation
 seed and vectors, non-automatable plane-tilt macro state, mappings, loop policy,
-palette, camera target, orbit angle, framing limits, zoom, and note-pane state.
+per-planet roots, chord controls, palette, camera target, orbit angle, framing
+limits, zoom, and note-pane state. Schemas v1-v4 migrate with compatible defaults.
 Rendering consumes revisioned immutable snapshots and a separate fixed-capacity
 note-event queue; it never runs on the MIDI processing thread.
 
-The renderer embeds a small real bright-star fallback plus a deterministic
-faint field. To populate the pinned HYG v4.1 magnitude-6.5 catalogue, obtain
+The renderer embeds 8,921 stars from the pinned HYG v4.1 magnitude-6.5
+catalogue, plus a deterministic faint field. To regenerate it, obtain
 `hygdata_v41.csv` from HYG commit
 `c7f7f883fe678cc7680169a50ccd7dcc49b060ce` and run:
 

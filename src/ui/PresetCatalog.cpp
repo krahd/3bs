@@ -189,11 +189,24 @@ juce::StringArray scaleDisplayNames() {
 }
 
 juce::StringArray pitchMappingDisplayNames() {
-    return {"Barycentric Radius", "Nearest Body", "Plane Distance", "Speed", "Orbital Phase"};
+    return {"Barycentric Radius", "Nearest Body", "Plane Distance", "Speed", "Orbital Phase",
+            "Radial Velocity", "Relative Speed", "Acceleration", "Angular Momentum"};
 }
 
 juce::StringArray triggerMappingDisplayNames() {
-    return {"Clock", "Plane Crossing", "Close Approach", "Turning Point"};
+    return {"Clock", "Plane Crossing", "Close Approach", "Turning Point", "Apsis",
+            "Receding Threshold", "Speed Peak", "Phase Steps"};
+}
+
+juce::String presetCategoryName(InitialSystem system) {
+    switch (system) {
+    case InitialSystem::FigureEight: return "FIGURE EIGHT";
+    case InitialSystem::Hierarchical: return "HIERARCHICAL";
+    case InitialSystem::Stable: return "STABLE";
+    case InitialSystem::ControlledChaos: return "CONTROLLED CHAOS";
+    case InitialSystem::Unbound: return "UNBOUND";
+    }
+    return "SYSTEM";
 }
 
 } // namespace threebs

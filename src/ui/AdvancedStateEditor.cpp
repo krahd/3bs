@@ -107,8 +107,10 @@ private:
     }
 
     void dismiss() {
-        if (auto* callout = findParentComponentOfClass<juce::CallOutBox>())
-            callout->dismiss();
+        if (auto* dialog = findParentComponentOfClass<juce::DialogWindow>()) {
+            dialog->setVisible(false);
+            dialog->exitModalState(0);
+        }
     }
 
     SimulationState state_;
@@ -128,7 +130,16 @@ void showAdvancedStateEditor(const SimulationState& state, juce::Rectangle<int> 
                              juce::Component& parent,
                              std::function<void(const SimulationState&)> onApply) {
     auto editor = std::make_unique<AdvancedStateEditor>(state, std::move(onApply));
-    juce::CallOutBox::launchAsynchronously(std::move(editor), targetArea, &parent);
+    juce::DialogWindow::LaunchOptions options;
+    options.dialogTitle = "SET INITIAL BODY STATE";
+    options.dialogBackgroundColour = juce::Colour(0xff080d18);
+    options.content.setOwned(editor.release());
+    options.componentToCentreAround = parent.getTopLevelComponent();
+    options.escapeKeyTriggersCloseButton = true;
+    options.useNativeTitleBar = true;
+    options.resizable = false;
+    options.launchAsync();
+    juce::ignoreUnused(targetArea);
 }
 
 } // namespace threebs

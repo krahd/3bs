@@ -12,7 +12,7 @@
 namespace threebs {
 
 inline constexpr std::size_t bodyCount = 3;
-inline constexpr std::uint32_t stateSchemaVersion = 4;
+inline constexpr std::uint32_t stateSchemaVersion = 5;
 
 enum class InitialSystem : std::uint8_t {
     FigureEight,
@@ -39,6 +39,10 @@ enum class PitchMapping : std::uint8_t {
     SignedPlaneDistance,
     Speed,
     OrbitalPhase,
+    RadialVelocity,
+    RelativeSpeed,
+    Acceleration,
+    AngularMomentum,
 };
 
 enum class TriggerMapping : std::uint8_t {
@@ -46,7 +50,13 @@ enum class TriggerMapping : std::uint8_t {
     PlaneCrossing,
     CloseApproach,
     TurningPoint,
+    Apsis,
+    RecedingThreshold,
+    SpeedPeak,
+    PhaseStep,
 };
+
+enum class VoicingMode : std::uint8_t { Independent, Chord, Strum };
 
 enum class ScaleId : std::uint8_t {
     Major,

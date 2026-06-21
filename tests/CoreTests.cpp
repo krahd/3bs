@@ -252,6 +252,57 @@ void testPerVoiceGeneration() {
           "other planets still generate when one is disabled");
 }
 
+void testChordAndStrumModes() {
+    threebs::EngineConfig config;
+    for (std::size_t body = 0; body < threebs::bodyCount; ++body) {
+        auto& voice = config.voices[body];
+        voice.enabled = true;
+        voice.channel = static_cast<std::uint8_t>(body + 1U);
+        voice.root = static_cast<std::uint8_t>(body * 2U);
+        voice.scale = threebs::ScaleId::Major;
+        voice.triggerMapping = threebs::TriggerMapping::Clock;
+        voice.pitchMapping = threebs::PitchMapping::OrbitalPhase;
+        voice.clockDivisionBeats = 0.25;
+        voice.probability = 1.0;
+    }
+    const auto initial = threebs::makeInitialState(threebs::InitialSystem::FigureEight, 5150, 0.0);
+    const auto render = [&](threebs::VoicingMode mode, double strumMilliseconds) {
+        config.voicingMode = mode;
+        config.chordStrumMilliseconds = strumMilliseconds;
+        threebs::MusicEngine engine(initial, config);
+        engine.prepare(48000.0);
+        std::array<std::uint64_t, threebs::bodyCount> firstOn{
+            std::numeric_limits<std::uint64_t>::max(), std::numeric_limits<std::uint64_t>::max(),
+            std::numeric_limits<std::uint64_t>::max()};
+        for (std::uint64_t position = 0; position < 2048; position += 127) {
+            threebs::ProcessContext context;
+            context.sampleCount = static_cast<std::uint32_t>(std::min<std::uint64_t>(127, 2048 - position));
+            context.sampleRate = 48000.0;
+            context.beatAtStart = static_cast<double>(position) * 2.0 / 48000.0;
+            context.beatsPerSample = 2.0 / 48000.0;
+            context.transportStarted = position == 0;
+            threebs::MusicEngine::EventBuffer events;
+            engine.process(context, events);
+            for (const auto& event : events) {
+                if (event.type != threebs::MidiEventType::NoteOn || event.sourceBody >= threebs::bodyCount)
+                    continue;
+                firstOn[event.sourceBody] = std::min(firstOn[event.sourceBody], position + event.sampleOffset);
+                check(threebs::noteIsInScale(event.data1, config.voices[event.sourceBody].root,
+                                             config.voices[event.sourceBody].scale,
+                                             config.voices[event.sourceBody].customScale),
+                      "chord notes respect each planet root and scale");
+            }
+        }
+        return firstOn;
+    };
+    const auto chord = render(threebs::VoicingMode::Chord, 0.0);
+    check(chord[0] == chord[1] && chord[1] == chord[2],
+          "chord mode starts all enabled planets together");
+    const auto strum = render(threebs::VoicingMode::Strum, 10.0);
+    check(strum[0] == 0 && strum[1] == 480 && strum[2] == 960,
+          "strum mode schedules deterministic notes across processing blocks");
+}
+
 void testSnapshotQueue() {
     threebs::SpscQueue<threebs::RenderSnapshot, 4> queue;
     threebs::RenderSnapshot input;
@@ -323,9 +374,9 @@ void testCameraMotion() {
 
     camera.orbit(0.0, 100000.0, 1000.0, 4.0);
     check(camera.state().pitch < 1.49F, "camera pitch is clamped");
-    camera.zoom(1000.0, 4.0);
+    camera.zoom(1000.0, bodies, 4.0);
     check(near(camera.state().distance, 2.5, 1.0e-6), "camera zoom has a near bound");
-    camera.zoom(-1000.0, 4.0);
+    camera.zoom(-1000.0, bodies, 4.0);
     check(near(camera.state().distance, 40.0, 1.0e-6), "camera zoom has a configurable far bound");
     check(!camera.state().autoFrame, "manual zoom disables automatic framing");
 
@@ -335,6 +386,15 @@ void testCameraMotion() {
     check(halfway > 0.0 && halfway < 1.0, "camera focus transition eases between targets");
     camera.update(5.8, bodies);
     check(near(camera.basis().target.x, 1.0, 1.0e-6), "camera focus transition completes");
+    camera.zoom(1.0, bodies, 6.0);
+    camera.update(6.8, bodies);
+    check(camera.state().focusBody == -1 && near(camera.basis().target.x, 1.0 / 3.0, 1.0e-6),
+          "manual zoom returns selected focus to the barycenter");
+
+    camera.resetView(bodies, 16.0 / 9.0, 7.0);
+    check(camera.state().autoFrame && camera.state().focusBody == -1
+              && near(camera.basis().target.x, 1.0 / 3.0, 1.0e-6),
+          "camera view reset immediately restores fitted barycenter framing");
 }
 
 void testCameraAutoFraming() {
@@ -391,10 +451,14 @@ void testCameraSanitization() {
 void testTrailHistory() {
     threebs::TrailHistory<4> trail;
     for (int i = 0; i < 6; ++i)
-        trail.append({static_cast<double>(i), 0.0, 0.0}, static_cast<double>(i), 1);
-    check(trail.size() == 4 && near(trail[0].position.x, 2.0), "trail ring preserves newest samples");
+        trail.append({static_cast<double>(i) * 0.01, 0.0, 0.0}, static_cast<double>(i), 1);
+    check(trail.size() == 4 && near(trail[0].position.x, 0.02), "trail ring preserves newest samples");
     trail.prune(6.0, 2.5);
-    check(trail.size() == 2 && near(trail[0].position.x, 4.0), "trail prunes samples by age");
+    check(trail.size() == 2 && near(trail[0].position.x, 0.04), "trail prunes samples by age");
+    threebs::TrailHistory<64> smoothed;
+    smoothed.append({0.0, 0.0, 0.0}, 0.0, 1);
+    smoothed.append({1.0, 0.0, 0.0}, 1.0, 1);
+    check(smoothed.size() > 2U, "fast trail motion is subdivided into smooth ribbon samples");
     trail.append({10.0, 0.0, 0.0}, 7.0, 2);
     check(trail.size() == 1 && near(trail[0].position.x, 10.0), "trail revision clears old trajectory");
 }
@@ -420,6 +484,7 @@ int main() {
     testBlockSizeIndependentMidi();
     testNoteCleanup();
     testPerVoiceGeneration();
+    testChordAndStrumModes();
     testSnapshotQueue();
     testNoteVisualizationQueue();
     testCameraTargetAndHitTesting();

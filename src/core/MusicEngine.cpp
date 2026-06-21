@@ -61,6 +61,8 @@ void MusicEngine::prepare(double sampleRate) noexcept {
 void MusicEngine::setConfig(const EngineConfig& config) noexcept {
     config_ = config;
     simulation_.setConfig(config_.simulation);
+    config_.chordStrumMilliseconds = std::clamp(config_.chordStrumMilliseconds, 0.0, 250.0);
+    config_.minimumChordIntervalBeats = std::max(0.0, config_.minimumChordIntervalBeats);
     for (auto& voice : config_.voices) {
         voice.channel = std::clamp<std::uint8_t>(voice.channel, 1, 16);
         voice.minimumNote = std::min<std::uint8_t>(voice.minimumNote, 127);
@@ -86,10 +88,13 @@ void MusicEngine::reset(const SimulationState& initial, EventBuffer* noteOffs) n
     initial_ = initial;
     simulation_.reset(initial);
     runtime_ = {};
+    pendingNotes_ = {};
     random_.seedGenerator(initial.seed, 0x4D494449ULL);
     hasTimelineBeat_ = false;
     timelineBeat_ = 0.0;
     processedSamples_ = 0;
+    lastChordTriggerBeat_ = -1.0e12;
+    chordIndex_ = 0;
 }
 
 std::array<BodyMeasurements, bodyCount> MusicEngine::measurements() const noexcept {
@@ -102,11 +107,28 @@ std::array<BodyMeasurements, bodyCount> MusicEngine::measurements() const noexce
         const auto relativePosition = bodies[i].position - center;
         const auto relativeVelocity = bodies[i].velocity - centerVelocity;
         auto nearest = radiusScale;
+        std::size_t nearestIndex = i == 0U ? 1U : 0U;
         for (std::size_t j = 0; j < bodyCount; ++j) {
-            if (i != j)
-                nearest = std::min(nearest, length(bodies[i].position - bodies[j].position));
+            if (i != j) {
+                const auto distance = length(bodies[i].position - bodies[j].position);
+                if (distance < nearest) {
+                    nearest = distance;
+                    nearestIndex = j;
+                }
+            }
         }
         const auto radialDirection = normalized(relativePosition);
+        const auto relativeBodyVelocity = bodies[i].velocity - bodies[nearestIndex].velocity;
+        Vec3 acceleration{};
+        for (std::size_t j = 0; j < bodyCount; ++j) {
+            if (i == j)
+                continue;
+            const auto displacement = bodies[j].position - bodies[i].position;
+            const auto softened = dot(displacement, displacement)
+                + simulation_.config().softening * simulation_.config().softening;
+            acceleration += displacement * (simulation_.config().gravitationalConstant
+                * bodies[j].mass / std::pow(softened, 1.5));
+        }
         result[i] = {
             clamp01(length(relativePosition) / radiusScale),
             clamp01(nearest / radiusScale),
@@ -114,6 +136,9 @@ std::array<BodyMeasurements, bodyCount> MusicEngine::measurements() const noexce
             clamp01(length(relativeVelocity) / 4.0),
             clamp01((std::atan2(relativePosition.y, relativePosition.x) + pi) / (2.0 * pi)),
             dot(relativeVelocity, radialDirection),
+            clamp01(length(relativeBodyVelocity) / 6.0),
+            clamp01(length(acceleration) / 4.0),
+            clamp01(length(cross(relativePosition, relativeVelocity)) / 6.0),
         };
     }
     return result;
@@ -128,6 +153,10 @@ double MusicEngine::mappingValue(std::size_t bodyIndex, PitchMapping mapping,
     case PitchMapping::SignedPlaneDistance: return value.signedPlaneDistance;
     case PitchMapping::Speed: return value.speed;
     case PitchMapping::OrbitalPhase: return value.orbitalPhase;
+    case PitchMapping::RadialVelocity: return clamp01(0.5 + value.radialVelocity / 6.0);
+    case PitchMapping::RelativeSpeed: return value.relativeSpeed;
+    case PitchMapping::Acceleration: return value.acceleration;
+    case PitchMapping::AngularMomentum: return value.angularMomentum;
     }
     return 0.0;
 }
@@ -159,6 +188,28 @@ bool MusicEngine::shouldTrigger(std::size_t bodyIndex, const VoiceConfig& voice,
     case TriggerMapping::TurningPoint:
         trigger = runtime.previous.radialVelocity > 0.0 && current.radialVelocity <= 0.0;
         break;
+    case TriggerMapping::Apsis:
+        trigger = (runtime.previous.radialVelocity < 0.0 && current.radialVelocity >= 0.0)
+            || (runtime.previous.radialVelocity > 0.0 && current.radialVelocity <= 0.0);
+        break;
+    case TriggerMapping::RecedingThreshold: {
+        const auto threshold = clamp01(voice.closeApproachDistance / simulation_.config().escapeRadius);
+        trigger = runtime.previous.nearestBodyDistance < threshold
+            && current.nearestBodyDistance >= threshold;
+        break;
+    }
+    case TriggerMapping::SpeedPeak: {
+        const auto delta = current.speed - runtime.previous.speed;
+        trigger = runtime.previousSpeedDelta > 0.0 && delta <= 0.0;
+        runtime.previousSpeedDelta = delta;
+        break;
+    }
+    case TriggerMapping::PhaseStep: {
+        const auto step = std::floor(current.orbitalPhase * 16.0);
+        trigger = step != runtime.lastPhaseStep;
+        runtime.lastPhaseStep = step;
+        break;
+    }
     }
     runtime.previous = current;
     if (!trigger || random_.nextUnit() > voice.probability)
@@ -170,7 +221,6 @@ bool MusicEngine::shouldTrigger(std::size_t bodyIndex, const VoiceConfig& voice,
 void MusicEngine::triggerVoice(std::size_t bodyIndex, std::uint32_t sampleOffset, double beat,
                                const BodyMeasurements& measurement, EventBuffer& output) noexcept {
     const auto& voice = config_.voices[bodyIndex];
-    auto& runtime = runtime_[bodyIndex];
     const auto values = measurements();
     auto note = quantizeNormalizedPitch(mappingValue(bodyIndex, voice.pitchMapping, values), voice);
     note = static_cast<std::uint8_t>(std::clamp<int>(static_cast<int>(note) + config_.inputTranspose, 0, 127));
@@ -178,6 +228,13 @@ void MusicEngine::triggerVoice(std::size_t bodyIndex, std::uint32_t sampleOffset
     const auto velocity = static_cast<std::uint8_t>(std::clamp(
         static_cast<int>(std::lround(voice.minimumVelocity + measurement.speed * velocityRange)), 1, 127));
 
+    startNote(bodyIndex, note, velocity, sampleOffset, beat, output);
+}
+
+void MusicEngine::startNote(std::size_t bodyIndex, std::uint8_t note, std::uint8_t velocity,
+                            std::uint32_t sampleOffset, double beat, EventBuffer& output) noexcept {
+    const auto& voice = config_.voices[bodyIndex];
+    auto& runtime = runtime_[bodyIndex];
     if (runtime.noteActive)
         output.push({sampleOffset, MidiEventType::NoteOff, voice.channel, runtime.activeNote, 0,
                      static_cast<std::uint8_t>(bodyIndex)});
@@ -186,6 +243,38 @@ void MusicEngine::triggerVoice(std::size_t bodyIndex, std::uint32_t sampleOffset
     runtime.noteActive = true;
     runtime.activeNote = note;
     runtime.noteOffBeat = beat + voice.durationBeats;
+}
+
+void MusicEngine::triggerChord(std::size_t triggerBody, std::uint32_t sampleOffset, double beat,
+                               const std::array<BodyMeasurements, bodyCount>& values,
+                               EventBuffer& output) noexcept {
+    if (beat - lastChordTriggerBeat_ < config_.minimumChordIntervalBeats)
+        return;
+    lastChordTriggerBeat_ = beat;
+    const auto base = mappingValue(triggerBody, config_.voices[triggerBody].pitchMapping, values);
+    const auto strumSamples = static_cast<std::uint64_t>(std::llround(
+        config_.chordStrumMilliseconds * sampleRate_ / 1000.0));
+    const auto rotation = static_cast<std::size_t>(chordIndex_++ % bodyCount);
+    for (std::size_t order = 0; order < bodyCount; ++order) {
+        const auto body = config_.voicingMode == VoicingMode::Strum
+            ? (order + rotation) % bodyCount : order;
+        const auto& voice = config_.voices[body];
+        if (!voice.enabled)
+            continue;
+        auto note = quantizeScaleDegree(base, static_cast<int>(body * 2U), voice);
+        note = static_cast<std::uint8_t>(std::clamp<int>(static_cast<int>(note)
+            + config_.inputTranspose, 0, 127));
+        const auto velocityRange = static_cast<double>(voice.maximumVelocity - voice.minimumVelocity);
+        const auto velocity = static_cast<std::uint8_t>(std::clamp(
+            static_cast<int>(std::lround(voice.minimumVelocity
+                + values[body].speed * velocityRange)), 1, 127));
+        const auto delay = config_.voicingMode == VoicingMode::Strum ? order * strumSamples : 0U;
+        if (delay == 0U) {
+            startNote(body, note, velocity, sampleOffset, beat, output);
+        } else {
+            pendingNotes_[body] = {true, processedSamples_ + delay, body, note, velocity};
+        }
+    }
 }
 
 void MusicEngine::emitContinuousControllers(
@@ -217,7 +306,10 @@ void MusicEngine::applyTransportReset(std::uint32_t sampleOffset, EventBuffer& o
     allNotesOff(sampleOffset, output);
     simulation_.reset(initial_);
     runtime_ = {};
+    pendingNotes_ = {};
     random_.seedGenerator(initial_.seed, 0x4D494449ULL);
+    lastChordTriggerBeat_ = -1.0e12;
+    chordIndex_ = 0;
 }
 
 void MusicEngine::process(const ProcessContext& context, EventBuffer& output) noexcept {
@@ -244,8 +336,15 @@ void MusicEngine::process(const ProcessContext& context, EventBuffer& output) no
 
     for (std::uint32_t sample = 0; sample < context.sampleCount; ++sample) {
         const auto beat = timelineBeat_;
+        for (auto& pending : pendingNotes_) {
+            if (pending.active && pending.dueSample <= processedSamples_) {
+                startNote(pending.body, pending.note, pending.velocity, sample, beat, output);
+                pending.active = false;
+            }
+        }
         simulation_.advance(context.beatsPerSample);
         const auto values = measurements();
+        std::size_t chordTriggerBody = bodyCount;
         for (std::size_t body = 0; body < bodyCount; ++body) {
             const auto& voice = config_.voices[body];
             auto& runtime = runtime_[body];
@@ -256,10 +355,15 @@ void MusicEngine::process(const ProcessContext& context, EventBuffer& output) no
             }
             if (voice.enabled && (!config_.inputGateEnabled || config_.inputGateOpen)
                 && shouldTrigger(body, voice, values[body], beat)) {
-                triggerVoice(body, sample, beat, values[body], output);
+                if (config_.voicingMode == VoicingMode::Independent)
+                    triggerVoice(body, sample, beat, values[body], output);
+                else if (chordTriggerBody == bodyCount)
+                    chordTriggerBody = body;
             }
             emitContinuousControllers(body, sample, values, output);
         }
+        if (chordTriggerBody < bodyCount)
+            triggerChord(chordTriggerBody, sample, beat, values, output);
         timelineBeat_ += context.beatsPerSample;
         ++processedSamples_;
     }
@@ -267,6 +371,7 @@ void MusicEngine::process(const ProcessContext& context, EventBuffer& output) no
 }
 
 void MusicEngine::allNotesOff(std::uint32_t sampleOffset, EventBuffer& output) noexcept {
+    pendingNotes_ = {};
     for (std::size_t body = 0; body < bodyCount; ++body) {
         auto& runtime = runtime_[body];
         if (runtime.noteActive) {

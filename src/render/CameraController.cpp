@@ -73,12 +73,37 @@ void CameraController::orbit(double deltaX, double deltaY, double viewportWidth,
     lastInteractionTime_ = now;
 }
 
-void CameraController::zoom(double delta, double now) noexcept {
+void CameraController::zoom(double delta, const std::array<BodyState, bodyCount>& bodies,
+                            double now) noexcept {
+    if (state_.focusBody >= 0) {
+        state_.focusBody = -1;
+        transitionStart_ = focus_;
+        transitionStartTime_ = now;
+        transitioning_ = true;
+    }
     const auto factor = std::exp(-delta * 0.08);
     state_.distance = std::clamp(static_cast<float>(state_.distance * factor),
                                  state_.minimumDistance, state_.maximumDistance);
     state_.autoFrame = false;
     lastInteractionTime_ = now;
+    (void)bodies;
+}
+
+void CameraController::resetView(const std::array<BodyState, bodyCount>& bodies,
+                                 double aspectRatio, double now) noexcept {
+    state_.focusBody = -1;
+    state_.yaw = 0.0F;
+    state_.pitch = -0.34F;
+    state_.autoFrame = true;
+    state_.distance = static_cast<float>(std::clamp(
+        framingDistance(bodies, aspectRatio), static_cast<double>(state_.minimumDistance),
+        static_cast<double>(state_.maximumDistance)));
+    focus_ = barycenter(bodies);
+    transitionStart_ = focus_;
+    transitionStartTime_ = now;
+    previousUpdateTime_ = now;
+    lastInteractionTime_ = now;
+    transitioning_ = false;
 }
 
 void CameraController::selectFocus(int body, const std::array<BodyState, bodyCount>& bodies,

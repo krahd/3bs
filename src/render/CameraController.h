@@ -35,7 +35,9 @@ public:
 
     void beginInteraction(double now) noexcept;
     void orbit(double deltaX, double deltaY, double viewportWidth, double now) noexcept;
-    void zoom(double delta, double now) noexcept;
+    void zoom(double delta, const std::array<BodyState, bodyCount>& bodies, double now) noexcept;
+    void resetView(const std::array<BodyState, bodyCount>& bodies, double aspectRatio,
+                   double now) noexcept;
     void selectFocus(int body, const std::array<BodyState, bodyCount>& bodies, double now) noexcept;
     void update(double now, const std::array<BodyState, bodyCount>& bodies,
                 double aspectRatio = 16.0 / 9.0) noexcept;

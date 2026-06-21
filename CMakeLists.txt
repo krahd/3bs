@@ -42,6 +42,11 @@ if(THREEBS_BUILD_TESTS)
         COMMAND ${CMAKE_COMMAND}
             -DPRESET_FILE=${CMAKE_CURRENT_SOURCE_DIR}/resources/presets/factory-presets.json
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ValidatePresets.cmake)
+    add_test(
+        NAME threebs_star_catalog
+        COMMAND ${CMAKE_COMMAND}
+            -DSTAR_FILE=${CMAKE_CURRENT_SOURCE_DIR}/resources/stars/hyg-v41-mag65.csv
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ValidateStarCatalog.cmake)
 endif()
 
 if(THREEBS_BUILD_PLUGINS)

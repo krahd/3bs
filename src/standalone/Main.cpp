@@ -21,8 +21,8 @@ public:
     StandaloneContent() : panel_(snapshots_, noteVisualizationEvents_) {
         setWantsKeyboardFocus(true);
         addAndMakeVisible(panel_);
-        panel_.setPresetNames(presets_.names());
-        panel_.presetSelector().onChange = [this] { applyPreset(); };
+        panel_.setPresetCatalog(presets_);
+        panel_.onPresetSelected = [this](int index) { applyPreset(index); };
         panel_.onRandomize = [this] {
             baseInitial_ = makeInitialState(InitialSystem::ControlledChaos, ++seed_,
                                             panel_.chaosSlider().getValue() / 100.0);
@@ -57,14 +57,16 @@ public:
             });
         };
         panel_.syncButton().setToggleState(false, juce::dontSendNotification);
-        panel_.syncButton().setButtonText("FREE RUN");
+        panel_.syncButton().setButtonText("INTERNAL 120 BPM");
+        panel_.syncButton().setTooltip("Standalone generation always runs from its internal 120 BPM clock.");
+        panel_.syncButton().setEnabled(false);
         panel_.setMidiOutputAvailable(true);
         populateMidiOutputs();
         panel_.midiOutputSelector().onChange = [this] { openSelectedOutput(); };
         panel_.midiOutputSelector().setSelectedId(1, juce::sendNotificationSync);
         initial_ = engine_.simulation().initialState();
         engine_.prepare(sampleRate_);
-        applyPreset();
+        applyPreset(0);
         startTimerHz(timerRate_);
     }
 
@@ -110,8 +112,7 @@ private:
         }
     }
 
-    void applyPreset() {
-        const auto index = panel_.presetSelector().getSelectedItemIndex();
+    void applyPreset(int index) {
         if (!presets_.valid() || index < 0 || static_cast<std::size_t>(index) >= presets_.size())
             return;
         const auto& preset = presets_[static_cast<std::size_t>(index)];
@@ -134,12 +135,15 @@ private:
             masses[i]->setValue(initial_.bodies[i].mass, juce::dontSendNotification);
         const auto enables = panel_.voiceEnableButtons();
         const auto scales = panel_.voiceScaleSelectors();
+        const auto roots = panel_.voiceRootSelectors();
         const auto pitches = panel_.voicePitchSelectors();
         const auto triggers = panel_.voiceTriggerSelectors();
         for (std::size_t body = 0; body < bodyCount; ++body) {
             enables[body]->setToggleState(preset.voices[body].enabled, juce::dontSendNotification);
             scales[body]->setSelectedId(static_cast<int>(preset.voices[body].scale) + 1,
                                         juce::dontSendNotification);
+            roots[body]->setSelectedId(static_cast<int>(preset.voices[body].root) + 1,
+                                       juce::dontSendNotification);
             pitches[body]->setSelectedId(static_cast<int>(preset.voices[body].pitchMapping) + 1,
                                          juce::dontSendNotification);
             triggers[body]->setSelectedId(static_cast<int>(preset.voices[body].triggerMapping) + 1,
@@ -154,6 +158,7 @@ private:
         const auto density = panel_.densitySlider().getValue() / 100.0;
         const auto enables = panel_.voiceEnableButtons();
         const auto scales = panel_.voiceScaleSelectors();
+        const auto roots = panel_.voiceRootSelectors();
         const auto pitches = panel_.voicePitchSelectors();
         const auto triggers = panel_.voiceTriggerSelectors();
         for (std::size_t body = 0; body < bodyCount; ++body) {
@@ -161,9 +166,13 @@ private:
             voice.probability = density;
             voice.enabled = enables[body]->getToggleState();
             voice.scale = static_cast<ScaleId>(std::max(0, scales[body]->getSelectedItemIndex()));
+            voice.root = static_cast<std::uint8_t>(std::max(0, roots[body]->getSelectedItemIndex()));
             voice.pitchMapping = static_cast<PitchMapping>(std::max(0, pitches[body]->getSelectedItemIndex()));
             voice.triggerMapping = static_cast<TriggerMapping>(std::max(0, triggers[body]->getSelectedItemIndex()));
         }
+        config_.voicingMode = static_cast<VoicingMode>(
+            std::max(0, panel_.voicingModeSelector().getSelectedItemIndex()));
+        config_.chordStrumMilliseconds = panel_.chordStrumSlider().getValue();
         engine_.setConfig(config_);
         const auto masses = panel_.massSliders();
         for (std::size_t i = 0; i < bodyCount; ++i) {

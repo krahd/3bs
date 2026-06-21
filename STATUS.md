@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-20 18-12 GMT-3
+Last updated: 2026-06-21 01-49 GMT-3
 
 ## Project purpose
 
@@ -12,7 +12,7 @@ standalone artwork driven by a normalized three-body gravitational simulation.
 The repository builds a deterministic core library, Logic AU MIDI effect,
 Ableton-oriented VST3 instrument, and standalone CoreMIDI application. It has a
 native interactive HDR Metal presentation layer, shared control deck, 24
-schema-v2 factory presets, schema-v4 host state serialization, automatic camera
+schema-v2 factory presets, schema-v5 host state serialization, automatic camera
 framing, live note-stream visualization, automated tests, and macOS CI.
 
 ## Active focus
@@ -151,22 +151,40 @@ repository.
   tonal center (common root, third-compatible scales) for coherent harmony.
 - Added a core test asserting all three planets generate notes and that
   disabling a planet silences only that voice.
+- Added bounded Hermite trail subdivision, barycenter-targeted manual zoom, and
+  background double-click camera reset with immediate fitted framing.
+- Populated the pinned HYG v4.1 magnitude-6.5 resource with 8,921 stars and
+  restored larger additive star billboards before opaque planet rendering.
+- Made RESET persistent across deck pages, moved SET STATE into a top-level
+  window, categorized factory presets, enlarged dial captions, and highlighted
+  the selected deck tab instead of repeating its title.
+- Added per-planet root parameters, four pitch mappings, four trigger mappings,
+  and allocation-free deterministic chord/strum generation with schema-v5 recall.
+- Replaced note-pane H/V glyphs with line icons and raised the third FTII
+  column's text luminance.
 
 ## Tests and verification status
 
-- `cmake --build --preset dev -j8`: passed.
-- `ctest --preset dev --output-on-failure`: 2/2 passed (includes the new
-  per-voice generation/disable test).
+- `cmake --build --preset dev -j8`: passed after the TODO implementation.
+- `ctest --preset dev --output-on-failure`: 3/3 passed, including camera reset,
+  trail subdivision, per-voice roots, chord/strum scheduling, and the populated
+  HYG catalogue validation.
 - `cmake --build --preset plugin-debug -j8`: passed with no warnings for arm64
   AU, VST3, and standalone.
-- `ctest --preset plugin-debug --output-on-failure`: 4/4 passed; the Metal smoke
-  test ran (a Metal device was available) rather than being skipped.
+- `ctest --preset plugin-debug --output-on-failure`: all executable tests
+  passed (core, presets, and plugin); the Metal smoke test was skipped because
+  this execution environment exposed no Metal device.
 - Offline `xcrun metal` validation was attempted but the installed Xcode lacks
   the optional Metal Toolchain component.
 - Standalone was launched externally on Apple Silicon; runtime Metal shader
   compilation passed. The tabbed deck was manually verified by switching to the
   Presets page. The final cloud/trail attenuation build was compiled into all
-  targets but still needs a clean foreground visual recapture.
+  targets.
+- The TODO build was activated in the existing standalone instance and captured
+  in the foreground: the HYG star field, smooth subdivided trails, selected tab,
+  larger dial labels, equal-width NEW SYSTEM/SET STATE/RESET actions, and the
+  three-line note-pane icon were visible. Voices/Presets page interaction,
+  double-click reset, and chord audition still require hands-on verification.
 - `codesign --verify --deep --strict`: passed for all three ad-hoc-signed bundles.
 - Bundle metadata identifies AU type `aumi`, subtype `Tbs1`, manufacturer `Krhd`.
 - GitHub Actions run `27852219185`: native core tests and the complete arm64
@@ -182,12 +200,9 @@ repository.
 - GitHub repository `krahd/3bs` exists and was verified private on `main`.
 - AU MIDI effects and VST3 MIDI generation still require real host validation.
 - Apple signing and notarization are blocked until Developer credentials exist.
-- The pinned full HYG v4.1 payload could not be downloaded in this environment;
-  the generator, provenance, optional embedded target, real bright-star fallback,
-  and deterministic faint field are present.
 - User preset file import/export and advanced graphics controls are not yet
-  exposed. Per-planet enable/scale/pitch/trigger controls now exist; per-voice
-  root, range, and custom-scale editing remain available only through presets.
+  exposed. Per-planet enable/root/scale/pitch/trigger controls now exist;
+  per-voice range and custom-scale editing remain available only through presets.
 - The reversed-Z depth fix, glyph atlas, and vertical FastTracker II note view
   compile and pass the Metal smoke test but still need a clean foreground visual
   check (legibility, scrolling, and the absence of z-fighting at close approach).
@@ -197,7 +212,6 @@ repository.
 
 ## Pending tasks
 
-- Populate and verify the pinned compact HYG catalogue.
 - Complete hands-on mouse/trackpad interaction, final foreground renderer
   inspection, and 60 fps profiling.
 - Install and validate AU with `auval`, then test it in Logic.
@@ -234,4 +248,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-20 18-12 GMT-3
+Last updated: 2026-06-21 01-49 GMT-3
