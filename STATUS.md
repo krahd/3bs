@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-21 02-48 GMT-3
+Last updated: 2026-06-21 14-20 GMT-3
 
 ## Project purpose
 
@@ -19,8 +19,9 @@ simulation, and presentation configurations across plugin and standalone.
 
 ## Active focus
 
-Complete external Metal, Logic, and Ableton runtime validation for the existing
-three-format vertical slice before making the repository public.
+Publish the first private-repository alpha downloads and project website while
+continuing external Metal, Logic, and Ableton runtime validation before making
+the repository public.
 
 ## Architecture overview
 
@@ -97,6 +98,9 @@ repository.
 ## Important files and directories
 
 - `README.md`: project overview and eventual build/use instructions.
+- `doc/INSTALL.md`: binary verification, installation, routing, and removal.
+- `doc/releases/`: versioned release notes and known limitations.
+- `docs/`: dependency-free GitHub Pages source and product screenshot.
 - `AGENTS.md`: authoritative repository working rules.
 - `doc/project-initial-description.md`: original concept.
 - `doc/AGENTS.md`: source agent-policy template.
@@ -174,9 +178,30 @@ repository.
 - Added validated, versioned `.3bs` JSON save/load to plugin and standalone,
   including exact states, hidden voice fields, physics, camera/presentation,
   tilts, mode controls, and preset selection.
+- Reworked the README around the working three-format product, added an actual
+  standalone screenshot and installation/release documentation, and created a
+  responsive GitHub Pages showcase with versioned binary links.
+- Added a reproducible arm64 Release packaging flow for the complete bundle and
+  individual AU, VST3, and standalone archives, including build provenance,
+  licence files, third-party notices, and SHA-256 checksums.
+- Corrected the plugin configuration test tolerance to match the duration host
+  parameter's declared 0.001-beat precision instead of requiring impossible
+  double precision after an atomic-float round trip.
 
 ## Tests and verification status
 
+- A fresh arm64 macOS 13 Release configuration and complete build passed for
+  the AU, VST3, standalone, and test targets.
+- Fresh Release and rebuilt plugin-debug test runs passed all executable tests
+  (core, presets, star catalogue, and plugin integration). The Metal smoke test
+  skipped in both because this process exposed no Metal device.
+- `node --check docs/script.js` passed. Local HTML served successfully; visual
+  browser capture remains pending because installed GUI browsers could not be
+  launched from the restricted process environment.
+- `shasum -a 256 -c SHA256SUMS.txt` and `unzip -t` passed for the complete,
+  AU, VST3, and standalone archives.
+- `codesign --verify --deep --strict` passed on the three packaged ad-hoc-signed
+  bundles; their Mach-O executables are arm64.
 - `cmake --build --preset dev -j8`: passed after the TODO implementation.
 - `ctest --preset dev --output-on-failure`: 3/3 passed, including camera reset,
   trail subdivision, per-voice roots, chord/strum scheduling, and the populated
@@ -266,4 +291,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-21 02-48 GMT-3
+Last updated: 2026-06-21 14-20 GMT-3
