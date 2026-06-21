@@ -265,6 +265,9 @@ void testChordAndStrumModes() {
         voice.clockDivisionBeats = 0.25;
         voice.probability = 1.0;
     }
+    // Chord and Strum modes harmonize against one global tonal frame.
+    config.chordSystem.root = 2;
+    config.chordSystem.scale = threebs::ScaleId::Major;
     const auto initial = threebs::makeInitialState(threebs::InitialSystem::FigureEight, 5150, 0.0);
     const auto render = [&](threebs::VoicingMode mode, double strumMilliseconds) {
         config.voicingMode = mode;
@@ -287,10 +290,10 @@ void testChordAndStrumModes() {
                 if (event.type != threebs::MidiEventType::NoteOn || event.sourceBody >= threebs::bodyCount)
                     continue;
                 firstOn[event.sourceBody] = std::min(firstOn[event.sourceBody], position + event.sampleOffset);
-                check(threebs::noteIsInScale(event.data1, config.voices[event.sourceBody].root,
-                                             config.voices[event.sourceBody].scale,
-                                             config.voices[event.sourceBody].customScale),
-                      "chord notes respect each planet root and scale");
+                check(threebs::noteIsInScale(event.data1, config.chordSystem.root,
+                                             config.chordSystem.scale,
+                                             config.chordSystem.customScale),
+                      "chord notes respect the global chord root and scale");
             }
         }
         return firstOn;
@@ -472,6 +475,242 @@ void testTrailHistory() {
     check(smoothed.size() > 2U, "fast trail motion is subdivided into smooth ribbon samples");
     trail.append({10.0, 0.0, 0.0}, 7.0, 2);
     check(trail.size() == 1 && near(trail[0].position.x, 10.0), "trail revision clears old trajectory");
+}
+
+threebs::EngineConfig singleClockVoiceConfig() {
+    threebs::EngineConfig config;
+    for (auto& voice : config.voices)
+        voice.enabled = false;
+    auto& voice = config.voices[0];
+    voice.enabled = true;
+    voice.channel = 1;
+    voice.triggerMapping = threebs::TriggerMapping::Clock;
+    voice.clockDivisionBeats = 0.5;
+    voice.probability = 1.0;
+    voice.pitchMapping = threebs::PitchMapping::BarycentricRadius;
+    voice.minimumNote = 36;
+    voice.maximumNote = 60;
+    return config;
+}
+
+void testOctaveTranspose() {
+    const auto firstNote = [](int octave) {
+        auto config = singleClockVoiceConfig();
+        config.voices[0].octave = static_cast<std::int8_t>(octave);
+        const auto initial = threebs::makeInitialState(threebs::InitialSystem::FigureEight, 4242, 0.0);
+        threebs::MusicEngine engine(initial, config);
+        engine.prepare(48000.0);
+        threebs::ProcessContext context;
+        context.sampleCount = 48000;
+        context.sampleRate = 48000.0;
+        context.beatsPerSample = 2.0 / 48000.0;
+        context.playing = true;
+        context.transportStarted = true;
+        threebs::MusicEngine::EventBuffer buffer;
+        engine.process(context, buffer);
+        for (const auto& event : buffer)
+            if (event.type == threebs::MidiEventType::NoteOn)
+                return static_cast<int>(event.data1);
+        return -1;
+    };
+    const auto base = firstNote(0);
+    check(base >= 0 && firstNote(1) == base + 12,
+          "per-voice octave shifts notes up by twelve semitones");
+    check(firstNote(-1) == base - 12,
+          "per-voice octave shifts notes down by twelve semitones");
+}
+
+std::vector<int> noteDurationsInSamples(double minDuration, double maxDuration) {
+    auto config = singleClockVoiceConfig();
+    config.voices[0].minimumDurationBeats = minDuration;
+    config.voices[0].maximumDurationBeats = maxDuration;
+    config.voices[0].durationMapping = threebs::PitchMapping::Speed;
+    const auto initial = threebs::makeInitialState(threebs::InitialSystem::FigureEight, 4242, 0.0);
+    threebs::MusicEngine engine(initial, config);
+    engine.prepare(48000.0);
+    std::vector<int> durations;
+    std::uint64_t globalSample{};
+    bool active{};
+    std::uint64_t onSample{};
+    for (int block = 0; block < 6; ++block) {
+        threebs::ProcessContext context;
+        context.sampleCount = 24000;
+        context.sampleRate = 48000.0;
+        context.beatsPerSample = 2.0 / 48000.0;
+        context.playing = true;
+        context.transportStarted = block == 0;
+        threebs::MusicEngine::EventBuffer buffer;
+        engine.process(context, buffer);
+        for (const auto& event : buffer) {
+            if (event.sourceBody != 0)
+                continue;
+            const auto at = globalSample + event.sampleOffset;
+            if (event.type == threebs::MidiEventType::NoteOn) {
+                active = true;
+                onSample = at;
+            } else if (event.type == threebs::MidiEventType::NoteOff && active) {
+                durations.push_back(static_cast<int>(at - onSample));
+                active = false;
+            }
+        }
+        globalSample += context.sampleCount;
+    }
+    return durations;
+}
+
+void testDurationMapping() {
+    const auto fixed = noteDurationsInSamples(0.5, 0.5);
+    check(fixed.size() > 3, "fixed-length voice produces multiple notes");
+    bool allEqual = true;
+    for (const auto duration : fixed)
+        allEqual = allEqual && std::abs(duration - fixed.front()) <= 1;
+    check(allEqual, "equal min/max duration yields constant note lengths");
+
+    const auto varying = noteDurationsInSamples(0.1, 2.0);
+    int minimum = std::numeric_limits<int>::max();
+    int maximum = 0;
+    for (const auto duration : varying) {
+        minimum = std::min(minimum, duration);
+        maximum = std::max(maximum, duration);
+    }
+    check(varying.size() > 3 && maximum - minimum > 1000,
+          "duration mapping with a min/max range produces varied note lengths");
+}
+
+void testGlobalChordFrame() {
+    threebs::EngineConfig config;
+    for (std::size_t body = 0; body < threebs::bodyCount; ++body) {
+        auto& voice = config.voices[body];
+        voice.enabled = true;
+        voice.channel = static_cast<std::uint8_t>(body + 1U);
+        voice.root = 1;  // deliberately not in the global frame
+        voice.scale = threebs::ScaleId::Chromatic;
+        voice.triggerMapping = threebs::TriggerMapping::Clock;
+        voice.pitchMapping = threebs::PitchMapping::OrbitalPhase;
+        voice.clockDivisionBeats = 0.25;
+        voice.probability = 1.0;
+    }
+    config.voicingMode = threebs::VoicingMode::Chord;
+    config.chordSystem.root = 7;
+    config.chordSystem.scale = threebs::ScaleId::MajorPentatonic;
+    const auto initial = threebs::makeInitialState(threebs::InitialSystem::FigureEight, 5150, 0.0);
+    threebs::MusicEngine engine(initial, config);
+    engine.prepare(48000.0);
+    int notes{};
+    for (int block = 0; block < 8; ++block) {
+        threebs::ProcessContext context;
+        context.sampleCount = 12000;
+        context.sampleRate = 48000.0;
+        context.beatsPerSample = 2.0 / 48000.0;
+        context.playing = true;
+        context.transportStarted = block == 0;
+        threebs::MusicEngine::EventBuffer buffer;
+        engine.process(context, buffer);
+        for (const auto& event : buffer) {
+            if (event.type != threebs::MidiEventType::NoteOn)
+                continue;
+            ++notes;
+            check(threebs::noteIsInScale(event.data1, config.chordSystem.root,
+                                         config.chordSystem.scale, config.chordSystem.customScale),
+                  "chord mode quantizes to the global frame, ignoring per-planet root/scale");
+        }
+    }
+    check(notes > 0, "chord mode still generates notes under the global frame");
+}
+
+std::array<std::uint64_t, threebs::bodyCount> strumOnsets(threebs::StrumUnit unit, double value) {
+    threebs::EngineConfig config;
+    for (std::size_t body = 0; body < threebs::bodyCount; ++body) {
+        auto& voice = config.voices[body];
+        voice.enabled = true;
+        voice.channel = static_cast<std::uint8_t>(body + 1U);
+        voice.triggerMapping = threebs::TriggerMapping::Clock;
+        voice.pitchMapping = threebs::PitchMapping::OrbitalPhase;
+        voice.clockDivisionBeats = 0.25;
+        voice.probability = 1.0;
+    }
+    config.voicingMode = threebs::VoicingMode::Strum;
+    config.chordStrumUnit = unit;
+    config.chordStrumValue = value;
+    config.minimumChordIntervalBeats = 1.0;
+    const auto initial = threebs::makeInitialState(threebs::InitialSystem::FigureEight, 5150, 0.0);
+    threebs::MusicEngine engine(initial, config);
+    engine.prepare(48000.0);
+    std::array<std::uint64_t, threebs::bodyCount> firstOn{
+        std::numeric_limits<std::uint64_t>::max(), std::numeric_limits<std::uint64_t>::max(),
+        std::numeric_limits<std::uint64_t>::max()};
+    for (std::uint64_t position = 0; position < 24000; position += 127) {
+        threebs::ProcessContext context;
+        context.sampleCount = static_cast<std::uint32_t>(std::min<std::uint64_t>(127, 24000 - position));
+        context.sampleRate = 48000.0;
+        context.beatsPerSample = 2.0 / 48000.0;
+        context.timeSigNumerator = 4;
+        context.timeSigDenominator = 4;
+        context.transportStarted = position == 0;
+        threebs::MusicEngine::EventBuffer events;
+        engine.process(context, events);
+        for (const auto& event : events)
+            if (event.type == threebs::MidiEventType::NoteOn && event.sourceBody < threebs::bodyCount)
+                firstOn[event.sourceBody] = std::min(firstOn[event.sourceBody], position + event.sampleOffset);
+    }
+    return firstOn;
+}
+
+void testStrumBeatUnit() {
+    // 0.25 beat at 2/48000 beats per sample is 6000 samples between voices.
+    const auto beats = strumOnsets(threebs::StrumUnit::Beats, 0.25);
+    check(beats[0] == 0 && beats[1] == 6000 && beats[2] == 12000,
+          "beat-relative strum spacing matches the expected sample delay");
+    // 1/8 bar of 4/4 is 0.5 beats, i.e. 12000 samples between voices.
+    const auto bars = strumOnsets(threebs::StrumUnit::BarFraction, 0.125);
+    check(bars[0] == 0 && bars[1] == 12000 && bars[2] == 24000,
+          "bar-fraction strum spacing scales by the time signature");
+}
+
+std::vector<std::pair<int, int>> collectOnsets(bool autoReset, std::uint64_t totalSamples) {
+    auto config = singleClockVoiceConfig();
+    config.voices[0].clockDivisionBeats = 0.25;
+    config.autoResetEnabled = autoReset;
+    config.autoResetBars = 1.0;
+    const auto initial = threebs::makeInitialState(threebs::InitialSystem::FigureEight, 4242, 0.0);
+    threebs::MusicEngine engine(initial, config);
+    engine.prepare(48000.0);
+    std::vector<std::pair<int, int>> stream;
+    std::uint64_t globalSample{};
+    const std::uint32_t blockSize = 4800;
+    while (globalSample < totalSamples) {
+        threebs::ProcessContext context;
+        context.sampleCount = blockSize;
+        context.sampleRate = 48000.0;
+        context.beatsPerSample = 2.0 / 48000.0;
+        context.timeSigNumerator = 4;
+        context.timeSigDenominator = 4;
+        context.playing = true;
+        context.transportStarted = globalSample == 0;
+        threebs::MusicEngine::EventBuffer buffer;
+        engine.process(context, buffer);
+        for (const auto& event : buffer) {
+            if (event.type != threebs::MidiEventType::NoteOn)
+                continue;
+            if (globalSample + event.sampleOffset < totalSamples)
+                stream.emplace_back(static_cast<int>(event.sourceBody), static_cast<int>(event.data1));
+        }
+        globalSample += blockSize;
+    }
+    return stream;
+}
+
+void testBarAutoReset() {
+    // One bar of 4/4 at 2/48000 beats per sample spans 96000 samples.
+    const auto opening = collectOnsets(true, 96000);
+    const auto twoBars = collectOnsets(true, 192000);
+    auto expected = opening;
+    expected.insert(expected.end(), opening.begin(), opening.end());
+    check(!opening.empty() && twoBars == expected,
+          "auto-reset every bar replays the deterministic opening note stream");
+    const auto freeTwoBars = collectOnsets(false, 192000);
+    check(freeTwoBars != expected,
+          "without auto-reset the timeline evolves past the opening");
 }
 
 void testPresentationMigration() {

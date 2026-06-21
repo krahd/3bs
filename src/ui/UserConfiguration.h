@@ -10,7 +10,7 @@
 
 namespace threebs {
 
-inline constexpr int userConfigurationSchemaVersion = 1;
+inline constexpr int userConfigurationSchemaVersion = 2;
 
 struct UserConfiguration {
     SimulationState initial{};

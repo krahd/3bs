@@ -12,6 +12,7 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
 
@@ -193,12 +194,37 @@ private:
         panel_.voicingModeSelector().setSelectedId(static_cast<int>(config_.voicingMode) + 1,
                                                    juce::sendNotificationSync);
         panel_.chordStrumSlider().setValue(config_.chordStrumMilliseconds, juce::dontSendNotification);
+        panel_.strumUnitSelector().setSelectedId(static_cast<int>(config_.chordStrumUnit) + 1,
+                                                 juce::dontSendNotification);
+        panel_.strumValueSlider().setValue(config_.chordStrumValue, juce::dontSendNotification);
+        panel_.chordRootSelector().setSelectedId(static_cast<int>(config_.chordSystem.root) + 1,
+                                                 juce::dontSendNotification);
+        panel_.chordScaleSelector().setSelectedId(static_cast<int>(config_.chordSystem.scale) + 1,
+                                                  juce::dontSendNotification);
+        panel_.autoResetButton().setToggleState(config_.autoResetEnabled, juce::dontSendNotification);
+        {
+            constexpr std::array<double, 7> barValues{0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0};
+            int barIndex{2};
+            double bestError{1.0e18};
+            for (int i = 0; i < static_cast<int>(barValues.size()); ++i) {
+                const auto error = std::abs(barValues[static_cast<std::size_t>(i)] - config_.autoResetBars);
+                if (error < bestError) {
+                    bestError = error;
+                    barIndex = i;
+                }
+            }
+            panel_.autoResetBarsSelector().setSelectedId(barIndex + 1, juce::dontSendNotification);
+        }
         const auto masses = panel_.massSliders();
         const auto enables = panel_.voiceEnableButtons();
         const auto roots = panel_.voiceRootSelectors();
         const auto scales = panel_.voiceScaleSelectors();
         const auto pitches = panel_.voicePitchSelectors();
         const auto triggers = panel_.voiceTriggerSelectors();
+        const auto octaves = panel_.voiceOctaveSelectors();
+        const auto durationMaps = panel_.voiceDurationMapSelectors();
+        const auto durationMins = panel_.voiceDurationMinSliders();
+        const auto durationMaxs = panel_.voiceDurationMaxSliders();
         for (std::size_t body = 0; body < bodyCount; ++body) {
             masses[body]->setValue(initial_.bodies[body].mass, juce::dontSendNotification);
             enables[body]->setToggleState(config_.voices[body].enabled, juce::dontSendNotification);
@@ -210,6 +236,11 @@ private:
                                          juce::dontSendNotification);
             triggers[body]->setSelectedId(static_cast<int>(config_.voices[body].triggerMapping) + 1,
                                           juce::dontSendNotification);
+            octaves[body]->setSelectedId(config_.voices[body].octave + 5, juce::dontSendNotification);
+            durationMaps[body]->setSelectedId(static_cast<int>(config_.voices[body].durationMapping) + 1,
+                                              juce::dontSendNotification);
+            durationMins[body]->setValue(config_.voices[body].minimumDurationBeats, juce::dontSendNotification);
+            durationMaxs[body]->setValue(config_.voices[body].maximumDurationBeats, juce::dontSendNotification);
         }
     }
 
@@ -261,6 +292,10 @@ private:
         const auto roots = panel_.voiceRootSelectors();
         const auto pitches = panel_.voicePitchSelectors();
         const auto triggers = panel_.voiceTriggerSelectors();
+        const auto octaves = panel_.voiceOctaveSelectors();
+        const auto durationMaps = panel_.voiceDurationMapSelectors();
+        const auto durationMins = panel_.voiceDurationMinSliders();
+        const auto durationMaxs = panel_.voiceDurationMaxSliders();
         for (std::size_t body = 0; body < bodyCount; ++body) {
             auto& voice = config_.voices[body];
             voice.probability = density;
@@ -269,10 +304,28 @@ private:
             voice.root = static_cast<std::uint8_t>(std::max(0, roots[body]->getSelectedItemIndex()));
             voice.pitchMapping = static_cast<PitchMapping>(std::max(0, pitches[body]->getSelectedItemIndex()));
             voice.triggerMapping = static_cast<TriggerMapping>(std::max(0, triggers[body]->getSelectedItemIndex()));
+            voice.octave = static_cast<std::int8_t>(octaves[body]->getSelectedItemIndex() - 4);
+            voice.durationMapping = static_cast<PitchMapping>(std::max(0, durationMaps[body]->getSelectedItemIndex()));
+            voice.minimumDurationBeats = durationMins[body]->getValue();
+            voice.maximumDurationBeats = durationMaxs[body]->getValue();
         }
         config_.voicingMode = static_cast<VoicingMode>(
             std::max(0, panel_.voicingModeSelector().getSelectedItemIndex()));
         config_.chordStrumMilliseconds = panel_.chordStrumSlider().getValue();
+        config_.chordStrumUnit = static_cast<StrumUnit>(
+            std::max(0, panel_.strumUnitSelector().getSelectedItemIndex()));
+        config_.chordStrumValue = panel_.strumValueSlider().getValue();
+        config_.chordSystem.root = static_cast<std::uint8_t>(
+            std::max(0, panel_.chordRootSelector().getSelectedItemIndex()));
+        config_.chordSystem.scale = static_cast<ScaleId>(
+            std::max(0, panel_.chordScaleSelector().getSelectedItemIndex()));
+        config_.autoResetEnabled = panel_.autoResetButton().getToggleState();
+        {
+            constexpr std::array<double, 7> barValues{0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0};
+            const auto index = std::clamp(panel_.autoResetBarsSelector().getSelectedItemIndex(), 0,
+                                          static_cast<int>(barValues.size()) - 1);
+            config_.autoResetBars = barValues[static_cast<std::size_t>(index)];
+        }
         engine_.setConfig(config_);
         const auto masses = panel_.massSliders();
         for (std::size_t i = 0; i < bodyCount; ++i) {
@@ -293,11 +346,16 @@ private:
         }
 
         constexpr auto blockSize = static_cast<std::uint32_t>(sampleRate_ / timerRate_);
+        constexpr std::array<int, 5> denominators{1, 2, 4, 8, 16};
+        const auto denomIndex = std::clamp(panel_.timeSigDenominatorSelector().getSelectedItemIndex(), 0,
+                                           static_cast<int>(denominators.size()) - 1);
         ProcessContext context;
         context.sampleCount = blockSize;
         context.sampleRate = sampleRate_;
         context.beatAtStart = beat_;
         context.beatsPerSample = tempo_ / (60.0 * sampleRate_);
+        context.timeSigNumerator = std::max(1, panel_.timeSigNumeratorSelector().getSelectedItemIndex() + 1);
+        context.timeSigDenominator = denominators[static_cast<std::size_t>(denomIndex)];
         context.playing = panel_.runButton().getToggleState();
         context.transportStarted = context.playing && !wasRunning_;
         if (context.transportStarted)

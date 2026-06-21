@@ -37,6 +37,10 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
     const auto roots = panel_.voiceRootSelectors();
     const auto pitches = panel_.voicePitchSelectors();
     const auto triggers = panel_.voiceTriggerSelectors();
+    const auto octaves = panel_.voiceOctaveSelectors();
+    const auto durMaps = panel_.voiceDurationMapSelectors();
+    const auto durMins = panel_.voiceDurationMinSliders();
+    const auto durMaxs = panel_.voiceDurationMaxSliders();
     for (std::size_t body = 0; body < bodyCount; ++body) {
         const auto suffix = juce::String(body + 1);
         voiceEnableAttachments_[body] = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -49,10 +53,36 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
             state, "voicePitch" + suffix, *pitches[body]);
         voiceTriggerAttachments_[body] = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
             state, "voiceTrigger" + suffix, *triggers[body]);
+        voiceOctaveAttachments_[body] = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            state, "voiceOctave" + suffix, *octaves[body]);
+        voiceDurMapAttachments_[body] = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+            state, "voiceDurMap" + suffix, *durMaps[body]);
+        voiceDurMinAttachments_[body] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+            state, "voiceDurMin" + suffix, *durMins[body]);
+        voiceDurMaxAttachments_[body] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+            state, "voiceDurMax" + suffix, *durMaxs[body]);
     }
 
     voicingModeAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         state, "voicingMode", panel_.voicingModeSelector());
+    strumValueAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        state, "strumValue", panel_.strumValueSlider());
+    strumUnitAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        state, "strumUnit", panel_.strumUnitSelector());
+    chordRootAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        state, "chordRoot", panel_.chordRootSelector());
+    chordScaleAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        state, "chordScale", panel_.chordScaleSelector());
+    timeSigSourceAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        state, "timeSigSource", panel_.timeSigSourceSelector());
+    timeSigNumAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        state, "timeSigNum", panel_.timeSigNumeratorSelector());
+    timeSigDenomAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        state, "timeSigDenom", panel_.timeSigDenominatorSelector());
+    autoResetAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        state, "autoReset", panel_.autoResetButton());
+    autoResetBarsAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        state, "autoResetBars", panel_.autoResetBarsSelector());
 
     panel_.setPresetCatalog(presets_);
     panel_.onPresetSelected = [this](int index) {

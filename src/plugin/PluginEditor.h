@@ -36,6 +36,19 @@ private:
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voiceRootAttachments_;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voicePitchAttachments_;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voiceTriggerAttachments_;
+    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voiceOctaveAttachments_;
+    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, bodyCount> voiceDurMapAttachments_;
+    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>, bodyCount> voiceDurMinAttachments_;
+    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>, bodyCount> voiceDurMaxAttachments_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> strumValueAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> strumUnitAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> chordRootAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> chordScaleAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> timeSigSourceAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> timeSigNumAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> timeSigDenomAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> autoResetAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> autoResetBarsAttachment_;
     std::unique_ptr<juce::FileChooser> fileChooser_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ThreeBSEditor)

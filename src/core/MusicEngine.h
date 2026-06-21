@@ -49,6 +49,8 @@ struct ProcessContext {
     double sampleRate{48000.0};
     double beatAtStart{};
     double beatsPerSample{2.0 / 48000.0};
+    int timeSigNumerator{4};
+    int timeSigDenominator{4};
     bool playing{true};
     bool transportStarted{};
     bool seeked{};
@@ -65,7 +67,12 @@ struct EngineConfig {
     bool inputGateOpen{true};
     VoicingMode voicingMode{VoicingMode::Independent};
     double chordStrumMilliseconds{24.0};
+    StrumUnit chordStrumUnit{StrumUnit::Milliseconds};
+    double chordStrumValue{0.0625};
     double minimumChordIntervalBeats{0.125};
+    ChordSystemConfig chordSystem{};
+    bool autoResetEnabled{false};
+    double autoResetBars{1.0};
 };
 
 struct BodyMeasurements {
@@ -121,6 +128,7 @@ private:
         std::size_t body{};
         std::uint8_t note{};
         std::uint8_t velocity{};
+        double durationBeats{};
     };
 
     double mappingValue(std::size_t bodyIndex, PitchMapping mapping,
@@ -133,7 +141,10 @@ private:
                       const std::array<BodyMeasurements, bodyCount>& values,
                       EventBuffer& output) noexcept;
     void startNote(std::size_t bodyIndex, std::uint8_t note, std::uint8_t velocity,
-                   std::uint32_t sampleOffset, double beat, EventBuffer& output) noexcept;
+                   std::uint32_t sampleOffset, double beat, double durationBeats,
+                   EventBuffer& output) noexcept;
+    double durationBeatsFor(std::size_t bodyIndex,
+                            const std::array<BodyMeasurements, bodyCount>& values) const noexcept;
     void emitContinuousControllers(std::size_t bodyIndex, std::uint32_t sampleOffset,
                                    const std::array<BodyMeasurements, bodyCount>& values,
                                    EventBuffer& output) noexcept;
@@ -152,6 +163,10 @@ private:
     std::uint64_t processedSamples_{};
     double lastChordTriggerBeat_{-1.0e12};
     std::uint64_t chordIndex_{};
+    double currentBeatsPerSample_{2.0 / 48000.0};
+    double currentBeatsPerBar_{4.0};
+    bool hasAutoResetIndex_{};
+    double lastAutoResetIndex_{};
 };
 
 } // namespace threebs

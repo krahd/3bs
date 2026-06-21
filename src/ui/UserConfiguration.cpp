@@ -105,7 +105,16 @@ juce::var writeEngine(const EngineConfig& config) {
     set(result, "simulation", simulation);
     set(result, "voicingMode", static_cast<int>(config.voicingMode));
     set(result, "strumMilliseconds", config.chordStrumMilliseconds);
+    set(result, "strumUnit", static_cast<int>(config.chordStrumUnit));
+    set(result, "strumValue", config.chordStrumValue);
     set(result, "minimumChordInterval", config.minimumChordIntervalBeats);
+    set(result, "chordRoot", static_cast<int>(config.chordSystem.root));
+    set(result, "chordScale", static_cast<int>(config.chordSystem.scale));
+    juce::Array<juce::var> chordCustomScale;
+    for (const auto enabled : config.chordSystem.customScale) chordCustomScale.add(enabled);
+    set(result, "chordCustomScale", chordCustomScale);
+    set(result, "autoResetEnabled", config.autoResetEnabled);
+    set(result, "autoResetBars", config.autoResetBars);
     set(result, "inputTransposeEnabled", config.inputTransposeEnabled);
     set(result, "inputGateEnabled", config.inputGateEnabled);
     set(result, "inputTranspose", static_cast<int>(config.inputTranspose));
@@ -119,11 +128,14 @@ juce::var writeEngine(const EngineConfig& config) {
         set(item, "minimumNote", static_cast<int>(voice.minimumNote));
         set(item, "maximumNote", static_cast<int>(voice.maximumNote));
         set(item, "scale", static_cast<int>(voice.scale));
+        set(item, "octave", static_cast<int>(voice.octave));
         set(item, "pitchMapping", static_cast<int>(voice.pitchMapping));
         set(item, "triggerMapping", static_cast<int>(voice.triggerMapping));
+        set(item, "durationMapping", static_cast<int>(voice.durationMapping));
         set(item, "clockDivision", voice.clockDivisionBeats);
         set(item, "probability", voice.probability);
-        set(item, "duration", voice.durationBeats);
+        set(item, "durationMin", voice.minimumDurationBeats);
+        set(item, "durationMax", voice.maximumDurationBeats);
         set(item, "minimumTriggerInterval", voice.minimumTriggerIntervalBeats);
         set(item, "closeApproachDistance", voice.closeApproachDistance);
         set(item, "minimumVelocity", static_cast<int>(voice.minimumVelocity));
@@ -164,7 +176,16 @@ bool readEngine(const juce::var& source, EngineConfig& config) {
         integer(simulation, "escapePolicy", 0, 0, static_cast<int>(EscapePolicy::Prompt)));
     result.voicingMode = static_cast<VoicingMode>(integer(source, "voicingMode", 0, 0, 2));
     result.chordStrumMilliseconds = number(source, "strumMilliseconds", 24.0, 0.0, 250.0);
+    result.chordStrumUnit = static_cast<StrumUnit>(integer(source, "strumUnit", 0, 0, 2));
+    result.chordStrumValue = number(source, "strumValue", 0.0625, 0.0, 4.0);
     result.minimumChordIntervalBeats = number(source, "minimumChordInterval", 0.125, 0.0, 16.0);
+    result.chordSystem.root = static_cast<std::uint8_t>(integer(source, "chordRoot", 0, 0, 11));
+    result.chordSystem.scale = static_cast<ScaleId>(integer(source, "chordScale", 8, 0, 14));
+    if (auto* custom = get(source, "chordCustomScale").getArray(); custom != nullptr && custom->size() == 12)
+        for (int note = 0; note < 12; ++note)
+            result.chordSystem.customScale[static_cast<std::size_t>(note)] = static_cast<bool>((*custom)[note]);
+    result.autoResetEnabled = boolean(source, "autoResetEnabled", false);
+    result.autoResetBars = number(source, "autoResetBars", 1.0, 1.0 / 16.0, 256.0);
     result.inputTransposeEnabled = boolean(source, "inputTransposeEnabled", false);
     result.inputGateEnabled = boolean(source, "inputGateEnabled", false);
     result.inputTranspose = static_cast<std::int8_t>(integer(source, "inputTranspose", 0, -127, 127));
@@ -177,11 +198,16 @@ bool readEngine(const juce::var& source, EngineConfig& config) {
         voice.minimumNote = static_cast<std::uint8_t>(integer(item, "minimumNote", 36, 0, 127));
         voice.maximumNote = static_cast<std::uint8_t>(integer(item, "maximumNote", 84, 0, 127));
         voice.scale = static_cast<ScaleId>(integer(item, "scale", 8, 0, 14));
+        voice.octave = static_cast<std::int8_t>(integer(item, "octave", 0, -4, 4));
         voice.pitchMapping = static_cast<PitchMapping>(integer(item, "pitchMapping", 0, 0, 8));
         voice.triggerMapping = static_cast<TriggerMapping>(integer(item, "triggerMapping", 0, 0, 7));
+        voice.durationMapping = static_cast<PitchMapping>(integer(item, "durationMapping", 3, 0, 8));
         voice.clockDivisionBeats = number(item, "clockDivision", 0.25, 1.0 / 128.0, 16.0);
         voice.probability = number(item, "probability", 1.0, 0.0, 1.0);
-        voice.durationBeats = number(item, "duration", 0.2, 1.0 / 1024.0, 64.0);
+        // Legacy schema-1 files store a single "duration"; fall back to it for both bounds.
+        const auto legacyDuration = number(item, "duration", 0.2, 1.0 / 1024.0, 64.0);
+        voice.minimumDurationBeats = number(item, "durationMin", legacyDuration, 1.0 / 1024.0, 64.0);
+        voice.maximumDurationBeats = number(item, "durationMax", legacyDuration, 1.0 / 1024.0, 64.0);
         voice.minimumTriggerIntervalBeats = number(item, "minimumTriggerInterval", 0.0625, 0.0, 64.0);
         voice.closeApproachDistance = number(item, "closeApproachDistance", 1.0, 0.0001, 1000.0);
         voice.minimumVelocity = static_cast<std::uint8_t>(integer(item, "minimumVelocity", 44, 1, 127));
@@ -288,8 +314,9 @@ bool deserializeUserConfiguration(const juce::String& json, UserConfiguration& c
         return false;
     }
     const auto root = juce::JSON::parse(json);
+    const auto fileSchema = integer(root, "schemaVersion", 0, 0, 1000);
     if (root.getDynamicObject() == nullptr || get(root, "format").toString() != "three-body-solution"
-        || integer(root, "schemaVersion", 0, 0, 1000) != userConfigurationSchemaVersion) {
+        || fileSchema < 1 || fileSchema > userConfigurationSchemaVersion) {
         error = "This is not a supported .3bs configuration.";
         return false;
     }

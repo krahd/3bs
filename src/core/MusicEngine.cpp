@@ -62,14 +62,20 @@ void MusicEngine::setConfig(const EngineConfig& config) noexcept {
     config_ = config;
     simulation_.setConfig(config_.simulation);
     config_.chordStrumMilliseconds = std::clamp(config_.chordStrumMilliseconds, 0.0, 250.0);
+    config_.chordStrumValue = std::clamp(config_.chordStrumValue, 0.0, 4.0);
     config_.minimumChordIntervalBeats = std::max(0.0, config_.minimumChordIntervalBeats);
+    config_.autoResetBars = std::clamp(config_.autoResetBars, 1.0 / 16.0, 256.0);
+    config_.chordSystem.root = static_cast<std::uint8_t>(config_.chordSystem.root % 12U);
     for (auto& voice : config_.voices) {
         voice.channel = std::clamp<std::uint8_t>(voice.channel, 1, 16);
+        voice.root = static_cast<std::uint8_t>(voice.root % 12U);
+        voice.octave = std::clamp<std::int8_t>(voice.octave, -4, 4);
         voice.minimumNote = std::min<std::uint8_t>(voice.minimumNote, 127);
         voice.maximumNote = std::min<std::uint8_t>(voice.maximumNote, 127);
         voice.probability = clamp01(voice.probability);
         voice.clockDivisionBeats = std::max(1.0 / 128.0, voice.clockDivisionBeats);
-        voice.durationBeats = std::max(1.0 / 1024.0, voice.durationBeats);
+        voice.minimumDurationBeats = std::max(1.0 / 1024.0, voice.minimumDurationBeats);
+        voice.maximumDurationBeats = std::max(voice.minimumDurationBeats, voice.maximumDurationBeats);
         voice.minimumTriggerIntervalBeats = std::max(0.0, voice.minimumTriggerIntervalBeats);
         voice.closeApproachDistance = std::max(0.0001, voice.closeApproachDistance);
     }
@@ -95,6 +101,7 @@ void MusicEngine::reset(const SimulationState& initial, EventBuffer* noteOffs) n
     processedSamples_ = 0;
     lastChordTriggerBeat_ = -1.0e12;
     chordIndex_ = 0;
+    hasAutoResetIndex_ = false;
 }
 
 std::array<BodyMeasurements, bodyCount> MusicEngine::measurements() const noexcept {
@@ -218,21 +225,32 @@ bool MusicEngine::shouldTrigger(std::size_t bodyIndex, const VoiceConfig& voice,
     return true;
 }
 
+double MusicEngine::durationBeatsFor(
+    std::size_t bodyIndex, const std::array<BodyMeasurements, bodyCount>& values) const noexcept {
+    const auto& voice = config_.voices[bodyIndex];
+    const auto t = clamp01(mappingValue(bodyIndex, voice.durationMapping, values));
+    const auto duration = voice.minimumDurationBeats
+        + t * (voice.maximumDurationBeats - voice.minimumDurationBeats);
+    return std::max(1.0 / 1024.0, duration);
+}
+
 void MusicEngine::triggerVoice(std::size_t bodyIndex, std::uint32_t sampleOffset, double beat,
                                const BodyMeasurements& measurement, EventBuffer& output) noexcept {
     const auto& voice = config_.voices[bodyIndex];
     const auto values = measurements();
     auto note = quantizeNormalizedPitch(mappingValue(bodyIndex, voice.pitchMapping, values), voice);
-    note = static_cast<std::uint8_t>(std::clamp<int>(static_cast<int>(note) + config_.inputTranspose, 0, 127));
+    note = static_cast<std::uint8_t>(std::clamp<int>(
+        static_cast<int>(note) + config_.inputTranspose + voice.octave * 12, 0, 127));
     const auto velocityRange = static_cast<double>(voice.maximumVelocity - voice.minimumVelocity);
     const auto velocity = static_cast<std::uint8_t>(std::clamp(
         static_cast<int>(std::lround(voice.minimumVelocity + measurement.speed * velocityRange)), 1, 127));
 
-    startNote(bodyIndex, note, velocity, sampleOffset, beat, output);
+    startNote(bodyIndex, note, velocity, sampleOffset, beat, durationBeatsFor(bodyIndex, values), output);
 }
 
 void MusicEngine::startNote(std::size_t bodyIndex, std::uint8_t note, std::uint8_t velocity,
-                            std::uint32_t sampleOffset, double beat, EventBuffer& output) noexcept {
+                            std::uint32_t sampleOffset, double beat, double durationBeats,
+                            EventBuffer& output) noexcept {
     const auto& voice = config_.voices[bodyIndex];
     auto& runtime = runtime_[bodyIndex];
     if (runtime.noteActive)
@@ -242,7 +260,7 @@ void MusicEngine::startNote(std::size_t bodyIndex, std::uint8_t note, std::uint8
                  static_cast<std::uint8_t>(bodyIndex)});
     runtime.noteActive = true;
     runtime.activeNote = note;
-    runtime.noteOffBeat = beat + voice.durationBeats;
+    runtime.noteOffBeat = beat + durationBeats;
 }
 
 void MusicEngine::triggerChord(std::size_t triggerBody, std::uint32_t sampleOffset, double beat,
@@ -252,27 +270,45 @@ void MusicEngine::triggerChord(std::size_t triggerBody, std::uint32_t sampleOffs
         return;
     lastChordTriggerBeat_ = beat;
     const auto base = mappingValue(triggerBody, config_.voices[triggerBody].pitchMapping, values);
-    const auto strumSamples = static_cast<std::uint64_t>(std::llround(
-        config_.chordStrumMilliseconds * sampleRate_ / 1000.0));
+    std::uint64_t strumSamples{};
+    switch (config_.chordStrumUnit) {
+    case StrumUnit::Milliseconds:
+        strumSamples = static_cast<std::uint64_t>(std::llround(
+            config_.chordStrumMilliseconds * sampleRate_ / 1000.0));
+        break;
+    case StrumUnit::Beats:
+        strumSamples = static_cast<std::uint64_t>(std::llround(
+            config_.chordStrumValue / std::max(1.0e-12, currentBeatsPerSample_)));
+        break;
+    case StrumUnit::BarFraction:
+        strumSamples = static_cast<std::uint64_t>(std::llround(
+            config_.chordStrumValue * currentBeatsPerBar_ / std::max(1.0e-12, currentBeatsPerSample_)));
+        break;
+    }
     const auto rotation = static_cast<std::size_t>(chordIndex_++ % bodyCount);
     for (std::size_t order = 0; order < bodyCount; ++order) {
         const auto body = config_.voicingMode == VoicingMode::Strum
             ? (order + rotation) % bodyCount : order;
-        const auto& voice = config_.voices[body];
+        auto voice = config_.voices[body];
         if (!voice.enabled)
             continue;
+        // Chord and Strum modes harmonize against one global tonal frame.
+        voice.root = config_.chordSystem.root;
+        voice.scale = config_.chordSystem.scale;
+        voice.customScale = config_.chordSystem.customScale;
         auto note = quantizeScaleDegree(base, static_cast<int>(body * 2U), voice);
         note = static_cast<std::uint8_t>(std::clamp<int>(static_cast<int>(note)
-            + config_.inputTranspose, 0, 127));
+            + config_.inputTranspose + voice.octave * 12, 0, 127));
         const auto velocityRange = static_cast<double>(voice.maximumVelocity - voice.minimumVelocity);
         const auto velocity = static_cast<std::uint8_t>(std::clamp(
             static_cast<int>(std::lround(voice.minimumVelocity
                 + values[body].speed * velocityRange)), 1, 127));
+        const auto duration = durationBeatsFor(body, values);
         const auto delay = config_.voicingMode == VoicingMode::Strum ? order * strumSamples : 0U;
         if (delay == 0U) {
-            startNote(body, note, velocity, sampleOffset, beat, output);
+            startNote(body, note, velocity, sampleOffset, beat, duration, output);
         } else {
-            pendingNotes_[body] = {true, processedSamples_ + delay, body, note, velocity};
+            pendingNotes_[body] = {true, processedSamples_ + delay, body, note, velocity, duration};
         }
     }
 }
@@ -315,12 +351,17 @@ void MusicEngine::applyTransportReset(std::uint32_t sampleOffset, EventBuffer& o
 void MusicEngine::process(const ProcessContext& context, EventBuffer& output) noexcept {
     output.clear();
     prepare(context.sampleRate);
+    currentBeatsPerSample_ = context.beatsPerSample;
+    const auto numerator = std::max(1, context.timeSigNumerator);
+    const auto denominator = std::max(1, context.timeSigDenominator);
+    currentBeatsPerBar_ = static_cast<double>(numerator) * 4.0 / static_cast<double>(denominator);
     if ((!context.playing && wasPlaying_)
         || context.transportStarted || context.seeked
         || (context.loopWrapped && context.loopPolicy == LoopPolicy::Restart)) {
         applyTransportReset(0, output);
         timelineBeat_ = context.beatAtStart;
         hasTimelineBeat_ = true;
+        hasAutoResetIndex_ = false;
     }
 
     if (!context.playing) {
@@ -336,9 +377,19 @@ void MusicEngine::process(const ProcessContext& context, EventBuffer& output) no
 
     for (std::uint32_t sample = 0; sample < context.sampleCount; ++sample) {
         const auto beat = timelineBeat_;
+        const auto resetPeriodBeats = config_.autoResetBars * currentBeatsPerBar_;
+        const auto resetIndex = std::floor(beat / std::max(1.0e-9, resetPeriodBeats));
+        if (!hasAutoResetIndex_) {
+            lastAutoResetIndex_ = resetIndex;
+            hasAutoResetIndex_ = true;
+        } else if (config_.autoResetEnabled && resetIndex != lastAutoResetIndex_) {
+            applyTransportReset(sample, output);
+            lastAutoResetIndex_ = resetIndex;
+        }
         for (auto& pending : pendingNotes_) {
             if (pending.active && pending.dueSample <= processedSamples_) {
-                startNote(pending.body, pending.note, pending.velocity, sample, beat, output);
+                startNote(pending.body, pending.note, pending.velocity, sample, beat,
+                          pending.durationBeats, output);
                 pending.active = false;
             }
         }

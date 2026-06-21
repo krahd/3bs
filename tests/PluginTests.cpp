@@ -65,7 +65,11 @@ int main() {
     fileConfiguration.initial.bodies[0].position = {1.25, -2.5, 3.75};
     fileConfiguration.engine.voicingMode = threebs::VoicingMode::Strum;
     fileConfiguration.engine.voices[1].triggerMapping = threebs::TriggerMapping::Apsis;
-    fileConfiguration.engine.voices[1].durationBeats = 0.77;
+    fileConfiguration.engine.voices[1].octave = -2;
+    fileConfiguration.engine.voices[1].minimumDurationBeats = 0.77;
+    fileConfiguration.engine.voices[1].maximumDurationBeats = 0.77;
+    fileConfiguration.engine.chordSystem.root = 5;
+    fileConfiguration.engine.chordStrumUnit = threebs::StrumUnit::BarFraction;
     fileConfiguration.presentation.camera.yaw = 0.73F;
     fileConfiguration.planeTilts = {12.0, -8.0, 4.0};
     const auto configurationJson = threebs::serializeUserConfiguration(fileConfiguration);
@@ -77,13 +81,16 @@ int main() {
     check(std::abs(decodedConfiguration.initial.bodies[0].position.y + 2.5) < 1.0e-9
               && decodedConfiguration.engine.voicingMode == threebs::VoicingMode::Strum
               && decodedConfiguration.engine.voices[1].triggerMapping == threebs::TriggerMapping::Apsis
+              && decodedConfiguration.engine.voices[1].octave == -2
+              && decodedConfiguration.engine.chordSystem.root == 5
+              && decodedConfiguration.engine.chordStrumUnit == threebs::StrumUnit::BarFraction
               && std::abs(decodedConfiguration.presentation.camera.yaw - 0.73F) < 1.0e-6F,
           ".3bs JSON must preserve body, music, and presentation settings");
     check(!threebs::deserializeUserConfiguration("{\"format\":\"wrong\"}",
                                                  decodedConfiguration, configurationError),
           "malformed .3bs JSON must be rejected");
     processor.applyUserConfiguration(decodedConfiguration);
-    check(std::abs(processor.currentUserConfiguration().engine.voices[1].durationBeats - 0.77) < 1.0e-9,
+    check(std::abs(processor.currentUserConfiguration().engine.voices[1].maximumDurationBeats - 0.77) < 1.0e-9,
           "loaded hidden voice fields must survive a subsequent save");
 
     juce::AudioBuffer<float> audio(2, 512);

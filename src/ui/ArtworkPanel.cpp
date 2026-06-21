@@ -148,8 +148,29 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
         voiceTrigger_[body].addItemList(triggerMappingDisplayNames(), 1);
         voiceTrigger_[body].setSelectedId(1, juce::dontSendNotification);
         addAndMakeVisible(voiceTrigger_[body]);
+
+        for (int octave = -4; octave <= 4; ++octave)
+            voiceOctave_[body].addItem(octave > 0 ? "+" + juce::String(octave) : juce::String(octave),
+                                       octave + 5);
+        voiceOctave_[body].setSelectedId(5, juce::dontSendNotification);
+        addAndMakeVisible(voiceOctave_[body]);
+
+        voiceDurMap_[body].addItemList(pitchMappingDisplayNames(), 1);
+        voiceDurMap_[body].setSelectedId(static_cast<int>(PitchMapping::Speed) + 1,
+                                         juce::dontSendNotification);
+        addAndMakeVisible(voiceDurMap_[body]);
+
+        for (auto* duration : {&voiceDurMin_[body], &voiceDurMax_[body]}) {
+            duration->setSliderStyle(juce::Slider::LinearHorizontal);
+            duration->setTextBoxStyle(juce::Slider::TextBoxRight, false, 46, 18);
+            duration->setRange(0.02, 8.0, 0.001);
+            duration->setValue(0.2);
+            duration->setTextValueSuffix(" b");
+            addAndMakeVisible(*duration);
+        }
     }
-    const std::array<juce::String, 4> voiceRowNames{"ROOT", "SCALE", "PITCH MAP", "TRIGGER"};
+    const std::array<juce::String, 8> voiceRowNames{"ROOT", "SCALE", "OCTAVE", "PITCH MAP",
+                                                     "TRIGGER", "LEN MAP", "LEN MIN", "LEN MAX"};
     for (std::size_t i = 0; i < voiceRowLabels_.size(); ++i) {
         voiceRowLabels_[i].setText(voiceRowNames[i], juce::dontSendNotification);
         voiceRowLabels_[i].setJustificationType(juce::Justification::centredLeft);
@@ -172,8 +193,57 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     chordStrum_.setRange(0.0, 120.0, 1.0);
     chordStrum_.setValue(24.0);
     chordStrum_.setTextValueSuffix(" ms");
-    chordStrum_.setTooltip("Delay between planets in STRUM mode.");
+    chordStrum_.setTooltip("Delay between planets in STRUM mode when the unit is milliseconds.");
     addAndMakeVisible(chordStrum_);
+    strumUnit_.addItemList({"MS", "BEATS", "BAR FRACTION"}, 1);
+    strumUnit_.setSelectedId(1, juce::dontSendNotification);
+    strumUnit_.setTooltip("Choose whether STRUM spacing is absolute (ms) or musical (beat/bar fraction).");
+    strumUnit_.addListener(this);
+    addAndMakeVisible(strumUnit_);
+    strumValue_.setSliderStyle(juce::Slider::LinearHorizontal);
+    strumValue_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 58, 20);
+    strumValue_.setRange(0.0, 4.0, 0.001);
+    strumValue_.setValue(0.0625);
+    strumValue_.setTextValueSuffix(" b");
+    strumValue_.setTooltip("Musical STRUM spacing used when the unit is BEATS or BAR FRACTION.");
+    addAndMakeVisible(strumValue_);
+
+    const auto configureContextLabel = [this](juce::Label& label, const juce::String& text) {
+        label.setText(text, juce::dontSendNotification);
+        label.setFont(juce::Font(juce::FontOptions(8.5F).withStyle("Bold")));
+        label.setColour(juce::Label::textColourId, juce::Colour(0xff63778d));
+        label.setJustificationType(juce::Justification::centredLeft);
+        addAndMakeVisible(label);
+    };
+    chordRoot_.addItemList({"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}, 1);
+    chordRoot_.setSelectedId(1, juce::dontSendNotification);
+    chordRoot_.setTooltip("Global root for CHORD and STRUM voicings.");
+    addAndMakeVisible(chordRoot_);
+    chordScale_.addItemList(scaleDisplayNames(), 1);
+    chordScale_.setSelectedId(static_cast<int>(ScaleId::MinorPentatonic) + 1, juce::dontSendNotification);
+    chordScale_.setTooltip("Global scale/mode for CHORD and STRUM voicings.");
+    addAndMakeVisible(chordScale_);
+    configureContextLabel(chordRootLabel_, "CHORD ROOT");
+    configureContextLabel(chordScaleLabel_, "CHORD SCALE");
+
+    timeSigSource_.addItemList({"HOST", "MANUAL"}, 1);
+    timeSigSource_.setSelectedId(1, juce::dontSendNotification);
+    timeSigSource_.setTooltip("Use the host time signature, or set it manually for bar-relative timing.");
+    addAndMakeVisible(timeSigSource_);
+    for (int n = 1; n <= 16; ++n)
+        timeSigNum_.addItem(juce::String(n), n);
+    timeSigNum_.setSelectedId(4, juce::dontSendNotification);
+    addAndMakeVisible(timeSigNum_);
+    timeSigDenom_.addItemList({"1", "2", "4", "8", "16"}, 1);
+    timeSigDenom_.setSelectedId(3, juce::dontSendNotification);
+    addAndMakeVisible(timeSigDenom_);
+    configureContextLabel(timeSigLabel_, "TIME SIGNATURE");
+    addAndMakeVisible(autoReset_);
+    autoReset_.setTooltip("Restart the simulation deterministically every chosen number of bars.");
+    autoResetBars_.addItemList({"1/4", "1/2", "1", "2", "4", "8", "16"}, 1);
+    autoResetBars_.setSelectedId(3, juce::dontSendNotification);
+    addAndMakeVisible(autoResetBars_);
+    configureContextLabel(autoResetLabel_, "RESET EVERY (BARS)");
 
     const std::array<juce::String, 15> labels{
         "SPEED", "GRAVITY", "SOFTEN", "CHAOS", "DENSITY", "TRAIL", "BLOOM",
@@ -243,10 +313,14 @@ void ArtworkPanel::configureKnob(juce::Slider& slider, const juce::String& suffi
     addAndMakeVisible(slider);
 }
 
+int ArtworkPanel::deckHeight() const noexcept {
+    return deckPage_ == DeckPage::Voices ? 332 : 224;
+}
+
 void ArtworkPanel::paint(juce::Graphics& graphics) {
     graphics.fillAll(juce::Colour(0xff060914));
     if (!presentationMode_) {
-        const auto deck = getLocalBounds().removeFromBottom(224).toFloat();
+        const auto deck = getLocalBounds().removeFromBottom(deckHeight()).toFloat();
         juce::ColourGradient gradient(juce::Colour(0xf2171d2b), deck.getX(), deck.getY(),
                                       juce::Colour(0xff090d17), deck.getX(), deck.getBottom(), false);
         graphics.setGradientFill(gradient);
@@ -267,7 +341,7 @@ void ArtworkPanel::resized() {
     subtitle_.setBounds(header.removeFromLeft(230));
     present_.setBounds(header.removeFromRight(86).reduced(2, 5));
     status_.setBounds(header.removeFromRight(140));
-    auto deck = bounds.removeFromBottom(224);
+    auto deck = bounds.removeFromBottom(deckHeight());
     scene_.setBounds(bounds);
 
     auto tabs = deck.removeFromTop(34).reduced(16, 3);
@@ -294,47 +368,83 @@ void ArtworkPanel::resized() {
     };
 
     switch (deckPage_) {
-    case DeckPage::System:
-        randomize_.setBounds(left.removeFromTop(28).removeFromLeft(124));
+    case DeckPage::System: {
+        randomize_.setBounds(left.removeFromTop(26).removeFromLeft(124));
+        left.removeFromTop(5);
+        advanced_.setBounds(left.removeFromTop(26).removeFromLeft(124));
+        left.removeFromTop(8);
+        timeSigLabel_.setBounds(left.removeFromTop(12));
+        auto sigRow = left.removeFromTop(24);
+        timeSigSource_.setBounds(sigRow.removeFromLeft(80).reduced(0, 1));
+        timeSigNum_.setBounds(sigRow.removeFromLeft(48).reduced(2, 1));
+        timeSigDenom_.setBounds(sigRow.removeFromLeft(48).reduced(2, 1));
         left.removeFromTop(6);
-        advanced_.setBounds(left.removeFromTop(28).removeFromLeft(124));
+        autoReset_.setBounds(left.removeFromTop(24).removeFromLeft(124));
+        autoResetLabel_.setBounds(left.removeFromTop(12));
+        autoResetBars_.setBounds(left.removeFromTop(24).removeFromLeft(124));
         layoutKnobs({{0U, &speed_}, {1U, &gravity_}, {2U, &softening_}, {3U, &chaos_},
                      {7U, &massOne_}, {8U, &massTwo_}, {9U, &massThree_}}, content);
         break;
+    }
     case DeckPage::Voices: {
-        voicingMode_.setBounds(left.removeFromTop(28));
-        left.removeFromTop(4);
-        chordStrum_.setBounds(left.removeFromTop(28));
-        layoutKnobs({{4U, &density_}}, left.removeFromTop(82));
+        voicingMode_.setBounds(left.removeFromTop(26));
+        left.removeFromTop(3);
+        strumUnit_.setBounds(left.removeFromTop(24));
+        left.removeFromTop(3);
+        const auto strumRow = left.removeFromTop(24);
+        chordStrum_.setBounds(strumRow);
+        strumValue_.setBounds(strumRow);
+        left.removeFromTop(3);
+        auto chordRow = left.removeFromTop(40);
+        auto rootCell = chordRow.removeFromLeft(chordRow.getWidth() / 2).reduced(2, 0);
+        auto scaleCell = chordRow.reduced(2, 0);
+        chordRootLabel_.setBounds(rootCell.removeFromTop(12));
+        chordRoot_.setBounds(rootCell.removeFromTop(24));
+        chordScaleLabel_.setBounds(scaleCell.removeFromTop(12));
+        chordScale_.setBounds(scaleCell.removeFromTop(24));
+        left.removeFromTop(3);
+        layoutKnobs({{4U, &density_}}, left.removeFromTop(72));
         auto grid = content;
         auto gutter = grid.removeFromLeft(70);
         const auto columnWidth = grid.getWidth() / static_cast<int>(bodyCount);
-        voiceModeContext_.setBounds(grid.removeFromTop(18));
-        gutter.removeFromTop(18);
-        auto headerRow = grid.removeFromTop(16);
+        voiceModeContext_.setBounds(grid.removeFromTop(16));
         gutter.removeFromTop(16);
+        auto headerRow = grid.removeFromTop(14);
+        gutter.removeFromTop(14);
         for (std::size_t body = 0; body < bodyCount; ++body)
             voiceHeaders_[body].setBounds(headerRow.removeFromLeft(columnWidth));
         grid.removeFromTop(2);
         gutter.removeFromTop(2);
-        auto enableRow = grid.removeFromTop(20);
-        gutter.removeFromTop(20);
+        auto enableRow = grid.removeFromTop(18);
+        gutter.removeFromTop(18);
         for (std::size_t body = 0; body < bodyCount; ++body)
             voiceEnable_[body].setBounds(enableRow.removeFromLeft(columnWidth).reduced(10, 1));
         grid.removeFromTop(2);
         gutter.removeFromTop(2);
         const auto comboRow = [&](std::array<juce::ComboBox, bodyCount>& combos, std::size_t labelIndex) {
-            auto row = grid.removeFromTop(22);
-            voiceRowLabels_[labelIndex].setBounds(gutter.removeFromTop(22));
+            auto row = grid.removeFromTop(20);
+            voiceRowLabels_[labelIndex].setBounds(gutter.removeFromTop(20));
             for (std::size_t body = 0; body < bodyCount; ++body)
                 combos[body].setBounds(row.removeFromLeft(columnWidth).reduced(4, 1));
             grid.removeFromTop(2);
             gutter.removeFromTop(2);
         };
+        const auto sliderRow = [&](std::array<juce::Slider, bodyCount>& sliders, std::size_t labelIndex) {
+            auto row = grid.removeFromTop(20);
+            voiceRowLabels_[labelIndex].setBounds(gutter.removeFromTop(20));
+            for (std::size_t body = 0; body < bodyCount; ++body)
+                sliders[body].setBounds(row.removeFromLeft(columnWidth).reduced(4, 1));
+            grid.removeFromTop(2);
+            gutter.removeFromTop(2);
+        };
         comboRow(voiceRoot_, 0U);
         comboRow(voiceScale_, 1U);
-        comboRow(voicePitch_, 2U);
-        comboRow(voiceTrigger_, 3U);
+        comboRow(voiceOctave_, 2U);
+        comboRow(voicePitch_, 3U);
+        comboRow(voiceTrigger_, 4U);
+        comboRow(voiceDurMap_, 5U);
+        sliderRow(voiceDurMin_, 6U);
+        sliderRow(voiceDurMax_, 7U);
         break;
     }
     case DeckPage::Space:
@@ -443,9 +553,26 @@ void ArtworkPanel::updateDeckVisibility() {
         voiceRoot_[body].setVisible(false);
         voicePitch_[body].setVisible(false);
         voiceTrigger_[body].setVisible(false);
+        voiceOctave_[body].setVisible(false);
+        voiceDurMap_[body].setVisible(false);
+        voiceDurMin_[body].setVisible(false);
+        voiceDurMax_[body].setVisible(false);
     }
     voicingMode_.setVisible(false);
     chordStrum_.setVisible(false);
+    strumUnit_.setVisible(false);
+    strumValue_.setVisible(false);
+    chordRoot_.setVisible(false);
+    chordScale_.setVisible(false);
+    chordRootLabel_.setVisible(false);
+    chordScaleLabel_.setVisible(false);
+    timeSigSource_.setVisible(false);
+    timeSigNum_.setVisible(false);
+    timeSigDenom_.setVisible(false);
+    timeSigLabel_.setVisible(false);
+    autoReset_.setVisible(false);
+    autoResetBars_.setVisible(false);
+    autoResetLabel_.setVisible(false);
     voiceModeContext_.setVisible(false);
     for (auto& label : voiceRowLabels_)
         label.setVisible(false);
@@ -459,9 +586,17 @@ void ArtworkPanel::updateDeckVisibility() {
     };
     switch (deckPage_) {
     case DeckPage::System:
-        pageHelp_.setText("Physics, masses, reset, and exact body-state editing.", juce::dontSendNotification);
+        pageHelp_.setText("Physics, masses, time signature, bar auto-reset, and exact body-state editing.",
+                          juce::dontSendNotification);
         randomize_.setVisible(true);
         advanced_.setVisible(true);
+        timeSigSource_.setVisible(true);
+        timeSigNum_.setVisible(true);
+        timeSigDenom_.setVisible(true);
+        timeSigLabel_.setVisible(true);
+        autoReset_.setVisible(true);
+        autoResetBars_.setVisible(true);
+        autoResetLabel_.setVisible(true);
         showKnob(0U, speed_);
         showKnob(1U, gravity_);
         showKnob(2U, softening_);
@@ -475,7 +610,19 @@ void ArtworkPanel::updateDeckVisibility() {
                           juce::dontSendNotification);
         showKnob(4U, density_);
         voicingMode_.setVisible(true);
-        chordStrum_.setVisible(voicingMode_.getSelectedItemIndex() == 2);
+        {
+            const auto mode = voicingMode_.getSelectedItemIndex();
+            const auto strumMode = mode == 2;
+            const auto chordMode = mode >= 1;
+            const auto musicalStrum = strumUnit_.getSelectedItemIndex() != 0;
+            strumUnit_.setVisible(strumMode);
+            chordStrum_.setVisible(strumMode && !musicalStrum);
+            strumValue_.setVisible(strumMode && musicalStrum);
+            chordRoot_.setVisible(chordMode);
+            chordScale_.setVisible(chordMode);
+            chordRootLabel_.setVisible(chordMode);
+            chordScaleLabel_.setVisible(chordMode);
+        }
         voiceModeContext_.setVisible(true);
         for (std::size_t body = 0; body < bodyCount; ++body) {
             voiceHeaders_[body].setVisible(true);
@@ -484,6 +631,10 @@ void ArtworkPanel::updateDeckVisibility() {
             voiceRoot_[body].setVisible(true);
             voicePitch_[body].setVisible(true);
             voiceTrigger_[body].setVisible(true);
+            voiceOctave_[body].setVisible(true);
+            voiceDurMap_[body].setVisible(true);
+            voiceDurMin_[body].setVisible(true);
+            voiceDurMax_[body].setVisible(true);
         }
         for (auto& label : voiceRowLabels_)
             label.setVisible(true);
@@ -552,8 +703,13 @@ void ArtworkPanel::setPresetCatalog(const PresetCatalog& catalog) {
 }
 
 void ArtworkPanel::comboBoxChanged(juce::ComboBox* comboBox) {
-    if (comboBox == &voicingMode_)
+    if (comboBox == &voicingMode_) {
         updateVoiceModeControls();
+    } else if (comboBox == &strumUnit_) {
+        updateDeckVisibility();
+        resized();
+        repaint();
+    }
 }
 
 void ArtworkPanel::updateVoiceModeControls() {
@@ -561,20 +717,20 @@ void ArtworkPanel::updateVoiceModeControls() {
     if (mode == 0) {
         voiceModeContext_.setText("INDEPENDENT NOTES / EACH PLANET USES ITS OWN TRIGGER",
                                   juce::dontSendNotification);
-        voiceRowLabels_[2].setText("PITCH MAP", juce::dontSendNotification);
-        voiceRowLabels_[3].setText("TRIGGER", juce::dontSendNotification);
+        voiceRowLabels_[3].setText("PITCH MAP", juce::dontSendNotification);
+        voiceRowLabels_[4].setText("TRIGGER", juce::dontSendNotification);
     } else if (mode == 1) {
-        voiceModeContext_.setText("CHORD / ANY PLANET TRIGGER LAUNCHES SCALE DEGREES 0 / 2 / 4",
+        voiceModeContext_.setText("CHORD / GLOBAL ROOT+SCALE / DEGREES 0 / 2 / 4 FROM ANY TRIGGER",
                                   juce::dontSendNotification);
-        voiceRowLabels_[2].setText("DEGREE SRC", juce::dontSendNotification);
-        voiceRowLabels_[3].setText("CHORD TRIG", juce::dontSendNotification);
+        voiceRowLabels_[3].setText("DEGREE SRC", juce::dontSendNotification);
+        voiceRowLabels_[4].setText("CHORD TRIG", juce::dontSendNotification);
     } else {
-        voiceModeContext_.setText("STRUM / PHYSICAL TRIGGER LAUNCHES A ROTATING SHORT SEQUENCE",
+        voiceModeContext_.setText("STRUM / GLOBAL ROOT+SCALE / ROTATING SHORT SEQUENCE",
                                   juce::dontSendNotification);
-        voiceRowLabels_[2].setText("DEGREE SRC", juce::dontSendNotification);
-        voiceRowLabels_[3].setText("STRUM TRIG", juce::dontSendNotification);
+        voiceRowLabels_[3].setText("DEGREE SRC", juce::dontSendNotification);
+        voiceRowLabels_[4].setText("STRUM TRIG", juce::dontSendNotification);
     }
-    chordStrum_.setVisible(!presentationMode_ && deckPage_ == DeckPage::Voices && mode == 2);
+    updateDeckVisibility();
     resized();
     repaint();
 }

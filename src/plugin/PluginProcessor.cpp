@@ -7,12 +7,30 @@
 #include "ui/PresetCatalog.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace threebs {
 namespace {
 
 constexpr auto stateTreeName = "THREE_BS_STATE";
+
+constexpr std::array<double, 7> autoResetBarsValues{0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0};
+
+int autoResetBarsToIndex(double bars) noexcept {
+    int best{2};
+    double bestError{1.0e18};
+    for (int i = 0; i < static_cast<int>(autoResetBarsValues.size()); ++i) {
+        const auto error = std::abs(autoResetBarsValues[static_cast<std::size_t>(i)] - bars);
+        if (error < bestError) {
+            bestError = error;
+            best = i;
+        }
+    }
+    return best;
+}
+
+constexpr std::array<int, 5> timeSigDenominators{1, 2, 4, 8, 16};
 
 float parameterValue(const juce::AudioProcessorValueTreeState& state, const juce::String& id) noexcept {
     if (const auto* value = state.getRawParameterValue(id))
@@ -176,6 +194,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout ThreeBSProcessor::createPara
         values.push_back(std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID{"voiceTrigger" + suffix, 1}, "Planet " + suffix + " Trigger",
             triggerMappingDisplayNames(), 0));
+        values.push_back(std::make_unique<juce::AudioParameterInt>(
+            juce::ParameterID{"voiceOctave" + suffix, 1}, "Planet " + suffix + " Octave", -4, 4, 0));
+        values.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID{"voiceDurMap" + suffix, 1}, "Planet " + suffix + " Length Map",
+            pitchMappingDisplayNames(), static_cast<int>(PitchMapping::Speed)));
+        values.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID{"voiceDurMin" + suffix, 1}, "Planet " + suffix + " Length Min",
+            juce::NormalisableRange<float>(0.02F, 8.0F, 0.001F, 0.4F), 0.2F));
+        values.push_back(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID{"voiceDurMax" + suffix, 1}, "Planet " + suffix + " Length Max",
+            juce::NormalisableRange<float>(0.02F, 8.0F, 0.001F, 0.4F), 0.2F));
     }
     values.push_back(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID{"voicingMode", 1}, "Voicing Mode",
@@ -183,6 +212,36 @@ juce::AudioProcessorValueTreeState::ParameterLayout ThreeBSProcessor::createPara
     values.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"chordStrum", 1}, "Chord Strum",
         juce::NormalisableRange<float>(0.0F, 120.0F, 1.0F), 24.0F));
+    values.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"strumUnit", 1}, "Strum Unit",
+        juce::StringArray{"Milliseconds", "Beats", "Bar Fraction"}, 0));
+    values.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"strumValue", 1}, "Strum Amount",
+        juce::NormalisableRange<float>(0.0F, 4.0F, 0.001F, 0.4F), 0.0625F));
+    values.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"chordRoot", 1}, "Chord Root",
+        juce::StringArray{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}, 0));
+    values.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"chordScale", 1}, "Chord Scale",
+        scaleDisplayNames(), static_cast<int>(ScaleId::MinorPentatonic)));
+    values.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"timeSigSource", 1}, "Time Sig Source",
+        juce::StringArray{"Host", "Manual"}, 0));
+    {
+        juce::StringArray numerators;
+        for (int n = 1; n <= 16; ++n)
+            numerators.add(juce::String(n));
+        values.push_back(std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID{"timeSigNum", 1}, "Time Sig Numerator", numerators, 3));
+    }
+    values.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"timeSigDenom", 1}, "Time Sig Denominator",
+        juce::StringArray{"1", "2", "4", "8", "16"}, 2));
+    values.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{"autoReset", 1}, "Auto Reset", false));
+    values.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"autoResetBars", 1}, "Auto Reset Bars",
+        juce::StringArray{"1/4", "1/2", "1", "2", "4", "8", "16"}, 2));
     values.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{"inputMode", 1}, "MIDI Input",
         juce::StringArray{"Off", "Transpose", "Gate"}, 0));
     juce::StringArray presetNames;
@@ -216,9 +275,22 @@ ThreeBSProcessor::ThreeBSProcessor()
         parameterRefs_.voiceRoot[body] = parameters_.getRawParameterValue("voiceRoot" + suffix);
         parameterRefs_.voicePitch[body] = parameters_.getRawParameterValue("voicePitch" + suffix);
         parameterRefs_.voiceTrigger[body] = parameters_.getRawParameterValue("voiceTrigger" + suffix);
+        parameterRefs_.voiceOctave[body] = parameters_.getRawParameterValue("voiceOctave" + suffix);
+        parameterRefs_.voiceDurMap[body] = parameters_.getRawParameterValue("voiceDurMap" + suffix);
+        parameterRefs_.voiceDurMin[body] = parameters_.getRawParameterValue("voiceDurMin" + suffix);
+        parameterRefs_.voiceDurMax[body] = parameters_.getRawParameterValue("voiceDurMax" + suffix);
     }
     parameterRefs_.voicingMode = parameters_.getRawParameterValue("voicingMode");
     parameterRefs_.chordStrum = parameters_.getRawParameterValue("chordStrum");
+    parameterRefs_.strumUnit = parameters_.getRawParameterValue("strumUnit");
+    parameterRefs_.strumValue = parameters_.getRawParameterValue("strumValue");
+    parameterRefs_.chordRoot = parameters_.getRawParameterValue("chordRoot");
+    parameterRefs_.chordScale = parameters_.getRawParameterValue("chordScale");
+    parameterRefs_.timeSigSource = parameters_.getRawParameterValue("timeSigSource");
+    parameterRefs_.timeSigNum = parameters_.getRawParameterValue("timeSigNum");
+    parameterRefs_.timeSigDenom = parameters_.getRawParameterValue("timeSigDenom");
+    parameterRefs_.autoReset = parameters_.getRawParameterValue("autoReset");
+    parameterRefs_.autoResetBars = parameters_.getRawParameterValue("autoResetBars");
     parameterRefs_.inputMode = parameters_.getRawParameterValue("inputMode");
     parameterRefs_.preset = parameters_.getRawParameterValue("preset");
     engineConfig_ = engine_.config();
@@ -297,6 +369,10 @@ void ThreeBSProcessor::applyVoiceParameters(const std::array<VoiceConfig, bodyCo
         setParameterValue("voiceRoot" + suffix, static_cast<float>(voices[body].root));
         setParameterValue("voicePitch" + suffix, static_cast<float>(voices[body].pitchMapping));
         setParameterValue("voiceTrigger" + suffix, static_cast<float>(voices[body].triggerMapping));
+        setParameterValue("voiceOctave" + suffix, static_cast<float>(voices[body].octave));
+        setParameterValue("voiceDurMap" + suffix, static_cast<float>(voices[body].durationMapping));
+        setParameterValue("voiceDurMin" + suffix, static_cast<float>(voices[body].minimumDurationBeats));
+        setParameterValue("voiceDurMax" + suffix, static_cast<float>(voices[body].maximumDurationBeats));
     }
 }
 
@@ -308,6 +384,20 @@ void ThreeBSProcessor::updateEngineConfigFromParameters() noexcept {
     engineConfig_.voicingMode = static_cast<VoicingMode>(std::clamp(
         static_cast<int>(std::lround(parameterRefs_.voicingMode->load(std::memory_order_relaxed))), 0, 2));
     engineConfig_.chordStrumMilliseconds = parameterRefs_.chordStrum->load(std::memory_order_relaxed);
+    engineConfig_.chordStrumUnit = static_cast<StrumUnit>(std::clamp(
+        static_cast<int>(std::lround(parameterRefs_.strumUnit->load(std::memory_order_relaxed))), 0, 2));
+    engineConfig_.chordStrumValue = parameterRefs_.strumValue->load(std::memory_order_relaxed);
+    engineConfig_.chordSystem.root = static_cast<std::uint8_t>(std::clamp(
+        static_cast<int>(std::lround(parameterRefs_.chordRoot->load(std::memory_order_relaxed))), 0, 11));
+    engineConfig_.chordSystem.scale = static_cast<ScaleId>(std::lround(
+        parameterRefs_.chordScale->load(std::memory_order_relaxed)));
+    engineConfig_.autoResetEnabled = parameterRefs_.autoReset->load(std::memory_order_relaxed) >= 0.5F;
+    {
+        const auto index = std::clamp(static_cast<int>(std::lround(
+            parameterRefs_.autoResetBars->load(std::memory_order_relaxed))), 0,
+            static_cast<int>(autoResetBarsValues.size()) - 1);
+        engineConfig_.autoResetBars = autoResetBarsValues[static_cast<std::size_t>(index)];
+    }
     for (std::size_t body = 0; body < bodyCount; ++body) {
         auto& voice = engineConfig_.voices[body];
         voice.probability = density;
@@ -320,6 +410,12 @@ void ThreeBSProcessor::updateEngineConfigFromParameters() noexcept {
             parameterRefs_.voicePitch[body]->load(std::memory_order_relaxed)));
         voice.triggerMapping = static_cast<TriggerMapping>(std::lround(
             parameterRefs_.voiceTrigger[body]->load(std::memory_order_relaxed)));
+        voice.octave = static_cast<std::int8_t>(std::clamp(
+            static_cast<int>(std::lround(parameterRefs_.voiceOctave[body]->load(std::memory_order_relaxed))), -4, 4));
+        voice.durationMapping = static_cast<PitchMapping>(std::lround(
+            parameterRefs_.voiceDurMap[body]->load(std::memory_order_relaxed)));
+        voice.minimumDurationBeats = parameterRefs_.voiceDurMin[body]->load(std::memory_order_relaxed);
+        voice.maximumDurationBeats = parameterRefs_.voiceDurMax[body]->load(std::memory_order_relaxed);
     }
     const auto inputMode = static_cast<int>(parameterRefs_.inputMode->load(std::memory_order_relaxed));
     engineConfig_.inputTransposeEnabled = inputMode == 1;
@@ -392,11 +488,26 @@ void ThreeBSProcessor::processBlock(juce::AudioBuffer<float>& audio, juce::MidiB
     auto hostPlaying = true;
     bool loopWrapped{};
     bool seeked{};
+    const auto manualSource = static_cast<int>(std::lround(
+        parameterRefs_.timeSigSource->load(std::memory_order_relaxed))) == 1;
+    const auto manualNum = std::clamp(static_cast<int>(std::lround(
+        parameterRefs_.timeSigNum->load(std::memory_order_relaxed))) + 1, 1, 16);
+    const auto denomIndex = std::clamp(static_cast<int>(std::lround(
+        parameterRefs_.timeSigDenom->load(std::memory_order_relaxed))), 0,
+        static_cast<int>(timeSigDenominators.size()) - 1);
+    int timeSigNumerator = manualNum;
+    int timeSigDenominator = timeSigDenominators[static_cast<std::size_t>(denomIndex)];
     if (auto* playHead = getPlayHead()) {
         if (const auto position = playHead->getPosition()) {
             bpm = position->getBpm().orFallback(120.0);
             ppq = position->getPpqPosition().orFallback(freeBeat_);
             hostPlaying = position->getIsPlaying();
+            if (!manualSource) {
+                if (const auto sig = position->getTimeSignature()) {
+                    timeSigNumerator = std::clamp(sig->numerator, 1, 64);
+                    timeSigDenominator = std::clamp(sig->denominator, 1, 64);
+                }
+            }
             if (haveHostPosition_) {
                 loopWrapped = ppq < lastPpq_ - 0.25;
                 const auto expected = lastPpq_ + lastBeatsPerSample_ * static_cast<double>(lastBlockSize_);
@@ -414,6 +525,8 @@ void ThreeBSProcessor::processBlock(juce::AudioBuffer<float>& audio, juce::MidiB
     context.sampleRate = sampleRate_;
     context.beatAtStart = sync ? ppq : freeBeat_;
     context.beatsPerSample = beatsPerSample;
+    context.timeSigNumerator = timeSigNumerator;
+    context.timeSigDenominator = timeSigDenominator;
     context.playing = run && (sync ? hostPlaying : true);
     context.transportStarted = context.playing && !hostWasPlaying_;
     context.seeked = sync && seeked;
@@ -592,6 +705,20 @@ UserConfiguration ThreeBSProcessor::currentUserConfiguration() const {
     result.engine.voicingMode = static_cast<VoicingMode>(std::clamp(static_cast<int>(std::lround(
         parameterRefs_.voicingMode->load(std::memory_order_relaxed))), 0, 2));
     result.engine.chordStrumMilliseconds = parameterRefs_.chordStrum->load(std::memory_order_relaxed);
+    result.engine.chordStrumUnit = static_cast<StrumUnit>(std::clamp(static_cast<int>(std::lround(
+        parameterRefs_.strumUnit->load(std::memory_order_relaxed))), 0, 2));
+    result.engine.chordStrumValue = parameterRefs_.strumValue->load(std::memory_order_relaxed);
+    result.engine.chordSystem.root = static_cast<std::uint8_t>(std::clamp(static_cast<int>(std::lround(
+        parameterRefs_.chordRoot->load(std::memory_order_relaxed))), 0, 11));
+    result.engine.chordSystem.scale = static_cast<ScaleId>(std::clamp(static_cast<int>(std::lround(
+        parameterRefs_.chordScale->load(std::memory_order_relaxed))), 0, 14));
+    result.engine.autoResetEnabled = parameterRefs_.autoReset->load(std::memory_order_relaxed) >= 0.5F;
+    {
+        const auto index = std::clamp(static_cast<int>(std::lround(
+            parameterRefs_.autoResetBars->load(std::memory_order_relaxed))), 0,
+            static_cast<int>(autoResetBarsValues.size()) - 1);
+        result.engine.autoResetBars = autoResetBarsValues[static_cast<std::size_t>(index)];
+    }
     const auto inputMode = static_cast<int>(std::lround(parameterRefs_.inputMode->load(std::memory_order_relaxed)));
     result.engine.inputTransposeEnabled = inputMode == 1;
     result.engine.inputGateEnabled = inputMode == 2;
@@ -606,6 +733,12 @@ UserConfiguration ThreeBSProcessor::currentUserConfiguration() const {
             parameterRefs_.voicePitch[body]->load(std::memory_order_relaxed))), 0, 8));
         voice.triggerMapping = static_cast<TriggerMapping>(std::clamp(static_cast<int>(std::lround(
             parameterRefs_.voiceTrigger[body]->load(std::memory_order_relaxed))), 0, 7));
+        voice.octave = static_cast<std::int8_t>(std::clamp(static_cast<int>(std::lround(
+            parameterRefs_.voiceOctave[body]->load(std::memory_order_relaxed))), -4, 4));
+        voice.durationMapping = static_cast<PitchMapping>(std::clamp(static_cast<int>(std::lround(
+            parameterRefs_.voiceDurMap[body]->load(std::memory_order_relaxed))), 0, 8));
+        voice.minimumDurationBeats = parameterRefs_.voiceDurMin[body]->load(std::memory_order_relaxed);
+        voice.maximumDurationBeats = parameterRefs_.voiceDurMax[body]->load(std::memory_order_relaxed);
         voice.probability = result.densityPercent / 100.0;
     }
     return result;
@@ -637,6 +770,13 @@ void ThreeBSProcessor::applyUserConfiguration(const UserConfiguration& configura
     setParameterValue("bloom", configuration.presentation.visual.bloom * 100.0F);
     setParameterValue("voicingMode", static_cast<float>(configuration.engine.voicingMode));
     setParameterValue("chordStrum", static_cast<float>(configuration.engine.chordStrumMilliseconds));
+    setParameterValue("strumUnit", static_cast<float>(configuration.engine.chordStrumUnit));
+    setParameterValue("strumValue", static_cast<float>(configuration.engine.chordStrumValue));
+    setParameterValue("chordRoot", static_cast<float>(configuration.engine.chordSystem.root));
+    setParameterValue("chordScale", static_cast<float>(configuration.engine.chordSystem.scale));
+    setParameterValue("autoReset", configuration.engine.autoResetEnabled ? 1.0F : 0.0F);
+    setParameterValue("autoResetBars",
+                      static_cast<float>(autoResetBarsToIndex(configuration.engine.autoResetBars)));
     setParameterValue("inputMode", configuration.engine.inputTransposeEnabled ? 1.0F
         : configuration.engine.inputGateEnabled ? 2.0F : 0.0F);
     applyVoiceParameters(configuration.engine.voices);
@@ -726,6 +866,30 @@ void ThreeBSProcessor::setStateInformation(const void* data, int size) {
         }
         ensureStateParameterValue(state, "voicingMode", 0.0F);
         ensureStateParameterValue(state, "chordStrum", 24.0F);
+    }
+    if (schema < 6) {
+        for (std::size_t body = 0; body < bodyCount; ++body) {
+            const auto suffix = juce::String(body + 1);
+            const auto duration = stateParameterValue(state, "voiceDuration" + suffix, 0.2F);
+            ensureStateParameterValue(state, "voiceOctave" + suffix, 0.0F);
+            ensureStateParameterValue(state, "voiceDurMap" + suffix,
+                                      static_cast<float>(PitchMapping::Speed));
+            ensureStateParameterValue(state, "voiceDurMin" + suffix, duration);
+            ensureStateParameterValue(state, "voiceDurMax" + suffix, duration);
+        }
+        // Seed the global chord frame from the first voice so existing chord
+        // presets keep their tonal center.
+        ensureStateParameterValue(state, "chordRoot", stateParameterValue(state, "voiceRoot1", 0.0F));
+        ensureStateParameterValue(state, "chordScale",
+                                  stateParameterValue(state, "voiceScale1",
+                                                      static_cast<float>(ScaleId::MinorPentatonic)));
+        ensureStateParameterValue(state, "strumUnit", 0.0F);
+        ensureStateParameterValue(state, "strumValue", 0.0625F);
+        ensureStateParameterValue(state, "timeSigSource", 0.0F);
+        ensureStateParameterValue(state, "timeSigNum", 3.0F);
+        ensureStateParameterValue(state, "timeSigDenom", 2.0F);
+        ensureStateParameterValue(state, "autoReset", 0.0F);
+        ensureStateParameterValue(state, "autoResetBars", 2.0F);
     }
     parameters_.replaceState(state);
     auto initial = storedInitial_.load();

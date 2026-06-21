@@ -68,8 +68,29 @@ public:
     std::array<juce::ComboBox*, bodyCount> voiceTriggerSelectors() noexcept {
         return {&voiceTrigger_[0], &voiceTrigger_[1], &voiceTrigger_[2]};
     }
+    std::array<juce::ComboBox*, bodyCount> voiceOctaveSelectors() noexcept {
+        return {&voiceOctave_[0], &voiceOctave_[1], &voiceOctave_[2]};
+    }
+    std::array<juce::ComboBox*, bodyCount> voiceDurationMapSelectors() noexcept {
+        return {&voiceDurMap_[0], &voiceDurMap_[1], &voiceDurMap_[2]};
+    }
+    std::array<juce::Slider*, bodyCount> voiceDurationMinSliders() noexcept {
+        return {&voiceDurMin_[0], &voiceDurMin_[1], &voiceDurMin_[2]};
+    }
+    std::array<juce::Slider*, bodyCount> voiceDurationMaxSliders() noexcept {
+        return {&voiceDurMax_[0], &voiceDurMax_[1], &voiceDurMax_[2]};
+    }
     juce::ComboBox& voicingModeSelector() noexcept { return voicingMode_; }
     juce::Slider& chordStrumSlider() noexcept { return chordStrum_; }
+    juce::ComboBox& strumUnitSelector() noexcept { return strumUnit_; }
+    juce::Slider& strumValueSlider() noexcept { return strumValue_; }
+    juce::ComboBox& chordRootSelector() noexcept { return chordRoot_; }
+    juce::ComboBox& chordScaleSelector() noexcept { return chordScale_; }
+    juce::ComboBox& timeSigSourceSelector() noexcept { return timeSigSource_; }
+    juce::ComboBox& timeSigNumeratorSelector() noexcept { return timeSigNum_; }
+    juce::ComboBox& timeSigDenominatorSelector() noexcept { return timeSigDenom_; }
+    juce::ToggleButton& autoResetButton() noexcept { return autoReset_; }
+    juce::ComboBox& autoResetBarsSelector() noexcept { return autoResetBars_; }
 
     std::function<void()> onRandomize;
     std::function<void()> onReset;
@@ -92,6 +113,7 @@ private:
     enum class DeckPage : std::size_t { System, Voices, Space, Presets, Settings };
 
     void configureKnob(juce::Slider& slider, const juce::String& suffix = {});
+    int deckHeight() const noexcept;
     void togglePresentation();
     void selectDeckPage(DeckPage page);
     void updateDeckVisibility();
@@ -125,11 +147,28 @@ private:
     std::array<juce::ComboBox, bodyCount> voiceRoot_;
     std::array<juce::ComboBox, bodyCount> voicePitch_;
     std::array<juce::ComboBox, bodyCount> voiceTrigger_;
+    std::array<juce::ComboBox, bodyCount> voiceOctave_;
+    std::array<juce::ComboBox, bodyCount> voiceDurMap_;
+    std::array<juce::Slider, bodyCount> voiceDurMin_;
+    std::array<juce::Slider, bodyCount> voiceDurMax_;
     std::array<juce::Label, bodyCount> voiceHeaders_;
-    std::array<juce::Label, 4> voiceRowLabels_;
+    std::array<juce::Label, 8> voiceRowLabels_;
     juce::Label voiceModeContext_;
     juce::ComboBox voicingMode_;
     juce::Slider chordStrum_;
+    juce::ComboBox strumUnit_;
+    juce::Slider strumValue_;
+    juce::ComboBox chordRoot_;
+    juce::ComboBox chordScale_;
+    juce::Label chordRootLabel_;
+    juce::Label chordScaleLabel_;
+    juce::ComboBox timeSigSource_;
+    juce::ComboBox timeSigNum_;
+    juce::ComboBox timeSigDenom_;
+    juce::Label timeSigLabel_;
+    juce::ToggleButton autoReset_{"AUTO RESET"};
+    juce::ComboBox autoResetBars_;
+    juce::Label autoResetLabel_;
     juce::ToggleButton autoFrame_{"AUTO FRAME"};
     std::array<juce::ComboBox, 4> presetCategories_;
     std::array<juce::Label, 4> presetCategoryLabels_;

@@ -12,7 +12,7 @@
 namespace threebs {
 
 inline constexpr std::size_t bodyCount = 3;
-inline constexpr std::uint32_t stateSchemaVersion = 5;
+inline constexpr std::uint32_t stateSchemaVersion = 6;
 
 enum class InitialSystem : std::uint8_t {
     FigureEight,
@@ -57,6 +57,10 @@ enum class TriggerMapping : std::uint8_t {
 };
 
 enum class VoicingMode : std::uint8_t { Independent, Chord, Strum };
+
+enum class StrumUnit : std::uint8_t { Milliseconds, Beats, BarFraction };
+
+enum class TimeSignatureSource : std::uint8_t { Host, Manual };
 
 enum class ScaleId : std::uint8_t {
     Major,
@@ -114,6 +118,7 @@ struct VoiceConfig {
     std::uint8_t root{0};
     std::uint8_t minimumNote{36};
     std::uint8_t maximumNote{84};
+    std::int8_t octave{0};
     ScaleId scale{ScaleId::MinorPentatonic};
     std::array<bool, 12> customScale{true, false, true, false, true, true,
                                       false, true, false, true, false, true};
@@ -121,12 +126,21 @@ struct VoiceConfig {
     TriggerMapping triggerMapping{TriggerMapping::Clock};
     double clockDivisionBeats{0.25};
     double probability{1.0};
-    double durationBeats{0.20};
+    PitchMapping durationMapping{PitchMapping::Speed};
+    double minimumDurationBeats{0.20};
+    double maximumDurationBeats{0.20};
     double minimumTriggerIntervalBeats{0.0625};
     double closeApproachDistance{1.0};
     std::uint8_t minimumVelocity{44};
     std::uint8_t maximumVelocity{112};
     std::array<CcLaneConfig, 2> ccLanes{};
+};
+
+struct ChordSystemConfig {
+    std::uint8_t root{0};
+    ScaleId scale{ScaleId::MinorPentatonic};
+    std::array<bool, 12> customScale{true, false, true, false, true, true,
+                                      false, true, false, true, false, true};
 };
 
 } // namespace threebs

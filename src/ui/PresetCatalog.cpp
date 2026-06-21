@@ -100,7 +100,7 @@ PresetCatalog::PresetCatalog() {
         ThreeBSAssets::factorypresets_json, ThreeBSAssets::factorypresets_jsonSize);
     const auto root = juce::JSON::parse(source);
     const auto schema = static_cast<int>(property(root, "schemaVersion"));
-    if (schema != 1 && schema != 2)
+    if (schema < 1 || schema > 3)
         return;
     auto* array = property(root, "presets").getArray();
     if (array == nullptr || array->size() != 24)
@@ -132,6 +132,7 @@ PresetCatalog::PresetCatalog() {
             auto& voice = preset.voices[index];
             voice.channel = static_cast<std::uint8_t>(number(sourceVoice, "channel", index + 1.0));
             voice.root = static_cast<std::uint8_t>(number(sourceVoice, "root", 0.0));
+            voice.octave = static_cast<std::int8_t>(number(sourceVoice, "octave", 0.0));
             voice.scale = scale(text(sourceVoice, "scale"));
             voice.pitchMapping = pitchMapping(text(sourceVoice, "pitch"));
             voice.triggerMapping = triggerMapping(text(sourceVoice, "trigger"));
@@ -139,7 +140,13 @@ PresetCatalog::PresetCatalog() {
             voice.maximumNote = static_cast<std::uint8_t>(number(sourceVoice, "maximum", 84.0));
             voice.clockDivisionBeats = number(sourceVoice, "division", 0.25);
             voice.probability = number(sourceVoice, "probability", 1.0);
-            voice.durationBeats = number(sourceVoice, "duration", 0.2);
+            // Schema 1/2 stored a single "duration"; schema 3 adds a mapped range.
+            const auto legacyDuration = number(sourceVoice, "duration", 0.2);
+            voice.minimumDurationBeats = number(sourceVoice, "durationMin", legacyDuration);
+            voice.maximumDurationBeats = number(sourceVoice, "durationMax", legacyDuration);
+            const auto durationMapText = text(sourceVoice, "durationMap");
+            if (durationMapText.isNotEmpty())
+                voice.durationMapping = pitchMapping(durationMapText);
         }
 
         const auto visual = property(item, "visual");
