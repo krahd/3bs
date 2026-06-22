@@ -143,10 +143,16 @@ use their own schema v1 catalog. See
 
 ## Host Routing
 
-Logic uses `3bs` as an AU MIDI effect before a software instrument. Ableton uses
-the VST3 on one MIDI track and receives its output on another. Because Ableton
-merges internally routed MIDI channels, independent instruments require
-multiple instances or a multitimbral destination.
+Logic uses `3bs` as an AU MIDI effect before a software instrument. In Ableton,
+the VST3 is a MIDI-generating instrument and therefore occupies the track's
+instrument slot; place it on one MIDI track and receive its output on a second
+instrument track. For one destination track, run the standalone application,
+choose `Virtual MIDI: 3bs`, then select `The Three Body Solution` as that track's
+MIDI input. A device placed
+before an instrument in the same Live chain requires a dedicated Max for Live
+MIDI Effect rather than a VST3. Ableton merges internally routed MIDI channels,
+so independent instruments require multiple instances or a multitimbral
+destination.
 
 Local AU validation command:
 

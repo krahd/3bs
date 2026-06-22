@@ -23,7 +23,8 @@ is not.
 1. Move `The Three Body Solution.app` to `/Applications`.
 2. Control-click the application and choose **Open** on first launch.
 3. Choose `Virtual MIDI: 3bs` or another output on the Settings page.
-4. Route that MIDI source to a software instrument.
+4. On an Ableton instrument track, choose `The Three Body Solution` under
+   **MIDI From** and set monitoring to **In**.
 
 Press `P` for the clean presentation view and `F` for fullscreen. The
 standalone emits MIDI and does not synthesize audio itself.
@@ -52,10 +53,15 @@ mkdir -p ~/Library/Audio/Plug-Ins/VST3
 cp -R "The Three Body Solution.vst3" ~/Library/Audio/Plug-Ins/VST3/
 ```
 
-Rescan plugins in the host. In Ableton Live, place `3bs` on one MIDI track and
-receive its MIDI output on an instrument track. Ableton merges internally
-routed MIDI channels, so independent channel destinations require multiple
-instances or a multitimbral instrument.
+Rescan plugins in the host. In Ableton Live, the VST3 occupies an instrument
+slot and cannot precede another instrument on the same track. Place `3bs` on one
+MIDI track, then on a second instrument track choose the 3BS track and plug-in
+under **MIDI From** and set monitoring to **In**. Use the standalone virtual
+MIDI output described above when the destination instrument must remain on one
+track. True same-chain operation requires a Max for Live MIDI Effect; changing
+the VST3 category cannot provide that Live device type. Ableton merges
+internally routed MIDI channels, so independent channel destinations require
+multiple instances or a multitimbral instrument.
 
 ## Gatekeeper
 

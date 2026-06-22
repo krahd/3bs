@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-21 22-47 GMT-3
+Last updated: 2026-06-21 23-08 GMT-3
 
 ## Project purpose
 
@@ -296,6 +296,11 @@ repository.
 - Alpha.3 intentionally has a new AU manufacturer code and bundle identifiers;
   hosts may treat it as a different plugin from alpha.2.
 - AU MIDI effects and VST3 MIDI generation still require real host validation.
+- Ableton treats the VST3 as the instrument it declares itself to be, so it
+  cannot coexist before another instrument on one Live track. VST3 use requires
+  two-track MIDI routing; the standalone virtual MIDI output supports a
+  single destination track. True same-chain use requires a separate Max for
+  Live MIDI Effect implementation.
 - Apple signing and notarization are blocked until Developer credentials exist.
 - Authored user-preset library management and advanced graphics controls are not
   yet exposed. Complete configuration import/export is available as `.3bs`.
@@ -317,6 +322,8 @@ repository.
   inspection, and 60 fps profiling.
 - Test the installed AU MIDI effect in Logic.
 - Run plugin validation and test VST3 MIDI routing in Ableton.
+- Decide whether to add and support a Max for Live MIDI Effect for same-chain
+  Ableton operation.
 - Complete remaining voice controls (range and custom scale) and authored
   user-preset library management.
 - Profile processing allocation/locking and renderer frame time.
@@ -350,4 +357,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-21 22-47 GMT-3
+Last updated: 2026-06-21 23-08 GMT-3
