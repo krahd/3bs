@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-21 22-35 GMT-3
+Last updated: 2026-06-21 22-47 GMT-3
 
 ## Project purpose
 
@@ -20,8 +20,8 @@ simulation, and presentation configurations across plugin and standalone.
 
 ## Active focus
 
-Publish the corrected `v0.1.0-alpha.3` Tomas Laurenzo-branded binaries, then
-continue external Metal, Logic, and Ableton runtime validation.
+Continue external Metal, Logic, and Ableton runtime validation after publishing
+the corrected `v0.1.0-alpha.3` Tomas Laurenzo-branded binaries.
 
 ## Architecture overview
 
@@ -220,7 +220,7 @@ repository.
 - The new local install script built arm64 Release AU/VST3 bundles, verified both
   source and installed signatures, installed them under `~/Library/Audio/Plug-Ins`,
   and refreshed the Audio Unit registrar.
-- `auval -v aumi Tbs1 Krhd` passed every validation section for the installed
+- `auval -v aumi Tbs1 Tmlz` passed every validation section for the installed
   Release Audio Unit. `pluginval` is not installed, so VST3 validation remains
   limited to build and strict signature verification.
 - The alpha.2 packaging script completed a full arm64 Release build and test
@@ -229,6 +229,15 @@ repository.
 - Published the `v0.1.0-alpha.2` GitHub prerelease with complete, AU, VST3,
   standalone, and SHA-256 checksum downloads. Tag and main CI runs
   `27923022840` and `27923013158` passed core tests and arm64 bundle builds.
+- The clean alpha.3 packaging run passed all executable tests, strict bundle
+  signature checks, archive integrity tests, and checksums; Metal smoke skipped
+  because no Metal device was exposed. Generated metadata identifies the AU as
+  `aumi:Tbs1:Tmlz`, all vendors as `Tomas Laurenzo`, and all bundle IDs under
+  `com.tomaslaurenzo`.
+- Published the `v0.1.0-alpha.3` GitHub prerelease with complete, AU, VST3,
+  standalone, and checksum downloads. Uploaded ZIP digests match the locally
+  generated SHA-256 values. Tag and main CI runs `27924472182` and
+  `27924471208` passed core tests and arm64 bundle builds.
 - A fresh arm64 macOS 13 Release configuration and complete build passed for
   the AU, VST3, standalone, and test targets.
 - Fresh Release and rebuilt plugin-debug test runs passed all executable tests
@@ -272,7 +281,8 @@ repository.
   three-line note-pane icon were visible. Voices/Presets page interaction,
   double-click reset, and chord audition still require hands-on verification.
 - `codesign --verify --deep --strict`: passed for all three ad-hoc-signed bundles.
-- Bundle metadata identifies AU type `aumi`, subtype `Tbs1`, manufacturer `Krhd`.
+- Bundle metadata identifies AU type `aumi`, subtype `Tbs1`, manufacturer
+  `Tmlz`, and manufacturer string `Tomas Laurenzo`.
 - GitHub Actions run `27852219185`: native core tests and the complete arm64
   Release bundle build passed.
 - A fresh standalone launch for the bloom/framing/note-pane build could not be
@@ -315,7 +325,7 @@ repository.
 
 1. Complete interaction/performance and host validation.
 2. Close the remaining control-surface gaps and rerun the full suite.
-3. Publish alpha.3 and continue release validation in Logic and Ableton.
+3. Continue alpha.3 release validation in Logic and Ableton.
 
 ## Longer-term steps
 
@@ -340,4 +350,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-21 22-35 GMT-3
+Last updated: 2026-06-21 22-47 GMT-3
