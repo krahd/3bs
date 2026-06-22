@@ -35,6 +35,21 @@
         "panel": "dedicated",
         "clear": true
       }
+    },
+    {
+      "label": "3bs: Build and Install Plugins",
+      "type": "process",
+      "command": "${workspaceFolder}/scripts/build_install_plugins.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": ["$gcc"],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
     }
   ]
 }

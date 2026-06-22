@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-21 16-52 GMT-3
+Last updated: 2026-06-21 21-45 GMT-3
 
 ## Project purpose
 
@@ -20,8 +20,8 @@ simulation, and presentation configurations across plugin and standalone.
 
 ## Active focus
 
-Continue external Metal, Logic, and Ableton runtime validation following the
-public `v0.1.0-alpha.1` binary release and GitHub Pages launch.
+Publish the `v0.1.0-alpha.2` binary refresh, then continue external Metal,
+Logic, and Ableton runtime validation.
 
 ## Architecture overview
 
@@ -85,9 +85,9 @@ processing path.
 Requirements are Apple Silicon macOS 13+, Xcode, CMake 3.22+, and recursive Git
 submodules. Use `cmake --preset dev` for core tests or
 `cmake --preset plugin-debug` for all formats, then the matching build and test
-presets. Detailed commands and artifact paths are in `README.md`. In VS Code,
-run the `3bs: Run Standalone` task to build the standalone target and execute
-the application with its output visible in a dedicated terminal.
+presets. Detailed commands and artifact paths are in `README.md`. VS Code tasks
+can build/run the standalone or build Release AU/VST3 bundles and install them
+into the current user's plugin directories.
 
 ## Configuration and environment variables
 
@@ -201,6 +201,8 @@ repository.
   `.3bs` migration preserving old sessions as Continuous Legacy.
 - Moved time signature to Voices, moved the exclusive voicing-mode selector over
   the planet grid, and added contextual voicing-preset and length-grid controls.
+- Added tracked scripts for Release build/test/package output and local AU/VST3
+  installation, plus the `3bs: Build and Install Plugins` VS Code task.
 
 ## Tests and verification status
 
@@ -210,6 +212,15 @@ repository.
 - Standalone captures at 1280x820 visually confirmed readable time-signature and
   legacy-duration values, straight-grid note labels, and non-overlapping
   Independent and Chord layouts.
+- The new local install script built arm64 Release AU/VST3 bundles, verified both
+  source and installed signatures, installed them under `~/Library/Audio/Plug-Ins`,
+  and refreshed the Audio Unit registrar.
+- `auval -v aumi Tbs1 Krhd` passed every validation section for the installed
+  Release Audio Unit. `pluginval` is not installed, so VST3 validation remains
+  limited to build and strict signature verification.
+- The alpha.2 packaging script completed a full arm64 Release build and test
+  run, verified all three bundle signatures, generated complete/AU/VST3/
+  standalone archives, and passed checksum and ZIP-integrity verification.
 - A fresh arm64 macOS 13 Release configuration and complete build passed for
   the AU, VST3, standalone, and test targets.
 - Fresh Release and rebuilt plugin-debug test runs passed all executable tests
@@ -256,10 +267,8 @@ repository.
 - Bundle metadata identifies AU type `aumi`, subtype `Tbs1`, manufacturer `Krhd`.
 - GitHub Actions run `27852219185`: native core tests and the complete arm64
   Release bundle build passed.
-- `auval -v aumi Tbs1 Krhd`: attempted and failed discovery because the local
-  component was not installed in the Audio Unit search path.
 - A fresh standalone launch for the bloom/framing/note-pane build could not be
-  approved in this run; installed `auval`, pluginval, Logic, Ableton, and 60 fps
+  approved in that run; Logic, Ableton, VST3 plugin validation, and 60 fps
   profiling remain unverified.
 
 ## Known issues, risks, and limitations
@@ -286,7 +295,7 @@ repository.
 
 - Complete hands-on mouse/trackpad interaction, final foreground renderer
   inspection, and 60 fps profiling.
-- Install and validate AU with `auval`, then test it in Logic.
+- Test the installed AU MIDI effect in Logic.
 - Run plugin validation and test VST3 MIDI routing in Ableton.
 - Complete remaining voice controls (range and custom scale) and authored
   user-preset library management.
@@ -296,7 +305,7 @@ repository.
 
 1. Complete interaction/performance and host validation.
 2. Close the remaining control-surface gaps and rerun the full suite.
-3. Prepare the next prerelease after the remaining host and renderer checks.
+3. Publish alpha.2 and continue release validation in Logic and Ableton.
 
 ## Longer-term steps
 
@@ -321,4 +330,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-21 16-52 GMT-3
+Last updated: 2026-06-21 21-45 GMT-3

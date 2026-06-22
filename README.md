@@ -8,7 +8,7 @@ phases, and crossings become three interlocking musical voices.
 [![The Three Body Solution standalone application](docs/assets/three-body-solution-app.jpg)](https://krahd.github.io/3bs/)
 
 **[Project website](https://krahd.github.io/3bs/)** ·
-**[Download v0.1.0-alpha.1](https://github.com/krahd/3bs/releases/tag/v0.1.0-alpha.1)** ·
+**[Download v0.1.0-alpha.2](https://github.com/krahd/3bs/releases/tag/v0.1.0-alpha.2)** ·
 **[Installation guide](doc/INSTALL.md)** ·
 **[Project status](STATUS.md)**
 
@@ -93,6 +93,22 @@ Debug bundles are written below `build/plugin-debug`:
 Local builds are ad-hoc signed by default. Set `THREEBS_ADHOC_SIGN=OFF` for a
 Developer ID signing and notarization workflow.
 
+In VS Code, run **Tasks: Run Task** and choose
+`3bs: Build and Install Plugins` to create Release AU/VST3 bundles and install
+them into the current user's `~/Library/Audio/Plug-Ins` directories. The same
+operation is available from the terminal:
+
+```bash
+./scripts/build_install_plugins.sh
+```
+
+Release maintainers can build, test, verify, and package all downloadable
+formats with:
+
+```bash
+./scripts/package_plugins.sh v0.1.0-alpha.2
+```
+
 ## Use It
 
 The control deck has five pages:
@@ -155,4 +171,4 @@ The project is free software under the GNU Affero General Public License version
 corresponding source and build information. Third-party notices are recorded in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
-[release]: https://github.com/krahd/3bs/releases/tag/v0.1.0-alpha.1
+[release]: https://github.com/krahd/3bs/releases/tag/v0.1.0-alpha.2

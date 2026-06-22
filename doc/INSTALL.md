@@ -1,6 +1,6 @@
 # Install The Three Body Solution
 
-The `v0.1.0-alpha.1` release contains ad-hoc-signed Apple silicon binaries for
+The `v0.1.0-alpha.2` release contains ad-hoc-signed Apple silicon binaries for
 macOS 13 and newer. They are alpha builds: they are not notarized and Logic and
 Ableton host validation is still pending. Download the complete bundle or an
 individual format from the [GitHub release][release].
@@ -30,7 +30,7 @@ standalone emits MIDI and does not synthesize audio itself.
 
 ## Audio Unit
 
-Copy `3bs.component` to your user Audio Unit directory:
+Copy `The Three Body Solution.component` to your user Audio Unit directory:
 
 ```bash
 mkdir -p ~/Library/Audio/Plug-Ins/Components
@@ -45,7 +45,7 @@ macOS version with any issue.
 
 ## VST3
 
-Copy `3bs.vst3` to your user VST3 directory:
+Copy `The Three Body Solution.vst3` to your user VST3 directory:
 
 ```bash
 mkdir -p ~/Library/Audio/Plug-Ins/VST3
@@ -77,4 +77,4 @@ Remove the copied application or plugin bundle. User configuration files are
 portable `.3bs` files saved only where you choose; the application does not
 install a background service.
 
-[release]: https://github.com/krahd/3bs/releases/tag/v0.1.0-alpha.1
+[release]: https://github.com/krahd/3bs/releases/tag/v0.1.0-alpha.2
