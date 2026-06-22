@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-21 21-45 GMT-3
+Last updated: 2026-06-21 21-55 GMT-3
 
 ## Project purpose
 
@@ -20,8 +20,8 @@ simulation, and presentation configurations across plugin and standalone.
 
 ## Active focus
 
-Publish the `v0.1.0-alpha.2` binary refresh, then continue external Metal,
-Logic, and Ableton runtime validation.
+Continue external Metal, Logic, and Ableton runtime validation after publishing
+the `v0.1.0-alpha.2` binary refresh.
 
 ## Architecture overview
 
@@ -221,6 +221,9 @@ repository.
 - The alpha.2 packaging script completed a full arm64 Release build and test
   run, verified all three bundle signatures, generated complete/AU/VST3/
   standalone archives, and passed checksum and ZIP-integrity verification.
+- Published the `v0.1.0-alpha.2` GitHub prerelease with complete, AU, VST3,
+  standalone, and SHA-256 checksum downloads. Tag and main CI runs
+  `27923022840` and `27923013158` passed core tests and arm64 bundle builds.
 - A fresh arm64 macOS 13 Release configuration and complete build passed for
   the AU, VST3, standalone, and test targets.
 - Fresh Release and rebuilt plugin-debug test runs passed all executable tests
@@ -305,7 +308,7 @@ repository.
 
 1. Complete interaction/performance and host validation.
 2. Close the remaining control-surface gaps and rerun the full suite.
-3. Publish alpha.2 and continue release validation in Logic and Ableton.
+3. Continue alpha.2 release validation in Logic and Ableton.
 
 ## Longer-term steps
 
@@ -330,4 +333,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-21 21-45 GMT-3
+Last updated: 2026-06-21 21-55 GMT-3
