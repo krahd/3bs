@@ -15,11 +15,11 @@ function(threebs_configure_plugin target)
 endfunction()
 
 juce_add_plugin(ThreeBSAU
-    COMPANY_NAME "krahd"
+    COMPANY_NAME "Tomas Laurenzo"
     COMPANY_WEBSITE "https://github.com/krahd/3bs"
     COMPANY_COPYRIGHT "Copyright (c) 2026 Tomas Laurenzo"
-    BUNDLE_ID "com.krahd.threebodysolution.au"
-    PLUGIN_MANUFACTURER_CODE Krhd
+    BUNDLE_ID "com.tomaslaurenzo.threebodysolution.au"
+    PLUGIN_MANUFACTURER_CODE Tmlz
     PLUGIN_CODE Tbs1
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT TRUE
@@ -33,11 +33,11 @@ target_compile_definitions(ThreeBSAU PRIVATE THREEBS_AU_MIDI_EFFECT=1)
 threebs_configure_plugin(ThreeBSAU)
 
 juce_add_plugin(ThreeBSVST3
-    COMPANY_NAME "krahd"
+    COMPANY_NAME "Tomas Laurenzo"
     COMPANY_WEBSITE "https://github.com/krahd/3bs"
     COMPANY_COPYRIGHT "Copyright (c) 2026 Tomas Laurenzo"
-    BUNDLE_ID "com.krahd.threebodysolution.vst3"
-    PLUGIN_MANUFACTURER_CODE Krhd
+    BUNDLE_ID "com.tomaslaurenzo.threebodysolution.vst3"
+    PLUGIN_MANUFACTURER_CODE Tmlz
     PLUGIN_CODE Tbs2
     IS_SYNTH TRUE
     NEEDS_MIDI_INPUT TRUE

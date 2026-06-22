@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-21 21-55 GMT-3
+Last updated: 2026-06-21 22-35 GMT-3
 
 ## Project purpose
 
@@ -20,8 +20,8 @@ simulation, and presentation configurations across plugin and standalone.
 
 ## Active focus
 
-Continue external Metal, Logic, and Ableton runtime validation after publishing
-the `v0.1.0-alpha.2` binary refresh.
+Publish the corrected `v0.1.0-alpha.3` Tomas Laurenzo-branded binaries, then
+continue external Metal, Logic, and Ableton runtime validation.
 
 ## Architecture overview
 
@@ -203,6 +203,9 @@ repository.
   the planet grid, and added contextual voicing-preset and length-grid controls.
 - Added tracked scripts for Release build/test/package output and local AU/VST3
   installation, plus the `3bs: Build and Install Plugins` VS Code task.
+- Corrected AU, VST3, and standalone company metadata from `krahd` to
+  `Tomas Laurenzo`, moved bundle identifiers to `com.tomaslaurenzo`, and changed
+  the plugin manufacturer code from `Krhd` to `Tmlz` for alpha.3.
 
 ## Tests and verification status
 
@@ -278,6 +281,8 @@ repository.
 
 - GitHub repository `krahd/3bs` is public on `main`; the alpha prerelease and
   Pages site are live.
+- Alpha.3 intentionally has a new AU manufacturer code and bundle identifiers;
+  hosts may treat it as a different plugin from alpha.2.
 - AU MIDI effects and VST3 MIDI generation still require real host validation.
 - Apple signing and notarization are blocked until Developer credentials exist.
 - Authored user-preset library management and advanced graphics controls are not
@@ -308,7 +313,7 @@ repository.
 
 1. Complete interaction/performance and host validation.
 2. Close the remaining control-surface gaps and rerun the full suite.
-3. Continue alpha.2 release validation in Logic and Ableton.
+3. Publish alpha.3 and continue release validation in Logic and Ableton.
 
 ## Longer-term steps
 
@@ -333,4 +338,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-21 21-55 GMT-3
+Last updated: 2026-06-21 22-35 GMT-3

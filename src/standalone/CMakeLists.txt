@@ -3,8 +3,8 @@
 
 juce_add_gui_app(ThreeBSStandalone
     PRODUCT_NAME "The Three Body Solution"
-    COMPANY_NAME "krahd"
-    BUNDLE_ID "com.krahd.threebodysolution"
+    COMPANY_NAME "Tomas Laurenzo"
+    BUNDLE_ID "com.tomaslaurenzo.threebodysolution"
     COMPANY_COPYRIGHT "Copyright (c) 2026 Tomas Laurenzo")
 
 target_sources(ThreeBSStandalone PRIVATE Main.cpp)

@@ -1,6 +1,6 @@
 # Install The Three Body Solution
 
-The `v0.1.0-alpha.2` release contains ad-hoc-signed Apple silicon binaries for
+The `v0.1.0-alpha.3` release contains ad-hoc-signed Apple silicon binaries for
 macOS 13 and newer. They are alpha builds: they are not notarized and Logic and
 Ableton host validation is still pending. Download the complete bundle or an
 individual format from the [GitHub release][release].
@@ -36,7 +36,7 @@ Copy `The Three Body Solution.component` to your user Audio Unit directory:
 mkdir -p ~/Library/Audio/Plug-Ins/Components
 cp -R "The Three Body Solution.component" ~/Library/Audio/Plug-Ins/Components/
 killall -9 AudioComponentRegistrar 2>/dev/null || true
-auval -v aumi Tbs1 Krhd
+auval -v aumi Tbs1 Tmlz
 ```
 
 Insert `3bs` as a MIDI effect before a software instrument in Logic Pro. The
@@ -77,4 +77,4 @@ Remove the copied application or plugin bundle. User configuration files are
 portable `.3bs` files saved only where you choose; the application does not
 install a background service.
 
-[release]: https://github.com/krahd/3bs/releases/tag/v0.1.0-alpha.2
+[release]: https://github.com/krahd/3bs/releases/tag/v0.1.0-alpha.3

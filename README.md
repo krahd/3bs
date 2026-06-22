@@ -8,7 +8,7 @@ phases, and crossings become three interlocking musical voices.
 [![The Three Body Solution standalone application](docs/assets/three-body-solution-app.jpg)](https://krahd.github.io/3bs/)
 
 **[Project website](https://krahd.github.io/3bs/)** ·
-**[Download v0.1.0-alpha.2](https://github.com/krahd/3bs/releases/tag/v0.1.0-alpha.2)** ·
+**[Download v0.1.0-alpha.3](https://github.com/krahd/3bs/releases/tag/v0.1.0-alpha.3)** ·
 **[Installation guide](doc/INSTALL.md)** ·
 **[Project status](STATUS.md)**
 
@@ -106,7 +106,7 @@ Release maintainers can build, test, verify, and package all downloadable
 formats with:
 
 ```bash
-./scripts/package_plugins.sh v0.1.0-alpha.2
+./scripts/package_plugins.sh v0.1.0-alpha.3
 ```
 
 ## Use It
@@ -151,7 +151,7 @@ multiple instances or a multitimbral destination.
 Local AU validation command:
 
 ```bash
-auval -v aumi Tbs1 Krhd
+auval -v aumi Tbs1 Tmlz
 ```
 
 ## Documentation
@@ -171,4 +171,4 @@ The project is free software under the GNU Affero General Public License version
 corresponding source and build information. Third-party notices are recorded in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
-[release]: https://github.com/krahd/3bs/releases/tag/v0.1.0-alpha.2
+[release]: https://github.com/krahd/3bs/releases/tag/v0.1.0-alpha.3
