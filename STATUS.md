@@ -206,6 +206,8 @@ repository.
 - Corrected AU, VST3, and standalone company metadata from `krahd` to
   `Tomas Laurenzo`, moved bundle identifiers to `com.tomaslaurenzo`, and changed
   the plugin manufacturer code from `Krhd` to `Tmlz` for alpha.3.
+- Made release packaging and local plugin installation clean their Release
+  targets first so regenerated bundle metadata is always relinked and resigned.
 
 ## Tests and verification status
 

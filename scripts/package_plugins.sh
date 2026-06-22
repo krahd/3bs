@@ -32,7 +32,7 @@ cmake -S "$root_dir" -B "$build_dir" \
     -DTHREEBS_BUILD_PLUGINS=ON \
     -DTHREEBS_BUILD_TESTS=ON \
     -DTHREEBS_ADHOC_SIGN=ON
-cmake --build "$build_dir" --parallel "$jobs"
+cmake --build "$build_dir" --clean-first --parallel "$jobs"
 ctest --test-dir "$build_dir" --output-on-failure
 
 au_source="$build_dir/src/plugin/ThreeBSAU_artefacts/Release/AU/The Three Body Solution.component"

@@ -18,7 +18,8 @@ cmake -S "$root_dir" -B "$build_dir" \
     -DTHREEBS_BUILD_PLUGINS=ON \
     -DTHREEBS_BUILD_TESTS=ON \
     -DTHREEBS_ADHOC_SIGN=ON
-cmake --build "$build_dir" --target ThreeBSAU_AU ThreeBSVST3_VST3 --parallel "$jobs"
+cmake --build "$build_dir" --target ThreeBSAU_AU ThreeBSVST3_VST3 \
+    --clean-first --parallel "$jobs"
 
 au_source="$build_dir/src/plugin/ThreeBSAU_artefacts/Release/AU/The Three Body Solution.component"
 vst3_source="$build_dir/src/plugin/ThreeBSVST3_artefacts/Release/VST3/The Three Body Solution.vst3"
