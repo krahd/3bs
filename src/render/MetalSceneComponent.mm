@@ -21,6 +21,7 @@
 #include <cmath>
 #include <cstring>
 #include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <string>
 #include <unordered_map>
@@ -486,6 +487,14 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     NSUInteger _targetWidth;
     NSUInteger _targetHeight;
     CFTimeInterval _startTime;
+    CFTimeInterval _profileLastFrameTime;
+    double _profileFrameIntervalTotal;
+    double _profileFrameIntervalMaximum;
+    double _profileEncodeTotal;
+    double _profileEncodeMaximum;
+    std::uint64_t _profileFrameCount;
+    std::uint64_t _profileFrameIntervalCount;
+    BOOL _profileFrames;
     BOOL _ready;
 }
 
@@ -507,6 +516,7 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     _hostCamera = _presentation.camera;
     _styles = threebs::makePlanetVisualStyles(_presentation.visual.palette, _presentation.visualSeed);
     _startTime = CACurrentMediaTime();
+    _profileFrames = std::getenv("THREEBS_PROFILE_RENDERER") != nullptr;
     _latest.bodies = {{{1.0, {-0.95, 0.2, 0.0}, {}}, {1.0, {0.95, -0.2, 0.0}, {}},
                        {1.0, {0.0, 0.0, 0.0}, {}}}};
     _camera.setState(_presentation.camera, _latest.bodies, 0.0);
@@ -810,7 +820,17 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     if (_sceneTexture == nil || _depthTexture == nil || _bloomA == nil || _bloomB == nil)
         return;
 
-    const auto now = CACurrentMediaTime() - _startTime;
+    const auto frameClock = CACurrentMediaTime();
+    const auto now = frameClock - _startTime;
+    if (_profileFrames) {
+        if (_profileLastFrameTime > 0.0) {
+            const auto interval = frameClock - _profileLastFrameTime;
+            _profileFrameIntervalTotal += interval;
+            _profileFrameIntervalMaximum = std::max(_profileFrameIntervalMaximum, interval);
+            ++_profileFrameIntervalCount;
+        }
+        _profileLastFrameTime = frameClock;
+    }
     threebs::RenderSnapshot incoming;
     BOOL received = NO;
     while (_snapshots->pop(incoming)) {
@@ -1210,6 +1230,29 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     [encoder endEncoding];
     [command presentDrawable:view.currentDrawable];
     [command commit];
+    if (_profileFrames) {
+        const auto encodeSeconds = CACurrentMediaTime() - frameClock;
+        _profileEncodeTotal += encodeSeconds;
+        _profileEncodeMaximum = std::max(_profileEncodeMaximum, encodeSeconds);
+        ++_profileFrameCount;
+        if (_profileFrameCount >= 300U) {
+            const auto intervalCount = std::max<std::uint64_t>(1U, _profileFrameIntervalCount);
+            const auto averageInterval = _profileFrameIntervalTotal / static_cast<double>(intervalCount);
+            const auto averageEncode = _profileEncodeTotal / static_cast<double>(_profileFrameCount);
+            std::fprintf(stderr,
+                "3bs perf renderer frames=%llu fps=%.2f frame_ms_avg=%.3f frame_ms_max=%.3f encode_ms_avg=%.3f encode_ms_max=%.3f\n",
+                static_cast<unsigned long long>(_profileFrameCount),
+                averageInterval > 0.0 ? 1.0 / averageInterval : 0.0,
+                averageInterval * 1000.0, _profileFrameIntervalMaximum * 1000.0,
+                averageEncode * 1000.0, _profileEncodeMaximum * 1000.0);
+            _profileFrameIntervalTotal = 0.0;
+            _profileFrameIntervalMaximum = 0.0;
+            _profileEncodeTotal = 0.0;
+            _profileEncodeMaximum = 0.0;
+            _profileFrameCount = 0U;
+            _profileFrameIntervalCount = 0U;
+        }
+    }
 }
 @end
 

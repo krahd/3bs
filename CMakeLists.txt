@@ -37,6 +37,9 @@ if(THREEBS_BUILD_TESTS)
     add_executable(threebs_core_tests tests/CoreTests.cpp)
     target_link_libraries(threebs_core_tests PRIVATE threebs_core threebs_presentation_model)
     add_test(NAME threebs_core_tests COMMAND threebs_core_tests)
+    add_executable(threebs_performance_profile tests/PerformanceProfile.cpp)
+    target_link_libraries(threebs_performance_profile PRIVATE threebs_core)
+    add_test(NAME threebs_performance_profile COMMAND threebs_performance_profile)
     add_test(
         NAME threebs_factory_presets
         COMMAND ${CMAKE_COMMAND}
