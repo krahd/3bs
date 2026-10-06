@@ -13,7 +13,7 @@
 
 namespace threebs {
 
-class ArtworkPanel final : public juce::Component, private juce::ComboBox::Listener {
+class ArtworkPanel final : public juce::Component, private juce::ComboBox::Listener, private juce::Timer {
 public:
     ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
                  NoteVisualizationQueue& noteVisualizationEvents);
@@ -136,6 +136,7 @@ private:
     void updateVoiceModeControls();
     void markVoicingCustom();
     void comboBoxChanged(juce::ComboBox* comboBox) override;
+    void timerCallback() override;
 
     MetalSceneComponent scene_;
     juce::Label title_;

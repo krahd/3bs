@@ -101,10 +101,10 @@ int main() {
               << " allocations=" << allocations
               << " average_us=" << averageUs
               << " max_us=" << maximumUs
-              << " block_budget_us=" << budgetUs << '\\n';
+              << " block_budget_us=" << budgetUs << '\n';
 
     if (allocations != 0) {
-        std::cerr << "FAIL: steady-state processBlock allocated memory\\n";
+        std::cerr << "FAIL: steady-state processBlock allocated memory\n";
         return 1;
     }
     return 0;

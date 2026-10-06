@@ -370,6 +370,7 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
 - (BOOL)notePaneContainsX:(double)x y:(double)y width:(double)width height:(double)height;
 - (void)notePaneClickAtX:(double)x y:(double)y width:(double)width height:(double)height;
 - (BOOL)isReady;
+- (threebs::RendererPerformanceMetrics)performanceMetrics;
 @end
 
 @implementation ThreeBSMetalView
@@ -486,6 +487,14 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     NSUInteger _targetWidth;
     NSUInteger _targetHeight;
     CFTimeInterval _startTime;
+    CFTimeInterval _previousFrameTimestamp;
+    double _smoothedFrameInterval;
+    double _smoothedCpuFrameSeconds;
+    double _maxCpuFrameSeconds;
+    std::atomic<double> _publishedFramesPerSecond;
+    std::atomic<double> _publishedCpuFrameMilliseconds;
+    std::atomic<double> _publishedMaxCpuFrameMilliseconds;
+    std::atomic<std::uint64_t> _publishedFrameCount;
     BOOL _ready;
 }
 
@@ -507,6 +516,10 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     _hostCamera = _presentation.camera;
     _styles = threebs::makePlanetVisualStyles(_presentation.visual.palette, _presentation.visualSeed);
     _startTime = CACurrentMediaTime();
+    _publishedFramesPerSecond.store(0.0, std::memory_order_relaxed);
+    _publishedCpuFrameMilliseconds.store(0.0, std::memory_order_relaxed);
+    _publishedMaxCpuFrameMilliseconds.store(0.0, std::memory_order_relaxed);
+    _publishedFrameCount.store(0, std::memory_order_relaxed);
     _latest.bodies = {{{1.0, {-0.95, 0.2, 0.0}, {}}, {1.0, {0.95, -0.2, 0.0}, {}},
                        {1.0, {0.0, 0.0, 0.0}, {}}}};
     _camera.setState(_presentation.camera, _latest.bodies, 0.0);
@@ -806,6 +819,16 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
 - (void)drawInMTKView:(MTKView*)view {
     if (!_ready || view.currentDrawable == nil)
         return;
+    const auto frameStarted = CACurrentMediaTime();
+    if (_previousFrameTimestamp > 0.0) {
+        const auto interval = frameStarted - _previousFrameTimestamp;
+        _smoothedFrameInterval = _smoothedFrameInterval <= 0.0
+            ? interval : 0.9 * _smoothedFrameInterval + 0.1 * interval;
+        if (_smoothedFrameInterval > 0.0)
+            _publishedFramesPerSecond.store(1.0 / _smoothedFrameInterval,
+                                            std::memory_order_relaxed);
+    }
+    _previousFrameTimestamp = frameStarted;
     [self ensureTargetsForView:view];
     if (_sceneTexture == nil || _depthTexture == nil || _bloomA == nil || _bloomB == nil)
         return;
@@ -1210,6 +1233,25 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     [encoder endEncoding];
     [command presentDrawable:view.currentDrawable];
     [command commit];
+
+    const auto cpuFrameSeconds = CACurrentMediaTime() - frameStarted;
+    _smoothedCpuFrameSeconds = _smoothedCpuFrameSeconds <= 0.0
+        ? cpuFrameSeconds : 0.9 * _smoothedCpuFrameSeconds + 0.1 * cpuFrameSeconds;
+    _maxCpuFrameSeconds = std::max(_maxCpuFrameSeconds, cpuFrameSeconds);
+    _publishedCpuFrameMilliseconds.store(_smoothedCpuFrameSeconds * 1000.0,
+                                         std::memory_order_relaxed);
+    _publishedMaxCpuFrameMilliseconds.store(_maxCpuFrameSeconds * 1000.0,
+                                            std::memory_order_relaxed);
+    _publishedFrameCount.fetch_add(1, std::memory_order_relaxed);
+}
+
+- (threebs::RendererPerformanceMetrics)performanceMetrics {
+    return {
+        _publishedFramesPerSecond.load(std::memory_order_relaxed),
+        _publishedCpuFrameMilliseconds.load(std::memory_order_relaxed),
+        _publishedMaxCpuFrameMilliseconds.load(std::memory_order_relaxed),
+        _publishedFrameCount.load(std::memory_order_relaxed)
+    };
 }
 @end
 
@@ -1269,6 +1311,12 @@ PresentationState MetalSceneComponent::presentationState() const noexcept {
 
 bool MetalSceneComponent::rendererAvailable() const noexcept {
     return impl_ != nullptr && impl_->delegate != nil && [impl_->delegate isReady];
+}
+
+RendererPerformanceMetrics MetalSceneComponent::performanceMetrics() const noexcept {
+    if (impl_ != nullptr && impl_->delegate != nil)
+        return [impl_->delegate performanceMetrics];
+    return {};
 }
 
 } // namespace threebs

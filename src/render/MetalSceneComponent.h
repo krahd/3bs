@@ -8,10 +8,18 @@
 
 #include <juce_gui_extra/juce_gui_extra.h>
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 
 namespace threebs {
+
+struct RendererPerformanceMetrics {
+    double framesPerSecond{};
+    double cpuFrameMilliseconds{};
+    double maxCpuFrameMilliseconds{};
+    std::uint64_t frameCount{};
+};
 
 class MetalSceneComponent final : public juce::NSViewComponent {
 public:
@@ -22,6 +30,7 @@ public:
     void setPresentationState(const PresentationState& state) noexcept;
     PresentationState presentationState() const noexcept;
     bool rendererAvailable() const noexcept;
+    RendererPerformanceMetrics performanceMetrics() const noexcept;
 
     std::function<void(const CameraState&)> onCameraInteractionComplete;
     std::function<void(bool)> onNotePaneMinimizedChanged;
