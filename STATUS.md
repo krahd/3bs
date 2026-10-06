@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-06-21 23-08 GMT-3
+Last updated: 2026-10-06 15-14 GMT-3
 
 ## Project purpose
 
@@ -20,8 +20,13 @@ simulation, and presentation configurations across plugin and standalone.
 
 ## Active focus
 
-Continue external Metal, Logic, and Ableton runtime validation after publishing
-the corrected `v0.1.0-alpha.3` Tomas Laurenzo-branded binaries.
+Finish hands-on host and interaction validation for the published
+`v0.1.0-alpha.3` Tomas Laurenzo-branded binaries. Automated validation is green
+again on the current Mac: dev and plugin-debug suites pass, including the Metal
+smoke test, the installed AU passes `auval`, and installed AU/VST3 signatures
+and arm64 architectures verify. Ableton Live 12 Suite is installed and has
+previously scanned and loaded the VST3, but the current alpha.3 routing/editor
+workflow still needs a fresh hands-on pass. Logic is not installed on this Mac.
 
 ## Architecture overview
 
@@ -211,6 +216,19 @@ repository.
 
 ## Tests and verification status
 
+- 2026-10-06 validation refresh: the dev configure/build completed and
+  `ctest --preset dev --output-on-failure` passed 4/4. After initializing the
+  repository-pinned JUCE submodule, the plugin-debug configure/build completed
+  and `ctest --preset plugin-debug --output-on-failure` passed 6/6, including
+  `threebs_metal_smoke` and `threebs_plugin_tests`.
+- The installed alpha.3 AU passed a fresh `auval -v aumi Tbs1 Tmlz`.
+  `codesign --verify --deep --strict` passed for the installed AU and VST3,
+  and both installed plugin executables are arm64.
+- Ableton Live 12 Suite is installed. Existing Live 12.4.2 evidence shows the
+  VST3 was discovered by the scanner in June and September 2026 and was
+  successfully instantiated in June; a fresh current-alpha.3 routing/editor
+  pass is still pending. Logic and `pluginval` are not installed on this Mac.
+
 - Debug core and plugin configurations, full builds, and all automated tests
   passed after the voicing-preset and rhythmic-length changes. The Metal smoke
   test skipped because this process exposed no Metal device.
@@ -320,8 +338,9 @@ repository.
 
 - Complete hands-on mouse/trackpad interaction, final foreground renderer
   inspection, and 60 fps profiling.
-- Test the installed AU MIDI effect in Logic.
-- Run plugin validation and test VST3 MIDI routing in Ableton.
+- Test the installed alpha.3 AU MIDI effect on a Mac with Logic installed.
+- Run a fresh alpha.3 VST3 routing/editor pass in Ableton Live and run
+  `pluginval` when it is available.
 - Decide whether to add and support a Max for Live MIDI Effect for same-chain
   Ableton operation.
 - Complete remaining voice controls (range and custom scale) and authored
@@ -357,4 +376,4 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-06-21 23-08 GMT-3
+Last updated: 2026-10-06 15-14 GMT-3
