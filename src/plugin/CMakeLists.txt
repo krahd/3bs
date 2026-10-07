@@ -66,4 +66,11 @@ if(THREEBS_BUILD_TESTS)
     target_link_libraries(threebs_plugin_tests PRIVATE
         ThreeBSVST3 threebs_presentation juce::juce_audio_utils juce::juce_gui_extra)
     add_test(NAME threebs_plugin_tests COMMAND threebs_plugin_tests)
+
+    add_executable(threebs_realtime_profile ../../tests/RealtimeProfile.cpp)
+    target_include_directories(threebs_realtime_profile PRIVATE ..)
+    target_compile_definitions(threebs_realtime_profile PRIVATE THREEBS_AU_MIDI_EFFECT=0)
+    target_link_libraries(threebs_realtime_profile PRIVATE
+        ThreeBSVST3 threebs_presentation juce::juce_audio_utils juce::juce_gui_extra)
+    add_test(NAME threebs_realtime_profile COMMAND threebs_realtime_profile)
 endif()

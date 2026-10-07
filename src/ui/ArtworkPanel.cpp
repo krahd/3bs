@@ -111,10 +111,11 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     subtitle_.setFont(juce::Font(juce::FontOptions(10.0F).withStyle("Bold")));
     subtitle_.setColour(juce::Label::textColourId, juce::Colour(0xff70859b));
     addAndMakeVisible(subtitle_);
-    status_.setText(scene_.rendererAvailable() ? "METAL / 60 FPS" : "METAL UNAVAILABLE", juce::dontSendNotification);
+    status_.setText(scene_.rendererAvailable() ? "METAL / STARTING" : "METAL UNAVAILABLE", juce::dontSendNotification);
     status_.setJustificationType(juce::Justification::centredRight);
     status_.setColour(juce::Label::textColourId, juce::Colour(0xff63778d));
     addAndMakeVisible(status_);
+    startTimerHz(2);
     pageHelp_.setFont(juce::Font(juce::FontOptions(10.5F)));
     pageHelp_.setColour(juce::Label::textColourId, juce::Colour(0xff7f93a8));
     pageHelp_.setJustificationType(juce::Justification::centredLeft);
@@ -851,6 +852,18 @@ void ArtworkPanel::setSelectedVoicingPresetIndex(int index) {
     suppressVoicingEdit_ = true;
     voicingPreset_.setSelectedId(index >= 0 ? index + 2 : 1, juce::dontSendNotification);
     suppressVoicingEdit_ = false;
+}
+
+void ArtworkPanel::timerCallback() {
+    if (!scene_.rendererAvailable() || !status_.getText().startsWith("METAL"))
+        return;
+    const auto metrics = scene_.performanceMetrics();
+    if (metrics.frameCount == 0)
+        return;
+    status_.setText("METAL / " + juce::String(metrics.framesPerSecond, 1)
+                        + " FPS / " + juce::String(metrics.cpuFrameMilliseconds, 2)
+                        + " ms CPU",
+                    juce::dontSendNotification);
 }
 
 void ArtworkPanel::setStatus(const juce::String& status) {

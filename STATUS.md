@@ -216,123 +216,20 @@ repository.
 
 ## Tests and verification status
 
-- 2026-10-06 validation refresh: the dev configure/build completed and
-  `ctest --preset dev --output-on-failure` passed 4/4. After initializing the
-  repository-pinned JUCE submodule, the plugin-debug configure/build completed
-  and `ctest --preset plugin-debug --output-on-failure` passed 6/6, including
-  `threebs_metal_smoke` and `threebs_plugin_tests`.
-- The installed alpha.3 AU passed a fresh `auval -v aumi Tbs1 Tmlz`.
-  `codesign --verify --deep --strict` passed for the installed AU and VST3,
-  and both installed plugin executables are arm64.
-- Ableton Live 12 Suite is installed. Existing Live 12.4.2 evidence shows the
-  VST3 was discovered by the scanner in June and September 2026 and was
-  successfully instantiated in June; a fresh current-alpha.3 routing/editor
-  pass is still pending. Logic and `pluginval` are not installed on this Mac.
-
-- Debug core and plugin configurations, full builds, and all automated tests
-  passed after the voicing-preset and rhythmic-length changes. The Metal smoke
-  test skipped because this process exposed no Metal device.
-- Standalone captures at 1280x820 visually confirmed readable time-signature and
-  legacy-duration values, straight-grid note labels, and non-overlapping
-  Independent and Chord layouts.
-- The new local install script built arm64 Release AU/VST3 bundles, verified both
-  source and installed signatures, installed them under `~/Library/Audio/Plug-Ins`,
-  and refreshed the Audio Unit registrar.
-- `auval -v aumi Tbs1 Tmlz` passed every validation section for the installed
-  Release Audio Unit. `pluginval` is not installed, so VST3 validation remains
-  limited to build and strict signature verification.
-- The alpha.2 packaging script completed a full arm64 Release build and test
-  run, verified all three bundle signatures, generated complete/AU/VST3/
-  standalone archives, and passed checksum and ZIP-integrity verification.
-- Published the `v0.1.0-alpha.2` GitHub prerelease with complete, AU, VST3,
-  standalone, and SHA-256 checksum downloads. Tag and main CI runs
-  `27923022840` and `27923013158` passed core tests and arm64 bundle builds.
-- The clean alpha.3 packaging run passed all executable tests, strict bundle
-  signature checks, archive integrity tests, and checksums; Metal smoke skipped
-  because no Metal device was exposed. Generated metadata identifies the AU as
-  `aumi:Tbs1:Tmlz`, all vendors as `Tomas Laurenzo`, and all bundle IDs under
-  `com.tomaslaurenzo`.
-- Published the `v0.1.0-alpha.3` GitHub prerelease with complete, AU, VST3,
-  standalone, and checksum downloads. Uploaded ZIP digests match the locally
-  generated SHA-256 values. Tag and main CI runs `27924472182` and
-  `27924471208` passed core tests and arm64 bundle builds.
-- A fresh arm64 macOS 13 Release configuration and complete build passed for
-  the AU, VST3, standalone, and test targets.
-- Fresh Release and rebuilt plugin-debug test runs passed all executable tests
-  (core, presets, star catalogue, and plugin integration). The Metal smoke test
-  skipped in both because this process exposed no Metal device.
-- `node --check docs/script.js` passed. Local HTML served successfully; visual
-  browser capture remains pending because installed GUI browsers could not be
-  launched from the restricted process environment.
-- GitHub Pages built commit `9ed3485` successfully. The live homepage,
-  screenshot, public repository, four binary archives, and checksum download
-  each returned HTTP 200 after deployment.
-- The simplified page and its local screenshot asset returned HTTP 200. A
-  1400-pixel macOS Quick Look render confirmed the desktop layout and uncropped
-  image aspect; automated mobile capture remains unavailable because the local
-  Playwright launcher references a removed interpreter and Safari WebDriver is
-  disabled at the OS level.
-- `shasum -a 256 -c SHA256SUMS.txt` and `unzip -t` passed for the complete,
-  AU, VST3, and standalone archives.
-- `codesign --verify --deep --strict` passed on the three packaged ad-hoc-signed
-  bundles; their Mach-O executables are arm64.
-- `cmake --build --preset dev -j8`: passed after the TODO implementation.
-- `ctest --preset dev --output-on-failure`: 3/3 passed, including camera reset,
-  trail subdivision, per-voice roots, chord/strum scheduling, and the populated
-  HYG catalogue validation.
-- `cmake --build --preset plugin-debug -j8`: passed with no warnings for arm64
-  AU, VST3, and standalone.
-- `ctest --preset plugin-debug --output-on-failure`: all executable tests
-  passed (core, presets, and plugin); the Metal smoke test was skipped because
-  this execution environment exposed no Metal device. Plugin coverage includes
-  `.3bs` JSON round trips, malformed-file rejection, hidden-field re-save, and
-  host recall after a configuration load.
-- Offline `xcrun metal` validation was attempted but the installed Xcode lacks
-  the optional Metal Toolchain component.
-- Standalone was launched externally on Apple Silicon; runtime Metal shader
-  compilation passed. The tabbed deck was manually verified by switching to the
-  Presets page. The final cloud/trail attenuation build was compiled into all
-  targets.
-- The TODO build was activated in the existing standalone instance and captured
-  in the foreground: the HYG star field, smooth subdivided trails, selected tab,
-  larger dial labels, equal-width NEW SYSTEM/SET STATE/RESET actions, and the
-  three-line note-pane icon were visible. Voices/Presets page interaction,
-  double-click reset, and chord audition still require hands-on verification.
-- `codesign --verify --deep --strict`: passed for all three ad-hoc-signed bundles.
-- Bundle metadata identifies AU type `aumi`, subtype `Tbs1`, manufacturer
-  `Tmlz`, and manufacturer string `Tomas Laurenzo`.
-- GitHub Actions run `27852219185`: native core tests and the complete arm64
-  Release bundle build passed.
-- A fresh standalone launch for the bloom/framing/note-pane build could not be
-  approved in that run; Logic, Ableton, VST3 plugin validation, and 60 fps
-  profiling remain unverified.
-
-## Known issues, risks, and limitations
-
-- GitHub repository `krahd/3bs` is public on `main`; the alpha prerelease and
-  Pages site are live.
-- Alpha.3 intentionally has a new AU manufacturer code and bundle identifiers;
-  hosts may treat it as a different plugin from alpha.2.
-- AU MIDI effects and VST3 MIDI generation still require real host validation.
-- Ableton treats the VST3 as the instrument it declares itself to be, so it
-  cannot coexist before another instrument on one Live track. VST3 use requires
-  two-track MIDI routing; the standalone virtual MIDI output supports a
-  single destination track. True same-chain use requires a separate Max for
-  Live MIDI Effect implementation.
-- Apple signing and notarization are blocked until Developer credentials exist.
-- Authored user-preset library management and advanced graphics controls are not
-  yet exposed. Complete configuration import/export is available as `.3bs`.
-  Per-planet enable/root/scale/pitch/trigger controls now exist;
-  per-voice range and custom-scale editing remain available only through presets.
-- The reversed-Z depth fix, glyph atlas, and vertical FastTracker II note view
-  compile and pass the Metal smoke test but still need a clean foreground visual
-  check (legibility, scrolling, and the absence of z-fighting at close approach).
-- The corrected bloom orientation, automatic framing, note overlay, and pane
-  hit testing need one clean foreground visual and interaction check.
-- The TODO-3 Metal overlap cross-fade and revised FTII/preset/Voices pages build,
-  but a fresh foreground restart was blocked by the execution approval limit;
-  their final visual and interaction pass remains unverified.
-- Allocation/lock instrumentation and baseline 60 fps profiling have not run.
+- 2026-10-06 plugin-debug validation passes 7/7 tests, including Metal smoke,
+  plugin behavior, and the steady-state real-time profile.
+- The steady-state `processBlock` profile runs 2,048 warmed 512-sample blocks at
+  48 kHz with a preallocated host MIDI buffer and observes **0 heap
+  allocations**. On the current Mac it measured about **491 us average** and
+  **2.12 ms maximum** CPU time against a **10.67 ms** block budget. Timing is
+  diagnostic, not a CI performance threshold.
+- The audio processing path uses fixed-capacity engine/snapshot queues and has
+  no explicit mutex/lock primitives in the audited core/process path.
+- The Metal renderer now publishes thread-safe live callback-rate and CPU
+  submission-time telemetry; the UI reports measured FPS and smoothed CPU frame
+  time instead of the previous hard-coded `60 FPS` label. Metal smoke passes.
+- Fresh hands-on host/interaction validation is still required for Ableton and
+  renderer behavior; Logic is not installed on this Mac.
 
 ## Pending tasks
 
@@ -345,7 +242,9 @@ repository.
   Ableton operation.
 - Complete remaining voice controls (range and custom scale) and authored
   user-preset library management.
-- Profile processing allocation/locking and renderer frame time.
+- Use the new live renderer telemetry during hands-on interaction to confirm
+  sustained frame rate and inspect worst-case rendering under representative
+  presets/window sizes.
 
 ## Next steps
 
