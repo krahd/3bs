@@ -72,6 +72,14 @@ if(THREEBS_BUILD_TESTS)
         ThreeBSVST3 threebs_presentation juce::juce_audio_utils juce::juce_gui_extra)
     add_test(NAME threebs_plugin_tests COMMAND threebs_plugin_tests)
 
+    add_executable(threebs_processor_concurrency_tests ../../tests/ProcessorConcurrencyTests.cpp)
+    target_include_directories(threebs_processor_concurrency_tests PRIVATE ..)
+    target_compile_definitions(threebs_processor_concurrency_tests PRIVATE THREEBS_AU_MIDI_EFFECT=0)
+    target_link_libraries(threebs_processor_concurrency_tests PRIVATE
+        ThreeBSVST3 threebs_presentation juce::juce_audio_utils juce::juce_gui_extra)
+    add_test(NAME threebs_processor_concurrency_tests COMMAND threebs_processor_concurrency_tests)
+    set_tests_properties(threebs_processor_concurrency_tests PROPERTIES TIMEOUT 30)
+
     add_library(threebs_allocation_probe SHARED ../../tests/AllocationProbe.cpp)
     target_compile_features(threebs_allocation_probe PRIVATE cxx_std_20)
     set_target_properties(threebs_allocation_probe PROPERTIES CXX_VISIBILITY_PRESET default)

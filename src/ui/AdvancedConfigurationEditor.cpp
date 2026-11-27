@@ -3,6 +3,7 @@
 
 #include "ui/AdvancedConfigurationEditor.h"
 #include "ui/NumericText.h"
+#include "ui/DialogLifetime.h"
 #include "ui/PresetCatalog.h"
 #include <array>
 #include <memory>
@@ -206,7 +207,10 @@ public:
                 error_.setText(error.isEmpty() ? "Check numeric ranges and select at least one custom-scale interval." : error,
                                juce::dontSendNotification); return;
             }
-            apply_(candidate); dismiss();
+            const auto safe = juce::Component::SafePointer<AdvancedConfigurationEditor>(this);
+            const auto callback = apply_;
+            callback(candidate);
+            if (safe != nullptr) safe->dismiss();
         };
         cancel_.onClick = [this] { dismiss(); };
         setSize(800, 560);
@@ -258,6 +262,6 @@ void showAdvancedConfigurationEditor(const EngineConfig& config, juce::Component
         [guard, callback = std::move(onApply)](const EngineConfig& candidate) { if (guard != nullptr) callback(candidate); }));
     options.componentToCentreAround = parent.getTopLevelComponent();
     options.escapeKeyTriggersCloseButton = true; options.useNativeTitleBar = true; options.resizable = false;
-    options.launchAsync();
+    bindDialogToOwner(options.launchAsync(), parent);
 }
 } // namespace threebs

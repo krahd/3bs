@@ -6,6 +6,7 @@
 #include "core/MusicEngine.h"
 #include "core/SnapshotQueue.h"
 #include "plugin/LatestCommandMailbox.h"
+#include "plugin/InputKeyLedger.h"
 #include "ui/PresetCatalog.h"
 #include "ui/UserConfiguration.h"
 
@@ -141,11 +142,7 @@ private:
     std::atomic<std::uint64_t> droppedSnapshots_{0};
     std::atomic<bool> panicRequested_{false};
     std::array<InputEvent, maximumInputEvents> inputEvents_{};
-    std::array<std::array<std::uint16_t, 128>, 16> heldKeys_{};
-    std::array<std::array<std::uint64_t, 128>, 16> keyOrder_{};
-    std::uint64_t inputOrder_{};
-    int heldNotes_{};
-    std::int8_t inputTranspose_{};
+    InputKeyLedger inputKeys_;
     double sampleRate_{48000.0};
     double freeBeat_{}, lastPpq_{}, processingSeconds_{};
     double lastBeatsPerSample_{2.0 / 48000.0};

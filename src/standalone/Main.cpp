@@ -79,7 +79,7 @@ public:
         panel_.setMidiOutputAvailable(true);
         populateMidiOutputs();
         panel_.midiOutputSelector().onChange = [this] { openSelectedOutput(); };
-        panel_.midiOutputSelector().setSelectedId(1, juce::sendNotificationSync);
+        openSelectedOutput();
         applyPreset(0);
         panel_.timeSigSourceSelector().setSelectedId(2, juce::dontSendNotification);
         panel_.timeSigSourceSelector().setEnabled(false);
@@ -111,17 +111,31 @@ public:
 private:
     void populateMidiOutputs() {
         auto& selector = panel_.midiOutputSelector();
-        selector.clear();
+        const auto oldName = selector.getText();
+        selector.clear(juce::dontSendNotification);
         selector.addItem("Virtual MIDI: 3bs", 1);
-        devices_ = juce::MidiOutput::getAvailableDevices();
-        for (int i = 0; i < devices_.size(); ++i)
+        devices_ = CoreMidiOutput::availableDevices();
+        int selection = 1;
+        bool found = selectedOutputIdentifier_.isEmpty();
+        for (int i = 0; i < devices_.size(); ++i) {
             selector.addItem(devices_.getReference(i).name, i + 2);
+            if (devices_.getReference(i).identifier == selectedOutputIdentifier_) {
+                selection = i + 2; found = true;
+            }
+        }
+        if (!found) {
+            devices_.add({oldName.upToFirstOccurrenceOf(" (unavailable)", false, false) + " (unavailable)", selectedOutputIdentifier_});
+            selection = devices_.size() + 1;
+            selector.addItem(devices_.getLast().name, selection);
+        }
+        selector.setSelectedId(selection, juce::dontSendNotification);
     }
 
     void openSelectedOutput() {
         const auto selected = panel_.midiOutputSelector().getSelectedId();
         if (selected < 1 || selected > devices_.size() + 1) return;
         const auto identifier = selected == 1 ? juce::String{} : devices_.getReference(selected - 2).identifier;
+        selectedOutputIdentifier_ = identifier;
         if (!runtime_.selectOutput(selected == 1, identifier)) {
             panel_.setStatus("MIDI OUTPUT IDENTIFIER TOO LONG");
             return;
@@ -451,6 +465,7 @@ private:
         lastNumberControls_ = visibleNumbers();
     }
     void timerCallback() override {
+        if (++deviceRefreshTicks_ >= 60) { deviceRefreshTicks_ = 0; populateMidiOutputs(); }
         const auto numbers = visibleNumbers();
         std::array<double*, 6> destinations{&config_.simulation.gravitationalConstant, &config_.simulation.softening,
             &config_.simulation.speed, &config_.chordStrumMilliseconds, &config_.chordStrumValue, &config_.autoResetBars};
@@ -522,6 +537,10 @@ private:
             lastOutputReady_ = runtime_.outputReady();
             panel_.setStatus(lastOutputReady_ ? "MIDI OUTPUT READY" : "MIDI OUTPUT UNAVAILABLE");
         }
+        if (runtime_.outputFailures() != reportedOutputFailures_) {
+            reportedOutputFailures_ = runtime_.outputFailures();
+            panel_.setStatus("MIDI OUTPUT INTERRUPTED / RECONNECTING");
+        }
         presentation_.visual.trailSeconds = static_cast<float>(panel_.trailSlider().getValue());
         presentation_.visual.bloom = static_cast<float>(panel_.bloomSlider().getValue() / 100.0);
         presentation_.camera.minimumDistance = static_cast<float>(panel_.minimumCameraDistanceSlider().getValue());
@@ -542,6 +561,8 @@ private:
     SimulationState baseInitial_{};
     SimulationState initial_{};
     juce::Array<juce::MidiDeviceInfo> devices_;
+    juce::String selectedOutputIdentifier_;
+    int deviceRefreshTicks_{};
     std::unique_ptr<juce::FileChooser> fileChooser_;
     PresentationState presentation_{};
     std::uint64_t seed_{0x33425320ULL};
@@ -555,6 +576,7 @@ private:
     double lastDensityControl_{-1.0};
     bool reportedTimingFault_{};
     bool lastOutputReady_{};
+    std::uint64_t reportedOutputFailures_{};
     std::array<double, bodyCount> planeTilts_{};
 };
 

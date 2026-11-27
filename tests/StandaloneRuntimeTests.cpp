@@ -15,6 +15,18 @@
 #include <thread>
 #include <vector>
 
+#if JUCE_MAC
+#include <CoreFoundation/CoreFoundation.h>
+#endif
+
+namespace threebs {
+struct StandaloneRuntimeTestPeer {
+    static std::uint64_t appliedRoute(const StandaloneRuntime& runtime) noexcept {
+        return runtime.appliedRouteRevision_.load(std::memory_order_acquire);
+    }
+};
+}
+
 namespace {
 using namespace threebs;
 using Clock = std::chrono::steady_clock;
@@ -26,6 +38,14 @@ double now() noexcept {
 void check(bool condition, const char* message) {
     std::cout << (condition ? "PASS " : "FAIL ") << message << '\n';
     if (!condition) ++failures;
+}
+void pumpMessageThread() {
+#if JUCE_MAC
+    // JUCE's CoreMIDI device-list cache is refreshed by message-thread endpoint
+    // notifications. Discovery/transitions pump that loop; the timed stall does
+    // not. CoreFoundation avoids enabling modal loops in the product build.
+    (void)CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.002, false);
+#endif
 }
 
 // The CoreMIDI callback performs no allocation or locking. Only this test's
@@ -88,6 +108,7 @@ Identifiers inputIdentifiers() {
 std::unique_ptr<juce::MidiInput> connectCreatedSource(const Identifiers& before, Capture& capture) {
     const auto deadline = now() + 3.0;
     while (now() < deadline) {
+        pumpMessageThread();
         for (const auto& device : juce::MidiInput::getAvailableDevices()) {
             if (device.name != "The Three Body Solution"
                 || std::find(before.begin(), before.end(), device.identifier) != before.end()) continue;
@@ -104,14 +125,18 @@ std::unique_ptr<juce::MidiInput> connectCreatedSource(const Identifiers& before,
 struct Harness {
     SpscQueue<RenderSnapshot, 64> snapshots;
     NoteVisualizationQueue notes;
+    RenderSnapshot latestSnapshot;
     std::unique_ptr<StandaloneRuntime> runtime{std::make_unique<StandaloneRuntime>(snapshots, notes)};
     void drainVisuals() {
         RenderSnapshot snapshot;
-        while (snapshots.pop(snapshot)) {}
+        while (snapshots.pop(snapshot)) latestSnapshot = snapshot;
         NoteVisualizationEvent event;
         while (notes.pop(event)) {}
     }
-    void pump(Capture& capture) { capture.drain(); drainVisuals(); }
+    void pump(Capture& capture, bool dispatch = true) {
+        if (dispatch) pumpMessageThread();
+        capture.drain(); drainVisuals();
+    }
     template <typename Predicate>
     bool until(Capture& capture, Predicate predicate, double timeout = 1.0) {
         const auto deadline = now() + timeout;
@@ -195,8 +220,9 @@ int main() {
     ++controls.resetRevision;
     harness.runtime->publish(controls);
     check(harness.until(original, [&] { return original.ledger.activeCount() == bodyCount; }),
-          "physical loopback receives the three generated voice notes");
+          "CoreMIDI loopback receives the three generated voice notes");
     const auto onsBeforeStall = original.receivedOns();
+    const auto intervalNotesBeforeStall = original.intervalNotes;
     const auto duration = stressSeconds();
     const auto stressStart = now();
     auto nextReport = stressStart + 30.0;
@@ -205,15 +231,21 @@ int main() {
         // and MIDI delivery must continue solely on their owning worker threads.
         std::this_thread::sleep_for(std::chrono::duration<double>(
             std::min(1.0, duration - (now() - stressStart))));
-        harness.pump(original);
+        harness.pump(original, false);
         if (now() >= nextReport) {
             std::cout << "STRESS elapsed=" << now() - stressStart
-                      << " received_note_ons=" << original.ons << '\n';
+                      << " received_note_ons=" << original.ons << std::endl;
             nextReport += 30.0;
         }
     }
     check(original.receivedOns() >= onsBeforeStall + bodyCount,
           "MIDI generation continues while the message thread is stalled");
+    const auto measuredStressSeconds = now() - stressStart;
+    const auto expectedIntervals = static_cast<std::uint64_t>(
+        std::floor(measuredStressSeconds / Capture::expectedPeriod));
+    const auto measuredIntervals = original.intervalNotes - intervalNotesBeforeStall;
+    check(measuredIntervals + 2U >= expectedIntervals && measuredIntervals <= expectedIntervals + 2U,
+          "captured note count covers the complete elapsed stall interval");
     original.measureIntervals = false;
     const auto drift = original.intervalNotes > 1U
         ? (original.lastOn - original.firstOn)
@@ -222,6 +254,7 @@ int main() {
     check(original.intervalNotes > 2U && std::abs(drift) < 0.2,
           "captured MIDI period does not accumulate message-thread timing drift");
     check(!harness.runtime->timingFault() && harness.runtime->overruns() == 0U
+          && harness.runtime->outputFailures() == 0U
           && harness.runtime->maximumLatenessMilliseconds()
               <= StandaloneTimeline::maximumLatenessSeconds * 1000.0,
           "worker remains within its explicit lateness and overrun contract");
@@ -234,15 +267,17 @@ int main() {
     }
     ++controls.resetRevision;
     const auto offsBeforeReset = original.offs;
+    const auto revisionBeforeReset = harness.latestSnapshot.trajectoryRevision;
     harness.runtime->publish(controls);
     check(harness.until(original, [&] {
-        return original.offs >= offsBeforeReset + bodyCount && original.ledger.activeCount() == bodyCount;
+        return harness.latestSnapshot.trajectoryRevision > revisionBeforeReset
+            && original.offs >= offsBeforeReset + bodyCount && original.ledger.activeCount() == bodyCount;
     }), "reset cleans the previous delivered identities before restarting voices");
 
     ++controls.panicRevision;
     harness.runtime->publish(controls);
     check(harness.until(original, [&] { return original.ledger.activeCount() == 0U; }),
-          "panic terminates physically delivered notes before their natural endings");
+          "panic terminates CoreMIDI-delivered notes before their natural endings");
     const auto onsAfterPanic = original.ons;
     harness.settle(original);
     check(original.ons == onsAfterPanic && original.ledger.activeCount() == 0U,
@@ -265,16 +300,24 @@ int main() {
     harness.runtime->publish(controls);
     check(harness.until(original, [&] { return original.ledger.activeCount() == bodyCount; }),
           "resume establishes notes before output replacement");
-    const auto beforeReplacement = inputIdentifiers();
+    const auto routeBeforeReplacement = StandaloneRuntimeTestPeer::appliedRoute(*harness.runtime);
     check(harness.runtime->selectOutput(true, {}), "virtual output replacement is accepted");
-    check(harness.until(original, [&] { return original.ledger.activeCount() == 0U; }),
-          "output replacement cleans notes on the old physical source");
+    check(harness.until(original, [&] {
+        return StandaloneRuntimeTestPeer::appliedRoute(*harness.runtime) > routeBeforeReplacement
+            && original.ledger.activeCount() == 0U;
+    }),
+          "output replacement cleans notes on the old virtual source");
+    originalInput->stop();
+    originalInput.reset();
     Capture replacement;
     replacement.measureIntervals = false;
-    auto replacementInput = connectCreatedSource(beforeReplacement, replacement);
+    // JUCE may retain the same unique ID for the same bundle/name. Once the
+    // delivery owner acknowledges replacement, that test-owned ID is allowed;
+    // all IDs that existed before this test remain excluded.
+    auto replacementInput = connectCreatedSource(initialInputs, replacement);
     check(replacementInput != nullptr, "loopback reconnects only to the newly created replacement source");
     if (replacementInput == nullptr) {
-        harness.runtime->stop(); originalInput->stop(); return 1;
+        harness.runtime->stop(); return 1;
     }
     ++controls.resetRevision;
     harness.runtime->publish(controls);
@@ -282,14 +325,19 @@ int main() {
           "replacement destination receives only its own new note generation");
 
     const auto maximumLateness = harness.runtime->maximumLatenessMilliseconds();
+    const auto lateness50 = harness.runtime->latenessPercentileMilliseconds(0.50);
+    const auto lateness95 = harness.runtime->latenessPercentileMilliseconds(0.95);
+    const auto lateness99 = harness.runtime->latenessPercentileMilliseconds(0.99);
+    const auto deliveredEvents = harness.runtime->deliveredEvents();
     const auto overruns = harness.runtime->overruns();
+    const auto outputFailures = harness.runtime->outputFailures();
     const auto visualDrops = harness.runtime->visualDrops();
     harness.runtime.reset(); // Destructor must join owners and clean the active output.
     check(harness.until(replacement, [&] { return replacement.ledger.activeCount() == 0U; }),
           "runtime destruction flushes the delivered-note ledger before closing output");
     harness.settle(original);
     harness.settle(replacement);
-    originalInput->stop(); replacementInput->stop();
+    replacementInput->stop();
     original.drain(); replacement.drain();
     check(original.ledger.activeCount() == 0U && replacement.ledger.activeCount() == 0U
           && original.peakActive <= bodyCount && replacement.peakActive <= bodyCount,
@@ -298,11 +346,19 @@ int main() {
           && original.dropped() == 0U && replacement.dropped() == 0U,
           "loopback capture observes balanced identities without dropped events");
     check(overruns == 0U, "all transition scenarios complete without worker overruns");
+    check(outputFailures == 0U, "all live transition scenarios complete without rejected CoreMIDI sends");
     std::cout << "{\"standalone_runtime\":{\"stress_seconds\":" << duration
+              << ",\"measured_stress_seconds\":" << measuredStressSeconds
+              << ",\"stress_voice1_note_ons\":" << measuredIntervals
               << ",\"captured_note_ons\":" << original.ons + replacement.ons
               << ",\"period_drift_seconds\":" << drift
               << ",\"max_interval_error_seconds\":" << original.maximumIntervalError
               << ",\"max_delivery_lateness_ms\":" << maximumLateness
+              << ",\"delivery_lateness_p50_ms\":" << lateness50
+              << ",\"delivery_lateness_p95_ms\":" << lateness95
+              << ",\"delivery_lateness_p99_ms\":" << lateness99
+              << ",\"delivered_events\":" << deliveredEvents
+              << ",\"output_failures_before_destructor\":" << outputFailures
               << ",\"overruns\":" << overruns << ",\"visual_drops_during_stall\":" << visualDrops
               << ",\"failures\":" << failures << "}}\n";
     return failures == 0 ? 0 : 1;

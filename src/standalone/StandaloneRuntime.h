@@ -5,6 +5,7 @@
 
 #include "core/SnapshotQueue.h"
 #include "standalone/StandaloneTimeline.h"
+#include "standalone/CoreMidiOutput.h"
 #include <juce_audio_devices/juce_audio_devices.h>
 
 #include <atomic>
@@ -59,6 +60,7 @@ public:
     bool timingFault() const noexcept { return timingFault_.load(std::memory_order_relaxed); }
     std::uint64_t overruns() const noexcept { return overruns_.load(std::memory_order_relaxed); }
     std::uint64_t visualDrops() const noexcept { return visualDrops_.load(std::memory_order_relaxed); }
+    std::uint64_t outputFailures() const noexcept { return outputFailures_.load(std::memory_order_relaxed); }
     std::uint64_t deliveredEvents() const noexcept { return deliveredEvents_.load(std::memory_order_relaxed); }
     double latenessPercentileMilliseconds(double percentile) const noexcept {
         const auto total = deliveredEvents();
@@ -76,6 +78,7 @@ public:
     }
 
 private:
+    friend struct StandaloneRuntimeTestPeer;
     using Clock = std::chrono::steady_clock;
     static double now() noexcept {
         return std::chrono::duration<double>(Clock::now().time_since_epoch()).count();
@@ -211,49 +214,50 @@ private:
         }
         epoch_.fetch_add(1U, std::memory_order_acq_rel);
     }
-    static void send(void* context, const MidiEvent& event) noexcept {
-        auto* output = static_cast<juce::MidiOutput*>(context);
-        if (output == nullptr) return;
-        if (event.type == MidiEventType::NoteOn)
-            output->sendMessageNow(juce::MidiMessage::noteOn(event.channel, event.data1, event.data2));
-        else if (event.type == MidiEventType::NoteOff)
-            output->sendMessageNow(juce::MidiMessage::noteOff(event.channel, event.data1));
-        else
-            output->sendMessageNow(juce::MidiMessage::controllerEvent(event.channel, event.data1, event.data2));
-    }
     void deliver() {
-        std::unique_ptr<juce::MidiOutput> output;
+        std::unique_ptr<CoreMidiOutput> output;
         std::array<DeliveredNoteLedger, bodyCount> ledgers;
         std::array<std::uint64_t, bodyCount> knownVoiceEpochs{};
-        const auto flushAll = [&] { for (auto& ledger : ledgers) ledger.flush({output.get(), send}); };
+        const auto flushAll = [&] {
+            for (auto& ledger : ledgers)
+                if (!ledger.tryFlush([&](const MidiEvent& event) { return output != nullptr && output->send(event); })) return false;
+            return true;
+        };
         std::uint64_t knownEpoch{}, maximumLateness{};
         Route currentRoute;
         bool hasRoute{};
         double nextDeviceCheck{};
         std::map<std::string, std::array<DeliveredNoteLedger, bodyCount>> disconnectedNotes;
         const auto devicePresent = [](const Route& route) {
-            if (route.virtualOutput) return true;
-            const auto identifier = juce::String::fromUTF8(route.identifier.data());
-            for (const auto& device : juce::MidiOutput::getAvailableDevices())
-                if (device.identifier == identifier) return true;
-            return false;
+            return route.virtualOutput || CoreMidiOutput::isAvailable(juce::String::fromUTF8(route.identifier.data()));
         };
+        const auto routeKey = [&] { return currentRoute.virtualOutput ? std::string("virtual:3bs")
+            : std::string(currentRoute.identifier.data()); };
         const auto closeOutput = [&](bool disconnected) {
-            if (disconnected && hasRoute && !currentRoute.virtualOutput)
-                disconnectedNotes[currentRoute.identifier.data()] = ledgers;
-            flushAll();
+            const auto outstanding = ledgers;
+            const auto cleared = flushAll();
+            if (hasRoute && (disconnected || !cleared))
+                disconnectedNotes[routeKey()] = disconnected ? outstanding : ledgers;
+            ledgers = {};
+            if (!cleared) outputFailures_.fetch_add(1U, std::memory_order_relaxed);
             epoch_.fetch_add(1U, std::memory_order_acq_rel);
             output.reset();
             outputReady_.store(false, std::memory_order_relaxed);
         };
         const auto openOutput = [&] {
-            output = currentRoute.virtualOutput ? juce::MidiOutput::createNewDevice("The Three Body Solution")
-                : juce::MidiOutput::openDevice(juce::String::fromUTF8(currentRoute.identifier.data()));
-            if (output != nullptr && !currentRoute.virtualOutput) {
-                const auto pendingCleanup = disconnectedNotes.find(currentRoute.identifier.data());
+            output = currentRoute.virtualOutput ? CoreMidiOutput::createVirtual("The Three Body Solution")
+                : CoreMidiOutput::openDevice(juce::String::fromUTF8(currentRoute.identifier.data()));
+            if (output != nullptr) {
+                const auto pendingCleanup = disconnectedNotes.find(routeKey());
                 if (pendingCleanup != disconnectedNotes.end()) {
-                    for (auto& ledger : pendingCleanup->second) ledger.flush({output.get(), send});
-                    disconnectedNotes.erase(pendingCleanup);
+                    bool cleared = true;
+                    for (auto& ledger : pendingCleanup->second)
+                        cleared = ledger.tryFlush([&](const MidiEvent& event) { return output->send(event); }) && cleared;
+                    if (cleared) disconnectedNotes.erase(pendingCleanup);
+                    else {
+                        outputFailures_.fetch_add(1U, std::memory_order_relaxed);
+                        output.reset();
+                    }
                 }
             }
             epoch_.fetch_add(1U, std::memory_order_acq_rel);
@@ -268,9 +272,10 @@ private:
                 currentRoute = route;
                 hasRoute = true;
                 openOutput();
+                appliedRouteRevision_.store(route.revision, std::memory_order_release);
                 nextDeviceCheck = now() + 1.0;
             }
-            if (hasRoute && !currentRoute.virtualOutput && now() >= nextDeviceCheck) {
+            if (hasRoute && now() >= nextDeviceCheck) {
                 const auto available = devicePresent(currentRoute);
                 if (output != nullptr && !available) closeOutput(true);
                 else if (output == nullptr && available) openOutput();
@@ -278,13 +283,19 @@ private:
             }
             const auto epoch = epoch_.load(std::memory_order_acquire);
             if (knownEpoch != epoch) {
-                flushAll();
+                if (!flushAll()) {
+                    outputFailures_.fetch_add(1U, std::memory_order_relaxed);
+                    closeOutput(false);
+                }
                 knownEpoch = epoch;
             }
             for (std::size_t body = 0; body < bodyCount; ++body) {
                 const auto revision = voiceEpochs_[body].load(std::memory_order_acquire);
                 if (revision != knownVoiceEpochs[body]) {
-                    ledgers[body].flush({output.get(), send});
+                    if (!ledgers[body].tryFlush([&](const MidiEvent& event) { return output != nullptr && output->send(event); })) {
+                        outputFailures_.fetch_add(1U, std::memory_order_relaxed);
+                        closeOutput(false);
+                    }
                     knownVoiceEpochs[body] = revision;
                 }
             }
@@ -315,7 +326,12 @@ private:
             if (pending.epoch == epoch_.load(std::memory_order_acquire)
                 && pending.voiceEpoch == voiceEpochs_[body].load(std::memory_order_acquire) && output != nullptr) {
                 if (pending.event.type != MidiEventType::NoteOff || ledgers[body].contains(pending.event)) {
-                    send(output.get(), pending.event);
+                    if (!output->send(pending.event)) {
+                        outputFailures_.fetch_add(1U, std::memory_order_relaxed);
+                        closeOutput(false);
+                        hasPending = false;
+                        continue;
+                    }
                     ledgers[body].record(pending.event);
                     const auto bucket = std::min<std::size_t>(latenessHistogram_.size() - 1U,
                         static_cast<std::size_t>(lateness * 10000.0));
@@ -325,7 +341,7 @@ private:
             }
             hasPending = false;
         }
-        flushAll();
+        if (!flushAll()) outputFailures_.fetch_add(1U, std::memory_order_relaxed);
         outputReady_.store(false, std::memory_order_relaxed);
     }
 
@@ -338,7 +354,8 @@ private:
     std::atomic<bool> stopping_{true}, outputReady_{}, timingFault_{};
     std::atomic<std::uint64_t> epoch_{1}, overruns_{}, visualDrops_{}, maximumLatenessMicros_{};
     std::array<std::atomic<std::uint64_t>, bodyCount> voiceEpochs_{};
-    std::atomic<std::uint64_t> deliveredEvents_{};
+    std::atomic<std::uint64_t> deliveredEvents_{}, outputFailures_{};
+    std::atomic<std::uint64_t> appliedRouteRevision_{};
     std::array<std::atomic<std::uint64_t>, 1001> latenessHistogram_{};
     std::uint64_t routeRevision_{}, noteSequence_{};
 };

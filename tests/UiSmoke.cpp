@@ -24,6 +24,9 @@ public:
     static void selectPage(ArtworkPanel& panel, std::size_t index) { panel.tabs_.at(index).triggerClick(); }
     static std::size_t page(const ArtworkPanel& panel) { return static_cast<std::size_t>(panel.deckPage_); }
     static bool presenting(const ArtworkPanel& panel) { return panel.presentationMode_; }
+    static bool factorySelectionUnmodified(const ArtworkPanel& panel) {
+        return panel.configurationState_.getText() == "FACTORY CONFIGURATION";
+    }
     static juce::TextEditor& presetName(ArtworkPanel& panel) { return panel.userPresetName_; }
     static juce::Component& scene(ArtworkPanel& panel) { return panel.scene_; }
     static std::vector<juce::Component*> requiredControls(ArtworkPanel& panel) {
@@ -178,16 +181,35 @@ void testNumericParser() {
 class SmokeWindow final : public juce::DocumentWindow {
 public:
     explicit SmokeWindow(threebs::ArtworkPanel& panel)
-        : DocumentWindow("3bs controls acceptance", juce::Colour(0xff060914), closeButton) {
+        : DocumentWindow("3bs controls acceptance", juce::Colour(0xff060914), closeButton), panel_(panel) {
         setUsingNativeTitleBar(true);
         setResizable(true, false);
-        setContentNonOwned(&panel, false);
-        setContentComponentSize(900, 600);
+        viewport_.setViewedComponent(&panel_, false);
+        setContentNonOwned(&viewport_, false);
+        setLayoutSize(900, 600);
         setTopLeftPosition(30, 30);
         setVisible(true);
         toFront(true);
     }
+    ~SmokeWindow() override {
+        clearContentComponent();
+        viewport_.setViewedComponent(nullptr, false);
+    }
+    void setLayoutSize(int width, int height) {
+        // CI desktops can be smaller than the supported editor sizes. Keep a
+        // real visible window while the viewport retains the exact logical
+        // panel geometry used for full-size control snapshots and assertions.
+        const auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
+        const auto desktop = display != nullptr ? display->userArea : juce::Rectangle<int>{0, 0, 1024, 768};
+        setContentComponentSize(std::min(width, std::max(320, desktop.getWidth() - 80)),
+                                std::min(height, std::max(240, desktop.getHeight() - 120)));
+        panel_.setSize(width, height);
+        viewport_.setViewPosition(0, 0);
+    }
     void closeButtonPressed() override { juce::JUCEApplication::getInstance()->systemRequestedQuit(); }
+private:
+    threebs::ArtworkPanel& panel_;
+    juce::Viewport viewport_;
 };
 } // namespace
 
@@ -226,6 +248,7 @@ public:
 
     void shutdown() override {
         stopTimer();
+        dialogOwner_.reset();
         // All dialogs created by successful steps have already exited their modal state.
         for (const auto* name : {stateTitle, configurationTitle})
             if (auto* open = dialog(name)) { open->setVisible(false); open->exitModalState(0); }
@@ -256,13 +279,17 @@ private:
         for (const auto size : {juce::Point<int>{900, 600}, {1280, 820}, {1920, 1400}}) {
             for (std::size_t page = 0; page < pageNames.size(); ++page) {
                 steps_.push_back([this, size, page] {
-                    window_->setContentComponentSize(size.x, size.y);
+                    window_->setLayoutSize(size.x, size.y);
                     Access::selectPage(*panel_, page);
                 });
                 steps_.push_back([this, size, page] {
                     check(panel_->getWidth() == size.x && panel_->getHeight() == size.y,
-                          "native window did not retain the requested content size");
+                          "viewport did not retain requested panel size " + std::to_string(size.x) + "x"
+                              + std::to_string(size.y) + "; actual " + std::to_string(panel_->getWidth())
+                              + "x" + std::to_string(panel_->getHeight()));
                     check(Access::page(*panel_) == page, "tab button did not switch pages");
+                    check(Access::factorySelectionUnmodified(*panel_),
+                          "initial control notifications incorrectly marked the selected factory configuration modified");
                     capture(juce::String(size.x) + "x" + juce::String(size.y) + "-" + pageNames[page]);
                     checkPanel(*panel_);
                     ++checkedPages_;
@@ -270,7 +297,7 @@ private:
             }
         }
         steps_.push_back([this] {
-            window_->setContentComponentSize(900, 600);
+            window_->setLayoutSize(900, 600);
             Access::selectPage(*panel_, 1);
         });
         steps_.push_back([this] {
@@ -301,7 +328,9 @@ private:
             check(name.keyPressed(p) && name.getText() == "p", "text editor did not accept the p character");
             check(!Access::presenting(*panel_), "typing a preset name entered presentation mode");
             name.moveKeyboardFocusToSibling(true);
-            check(juce::Component::getCurrentlyFocusedComponent() != &name, "Tab focus traversal stayed in the preset name");
+            const auto* next = juce::Component::getCurrentlyFocusedComponent();
+            check(next != nullptr && next != &name && (next == panel_.get() || panel_->isParentOf(next)),
+                  "Tab focus traversal did not reach another panel control");
             Access::selectPage(*panel_, 0);
         });
         steps_.push_back([this] {
@@ -357,6 +386,17 @@ private:
         });
         steps_.push_back([this] {
             auto& content = dialogContent(configurationTitle);
+            auto tabs = descendants<juce::TabbedComponent>(content);
+            check(tabs.size() == 1 && tabs.front()->getNumTabs() == 4,
+                  "advanced settings do not expose the three voice tabs and system tab");
+            for (int tab = 0; tab < 4; ++tab) {
+                tabs.front()->setCurrentTabIndex(tab);
+                for (auto* field : descendants<juce::TextEditor>(content))
+                    if (field->isShowing()) checkVisibleBounds(*field, *field->getParentComponent());
+                for (auto* selector : descendants<juce::ComboBox>(content))
+                    if (selector->isShowing()) checkVisibleBounds(*selector, *selector->getParentComponent());
+            }
+            tabs.front()->setCurrentTabIndex(0);
             auto fields = descendants<juce::TextEditor>(content);
             check(!fields.empty(), "advanced settings have no editable fields");
             fields.front()->setText("e", false);
@@ -375,6 +415,38 @@ private:
                   "advanced settings rounded an untouched simulation step");
             check(dialog(configurationTitle) == nullptr, "advanced settings dialog did not close after Apply");
         });
+        for (const bool configuration : {false, true}) {
+            for (const bool queuedApply : {false, true}) {
+                steps_.push_back([this, configuration] {
+                    dialogOwner_ = std::make_unique<juce::Component>();
+                    panel_->addAndMakeVisible(*dialogOwner_);
+                    dialogOwner_->setBounds(20, 20, 100, 50);
+                    threebs::MusicEngine engine;
+                    if (configuration) {
+                        threebs::showAdvancedConfigurationEditor(engine.config(), *dialogOwner_,
+                            [this](const threebs::EngineConfig&) { ++closedOwnerApplies_; });
+                    } else {
+                        threebs::showAdvancedStateEditor(engine.simulation().initialState(),
+                            dialogOwner_->getLocalBounds(), *dialogOwner_,
+                            [this](const threebs::SimulationState&) { ++closedOwnerApplies_; });
+                    }
+                });
+                steps_.push_back([this, configuration, queuedApply] {
+                    auto& content = dialogContent(configuration ? configurationTitle : stateTitle);
+                    // Queue a real Button command before destroying its owner. Never retain
+                    // a raw content pointer or a copied onClick closure across destruction.
+                    if (queuedApply) button(content, configuration ? "APPLY" : "APPLY + RESET").triggerClick();
+                    dialogOwner_.reset();
+                });
+                steps_.push_back([this, configuration] {
+                    check(closedOwnerApplies_ == 0, "Apply callback ran after the owning component was destroyed");
+                    check(dialog(configuration ? configurationTitle : stateTitle) == nullptr,
+                          "modal dialog remained open after its owning component was destroyed");
+                    check(juce::ModalComponentManager::getInstance()->getNumModalComponents() == 0,
+                          "destroyed owner left a modal component blocking the application");
+                });
+            }
+        }
     }
 
     void showStateEditor() {
@@ -396,7 +468,7 @@ private:
             stopTimer();
             check(checkedPages_ == 15, "not all requested page/size combinations ran");
             std::cout << "UI acceptance passed: 15 page/size layouts, all voicing modes/units, keyboard focus, "
-                         "presentation, strict numeric parsing and dialog validation" << std::endl;
+                         "presentation, strict numeric parsing, dialog validation and owner-close races" << std::endl;
             setApplicationReturnValue(0);
             quit();
         } catch (const std::exception& error) { fail(error.what()); }
@@ -413,10 +485,11 @@ private:
     threebs::NoteVisualizationQueue notes_;
     std::unique_ptr<threebs::ArtworkPanel> panel_;
     std::unique_ptr<SmokeWindow> window_;
+    std::unique_ptr<juce::Component> dialogOwner_;
     juce::File captures_;
     std::vector<std::function<void()>> steps_;
     std::size_t step_{}, checkedPages_{};
-    int stateApplies_{}, configurationApplies_{}, configurationChannel_{};
+    int stateApplies_{}, configurationApplies_{}, configurationChannel_{}, closedOwnerApplies_{};
     static constexpr double precisePosition = .12345678901234567;
     static constexpr double tinyVelocity = 1e-20;
     static constexpr double preciseFixedStep = 1.0 / 960.0;

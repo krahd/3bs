@@ -152,17 +152,17 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     configureKnob(minimumCameraDistance_);
     configureKnob(maximumCameraDistance_);
 
-    speed_.setRange(0.0, 8.0, 0.001); speed_.setValue(1.0);
-    gravity_.setRange(0.01, 3.0, 0.001); gravity_.setValue(0.65);
-    softening_.setRange(0.001, 0.25, 0.001); softening_.setValue(0.04);
-    chaos_.setRange(0.0, 100.0, 0.1); chaos_.setValue(20.0);
-    density_.setRange(0.0, 100.0, 0.1); density_.setValue(80.0);
-    trail_.setRange(5.0, 60.0, 0.1); trail_.setValue(30.0);
-    bloom_.setRange(0.0, 100.0, 0.1); bloom_.setValue(34.0);
-    for (auto* mass : massSliders()) { mass->setRange(0.05, 8.0, 0.001); mass->setValue(1.0); }
-    for (auto* tilt : planeTiltSliders()) { tilt->setRange(-75.0, 75.0, 0.1); tilt->setValue(0.0); }
-    minimumCameraDistance_.setRange(1.0, 20.0, 0.1); minimumCameraDistance_.setValue(2.5);
-    maximumCameraDistance_.setRange(5.0, 80.0, 0.1); maximumCameraDistance_.setValue(40.0);
+    speed_.setRange(0.0, 8.0, 0.001); speed_.setValue(1.0, juce::dontSendNotification);
+    gravity_.setRange(0.01, 3.0, 0.001); gravity_.setValue(0.65, juce::dontSendNotification);
+    softening_.setRange(0.001, 0.25, 0.001); softening_.setValue(0.04, juce::dontSendNotification);
+    chaos_.setRange(0.0, 100.0, 0.1); chaos_.setValue(20.0, juce::dontSendNotification);
+    density_.setRange(0.0, 100.0, 0.1); density_.setValue(80.0, juce::dontSendNotification);
+    trail_.setRange(5.0, 60.0, 0.1); trail_.setValue(30.0, juce::dontSendNotification);
+    bloom_.setRange(0.0, 100.0, 0.1); bloom_.setValue(34.0, juce::dontSendNotification);
+    for (auto* mass : massSliders()) { mass->setRange(0.05, 8.0, 0.001); mass->setValue(1.0, juce::dontSendNotification); }
+    for (auto* tilt : planeTiltSliders()) { tilt->setRange(-75.0, 75.0, 0.1); tilt->setValue(0.0, juce::dontSendNotification); }
+    minimumCameraDistance_.setRange(1.0, 20.0, 0.1); minimumCameraDistance_.setValue(2.5, juce::dontSendNotification);
+    maximumCameraDistance_.setRange(5.0, 80.0, 0.1); maximumCameraDistance_.setValue(40.0, juce::dontSendNotification);
     autoFrame_.setToggleState(true, juce::dontSendNotification);
     addAndMakeVisible(autoFrame_);
 
@@ -217,7 +217,7 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
             duration->setSliderStyle(juce::Slider::LinearHorizontal);
             duration->setTextBoxStyle(juce::Slider::TextBoxRight, false, 46, 18);
             duration->setRange(0.02, 8.0, 0.001);
-            duration->setValue(0.2);
+            duration->setValue(0.2, juce::dontSendNotification);
             duration->setStraightGrid(true);
             addAndMakeVisible(*duration);
         }
@@ -255,7 +255,7 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     chordStrum_.setSliderStyle(juce::Slider::LinearHorizontal);
     chordStrum_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 58, 20);
     chordStrum_.setRange(0.0, 120.0, 1.0);
-    chordStrum_.setValue(24.0);
+    chordStrum_.setValue(24.0, juce::dontSendNotification);
     chordStrum_.setTextValueSuffix(" ms");
     chordStrum_.setTooltip("Delay between planets in STRUM mode when the unit is milliseconds.");
     addAndMakeVisible(chordStrum_);
@@ -267,7 +267,7 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     strumValue_.setSliderStyle(juce::Slider::LinearHorizontal);
     strumValue_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 58, 20);
     strumValue_.setRange(0.0, 4.0, 0.001);
-    strumValue_.setValue(0.0625);
+    strumValue_.setValue(0.0625, juce::dontSendNotification);
     strumValue_.setTextValueSuffix(" b");
     strumValue_.setTooltip("Musical STRUM spacing used when the unit is BEATS or BAR FRACTION.");
     addAndMakeVisible(strumValue_);
@@ -374,7 +374,9 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
                 auto candidate = safe->advancedConfiguration_;
                 copyAdvancedConfigurationFields(source, candidate);
                 if (!isValidEngineConfig(candidate)) { safe->setStatus("SETTINGS INVALID"); return; }
-                if (safe->onAdvancedConfiguration && !safe->onAdvancedConfiguration(candidate)) return;
+                const auto callback = safe->onAdvancedConfiguration;
+                const auto accepted = !callback || callback(candidate);
+                if (safe == nullptr || !accepted) return;
                 safe->advancedConfiguration_ = candidate;
                 safe->markVoicingCustom();
                 safe->setStatus("VOICE AND SYSTEM SETTINGS APPLIED");
@@ -1007,7 +1009,9 @@ void ArtworkPanel::loadUserPreset() {
     if (file.getSize() > 1024 * 1024) { setStatus("LOAD FAILED / FILE EXCEEDS 1 MiB"); return; }
     UserConfiguration configuration; juce::String error;
     if (!deserializeUserConfiguration(file.loadFileAsString(), configuration, error)) { setStatus("LOAD FAILED / " + error); return; }
-    if (!onApplyUserConfiguration(configuration)) return;
+    const auto safe = juce::Component::SafePointer<ArtworkPanel>(this);
+    const auto callback = onApplyUserConfiguration;
+    if (!callback(configuration) || safe == nullptr) return;
     userPresetName_.setText(file.getFileNameWithoutExtension());
     configurationState_.setText("LOADED / " + file.getFileNameWithoutExtension(), juce::dontSendNotification);
     setStatus("LOADED / " + file.getFileName());

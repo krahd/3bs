@@ -48,6 +48,45 @@ void ledgerTest() {
     ledger.flush(sent.sink());
     check(sent.size() == 2U, "repeated cleanup is idempotent");
 }
+void failedCleanupRetryTest() {
+    using namespace threebs;
+    DeliveredNoteLedger ledger;
+    const MidiEvent first{0, MidiEventType::NoteOn, 1, 60, 100, 0};
+    const MidiEvent second{0, MidiEventType::NoteOn, 2, 61, 100, 1};
+    const MidiEvent last{0, MidiEventType::NoteOn, 16, 127, 100, 2};
+    ledger.record(first); ledger.record(first); ledger.record(second); ledger.record(last);
+
+    std::size_t attempts{};
+    check(!ledger.tryFlush([&](const MidiEvent&) noexcept { ++attempts; return false; })
+          && attempts == 1U && ledger.activeCount() == 4U,
+          "failed output cleanup retains every delivered note and stops at the first rejection");
+
+    FixedEventBuffer<8> accepted;
+    attempts = 0;
+    check(!ledger.tryFlush([&](const MidiEvent& event) noexcept {
+        ++attempts;
+        if (accepted.size() == 2U) return false;
+        return accepted.push(event);
+    }) && attempts == 3U && accepted.size() == 2U && ledger.activeCount() == 2U,
+          "partial cleanup removes only note-offs accepted by the destination");
+    check(!ledger.contains(first) && ledger.contains(second) && ledger.contains(last),
+          "partial cleanup retains the original channel/key of each unsent note-off");
+
+    attempts = 0;
+    check(!ledger.tryFlush([&](const MidiEvent&) noexcept { ++attempts; return false; })
+          && attempts == 1U && ledger.activeCount() == 2U && accepted.size() == 2U,
+          "repeated output failure cannot forget remaining cleanup obligations");
+    check(ledger.tryFlush([&](const MidiEvent& event) noexcept { return accepted.push(event); })
+          && ledger.activeCount() == 0U && accepted.size() == 4U
+          && accepted[0].channel == 1U && accepted[0].data1 == 60U
+          && accepted[1].channel == 1U && accepted[1].data1 == 60U
+          && accepted[2].channel == 2U && accepted[2].data1 == 61U
+          && accepted[3].channel == 16U && accepted[3].data1 == 127U,
+          "reconnection retries exactly the outstanding note-offs without resending accepted cleanup");
+    attempts = 0;
+    check(ledger.tryFlush([&](const MidiEvent&) noexcept { ++attempts; return false; }) && attempts == 0U,
+          "a fully cleaned destination needs no further send attempt");
+}
 void mailboxTest() {
     struct Payload { std::uint64_t revision{}; std::array<std::uint64_t, 128> values{}; };
     threebs::LatestValueMailbox<Payload> mailbox;
@@ -191,6 +230,6 @@ void voiceCancellationTest() {
 }
 }
 int main() {
-    clockTest(); ledgerTest(); mailboxTest(); pendingPanicTest(); voiceCancellationTest();
+    clockTest(); ledgerTest(); failedCleanupRetryTest(); mailboxTest(); pendingPanicTest(); voiceCancellationTest();
     return failures == 0 ? 0 : 1;
 }

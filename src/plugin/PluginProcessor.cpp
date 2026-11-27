@@ -523,12 +523,13 @@ bool ThreeBSProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const 
 bool ThreeBSProcessor::consumeCommand(EventSink sink) noexcept {
     EngineCommand command;
     if (!commands_.consume(command)) return false;
-    engine_.allNotesOff(0, sink);
     activeConfiguration_ = command.configuration;
     activeParameters_ = command.parameters;
     activeChangedMask_ = 0;
     activeRevision_ = command.revision;
-    (void)engine_.setConfig(activeConfiguration_.engine);
+    // Core reconfiguration cleans only affected voices. Install the current
+    // input gate/transpose as well, avoiding a transient global reconfiguration.
+    updateEngineConfigFromParameters();
     if (command.resetRevision > activeResetRevision_) {
         (void)engine_.reset(activeConfiguration_.initial, sink);
         activeResetRevision_ = command.resetRevision;
@@ -546,8 +547,8 @@ bool ThreeBSProcessor::consumeCommand(EventSink sink) noexcept {
 void ThreeBSProcessor::updateEngineConfigFromParameters() noexcept {
     auto current = activeConfiguration_;
     applyParameters(current, activeParameters_, activeChangedMask_);
-    current.engine.inputTranspose = current.engine.inputTransposeEnabled ? inputTranspose_ : 0;
-    current.engine.inputGateOpen = !current.engine.inputGateEnabled || heldNotes_ > 0;
+    current.engine.inputTranspose = current.engine.inputTransposeEnabled ? inputKeys_.transpose() : 0;
+    current.engine.inputGateOpen = !current.engine.inputGateEnabled || inputKeys_.heldNotes() > 0;
     if (!engine_.setConfig(current.engine)) {
         realtimeFaults_.fetch_or(1U, std::memory_order_relaxed);
         return;
@@ -556,40 +557,17 @@ void ThreeBSProcessor::updateEngineConfigFromParameters() noexcept {
         engine_.setBodyMass(body, current.initial.bodies[body].mass);
 }
 
-void ThreeBSProcessor::clearInputKeys() noexcept {
-    heldKeys_ = {};
-    keyOrder_ = {};
-    heldNotes_ = 0;
-    inputOrder_ = 0;
-    inputTranspose_ = 0;
-}
+void ThreeBSProcessor::clearInputKeys() noexcept { inputKeys_.clear(); }
 
 void ThreeBSProcessor::applyInputEvent(const InputEvent& event) noexcept {
-    const auto channel = static_cast<std::size_t>(event.status & 0x0FU);
+    const auto channel = static_cast<std::uint8_t>(event.status & 0x0FU);
     const auto kind = event.status & 0xF0U;
-    const auto note = static_cast<std::size_t>(event.data1);
-    if (kind == 0x90U && event.data2 != 0U) {
-        auto& count = heldKeys_[channel][note];
-        if (count < std::numeric_limits<std::uint16_t>::max()) { ++count; ++heldNotes_; }
-        keyOrder_[channel][note] = ++inputOrder_;
-        inputTranspose_ = static_cast<std::int8_t>(note % 12U);
-        return;
-    }
-    if (kind == 0x80U || (kind == 0x90U && event.data2 == 0U)) {
-        auto& count = heldKeys_[channel][note];
-        if (count > 0) { --count; --heldNotes_; }
-    } else if (kind == 0xB0U && (note == 120U || note == 123U)) {
-        for (auto& count : heldKeys_[channel]) { heldNotes_ -= count; count = 0; }
-    } else return;
-    std::uint64_t latest{};
-    for (std::size_t c = 0; c < heldKeys_.size(); ++c)
-        for (std::size_t key = 0; key < heldKeys_[c].size(); ++key)
-            if (heldKeys_[c][key] != 0 && keyOrder_[c][key] > latest) {
-                latest = keyOrder_[c][key];
-                inputTranspose_ = static_cast<std::int8_t>(key % 12U);
-            }
-    // Transpose holds its last pitch after the final release, as before. Gate
-    // depends on the key ledger and closes immediately at the release offset.
+    if (kind == 0x90U && event.data2 != 0U)
+        inputKeys_.noteOn(channel, event.data1);
+    else if (kind == 0x80U || (kind == 0x90U && event.data2 == 0U))
+        inputKeys_.noteOff(channel, event.data1);
+    else if (kind == 0xB0U && (event.data1 == 120U || event.data1 == 123U))
+        inputKeys_.allNotesOff(channel);
 }
 
 void ThreeBSProcessor::writeEvent(void* context, const MidiEvent& event) noexcept {

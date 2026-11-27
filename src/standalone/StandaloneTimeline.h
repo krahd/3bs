@@ -116,6 +116,18 @@ public:
                     --notes_[channel][note];
                 }
     }
+    template <typename Send>
+    bool tryFlush(Send&& send) noexcept {
+        for (std::size_t channel = 0; channel < notes_.size(); ++channel)
+            for (std::size_t note = 0; note < notes_[channel].size(); ++note)
+                while (notes_[channel][note] != 0U) {
+                    const MidiEvent event{0, MidiEventType::NoteOff, static_cast<std::uint8_t>(channel + 1U),
+                                          static_cast<std::uint8_t>(note), 0, 0};
+                    if (!send(event)) return false;
+                    --notes_[channel][note];
+                }
+        return true;
+    }
     bool contains(const MidiEvent& event) const noexcept {
         return event.channel >= 1U && event.channel <= 16U && event.data1 <= 127U
             && notes_[event.channel - 1U][event.data1] != 0U;

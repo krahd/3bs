@@ -12,6 +12,16 @@ standalone scheduling checks have executed locally. Native compilation,
 integration, rendering and format validation are being run against the
 candidate branch. A candidate archive is not a qualified public release.
 
+Checkpoint `988b5fd625bd192c3b34dd8b6bb35c98d7e14340` built all Release formats
+and passed 14 of 15 native CTest entries in
+[run 46079678297](https://github.com/krahd/3bs/actions/runs/46079678297).
+Metal completed 27 frames, exercised 13,824 glyph bytes and all 21 injected
+resource failures, and reported zero GPU errors. The processor profile recorded
+zero C/C++ allocations or frees across 2,184 callbacks. The UI test stopped when
+a requested native window exceeded the runner display; the corrected harness
+preserves the logical layout inside a visible viewport. Newer changes and the
+remaining native gates require their own execution evidence.
+
 ## Implemented contracts
 
 - Core MIDI uses an allocation-free event sink; bounded diagnostic collectors
@@ -29,6 +39,10 @@ candidate branch. A candidate archive is not a qualified public release.
   late deadline or saturated queue cancels the epoch, cleans delivered notes
   and pauses generation until Reset or a new Run transition. This is an
   explicit failure threshold, not a measured jitter acceptance tolerance.
+  Direct CoreMIDI client/port lifetime belongs to that worker. Failed note-offs
+  remain in the destination's ledger for retry; unavailable destinations retain
+  their outstanding notes until reconnection. Per-voice changes cancel only
+  affected queued and delivered voices.
 - Dynamic Metal buffers belong to completed frames; glyph instances use proper
   buffer storage. Timestamped trail history is independent of tessellation.
   Rendering failures remain independent of MIDI processing.
@@ -44,7 +58,12 @@ executes applicable native tests, runs real drawable Metal checks with API
 validation, invokes `auval` and pluginval 1.0.4, and retains logs and candidate
 archives. A Metal-less runner reports a skip rather than a render pass.
 Portable builds also execute Linux/macOS tests and a separate ThreadSanitizer
-ownership check. Numerical reports record finite state, energy, angular
+ownership check. Another ThreadSanitizer job exercises the actual processor
+under concurrent audio, configuration publication and save/restore. The native
+workflow captures state from the exact pre-repair executable, verifies recall
+and immediate resave, then runs a 30-minute virtual CoreMIDI timing/cleanup
+soak. Unavailable CoreMIDI reports a skip, never a delivery pass. Numerical
+reports record finite state, energy, angular
 momentum, work bounds and fixed-step refinement without imposing regularity on
 chaotic or escaping systems.
 
@@ -53,6 +72,12 @@ profile additionally observes supported C allocator paths. Host-owned JUCE MIDI
 buffer capacity is a separate contract: a plugin cannot promise allocation-free
 host storage of arbitrary capacity. Profiles record their preallocation and
 input conditions instead of generalising one empty-input result.
+
+JUCE processor destruction and `releaseResources()` provide no outgoing host
+MIDI buffer. Pending cleanup is delivered on the next valid callback; final
+teardown without a further callback depends on the host terminating notes.
+Logic/Ableton teardown sessions therefore remain necessary. Standalone owns
+its output and performs its cleanup before closing that destination.
 
 ## Required native sessions
 

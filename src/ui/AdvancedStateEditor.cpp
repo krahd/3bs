@@ -3,6 +3,7 @@
 
 #include "ui/AdvancedStateEditor.h"
 #include "ui/NumericText.h"
+#include "ui/DialogLifetime.h"
 #include "core/ThreeBodySimulation.h"
 
 #include <array>
@@ -107,8 +108,10 @@ private:
             error_.setText("Position and velocity must stay within ±1000000.", juce::dontSendNotification);
             return;
         }
-        onApply_(result);
-        dismiss();
+        const auto safe = juce::Component::SafePointer<AdvancedStateEditor>(this);
+        const auto callback = onApply_;
+        callback(result);
+        if (safe != nullptr) safe->dismiss();
     }
 
     void dismiss() {
@@ -145,7 +148,7 @@ void showAdvancedStateEditor(const SimulationState& state, juce::Rectangle<int> 
     options.escapeKeyTriggersCloseButton = true;
     options.useNativeTitleBar = true;
     options.resizable = false;
-    options.launchAsync();
+    bindDialogToOwner(options.launchAsync(), parent);
     juce::ignoreUnused(targetArea);
 }
 

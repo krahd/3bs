@@ -154,6 +154,44 @@ void inputAndStreamingTests() {
     check(dense == renderTimeline(48000, 127, false, 960),
           "streamed host output preserves every event above 1024 events per callback");
 }
+void unaffectedVoiceTest() {
+    auto processor = makeProcessor();
+    auto configuration = clockConfiguration(*processor);
+    configuration.engine.inputTransposeEnabled = true;
+    for (std::size_t body = 0; body < 2; ++body) {
+        auto& voice = configuration.engine.voices[body];
+        voice.enabled = true;
+        voice.clockDivisionBeats = 16.0;
+        voice.minimumDurationBeats = voice.maximumDurationBeats = 8.0;
+    }
+    check(processor->applyUserConfiguration(configuration), "two-voice configuration is accepted");
+    juce::AudioBuffer<float> audio(2, 128);
+    juce::MidiBuffer midi;
+    midi.ensureSize(65536);
+    const std::array<juce::uint8, 3> input{0x90, 65, 100};
+    midi.addEvent(input.data(), 3, 0);
+    processor->processBlock(audio, midi);
+    int notes{};
+    for (const auto metadata : midi) notes += (metadata.data[0] & 0xF0U) == 0x90U;
+    check(notes == 2, "unaffected-voice test establishes two active notes");
+    auto advanced = processor->currentUserConfiguration().engine;
+    advanced.voices[0].channel = 9;
+    check(processor->applyAdvancedConfiguration(advanced), "single-voice advanced edit is accepted");
+    midi.clear(); processor->processBlock(audio, midi);
+    bool affectedOff{}, unaffectedOff{};
+    for (const auto metadata : midi) {
+        affectedOff |= metadata.data[0] == 0x80U;
+        unaffectedOff |= metadata.data[0] == 0x81U;
+    }
+    check(affectedOff && !unaffectedOff,
+          "advanced channel edit cleans its old channel and preserves an unaffected sounding voice");
+    processor->requestPanic();
+    midi.clear(); processor->processBlock(audio, midi);
+    bool retainedOff{};
+    for (const auto metadata : midi) retainedOff |= metadata.data[0] == 0x81U;
+    check(retainedOff, "Panic confirms the unaffected voice retained its sounding-note ledger");
+}
+
 void portableValidationTests() {
     auto processor = makeProcessor();
     auto configuration = processor->currentUserConfiguration();
@@ -338,6 +376,7 @@ void hostValidationAndMigrationTests() {
               "malformed host state is rejected atomically before publication");
     };
     reject([](juce::XmlElement& xml) { xml.setAttribute("body0_px", "NaN"); });
+    reject([](juce::XmlElement& xml) { xml.setAttribute("body0_px", "1e99999999999999999999"); });
     reject([](juce::XmlElement& xml) { xml.setAttribute("body1_mass", "1.0junk"); });
     reject([](juce::XmlElement& xml) { xml.setAttribute("schemaVersion", "8.5"); });
     reject([](juce::XmlElement& xml) { xml.setAttribute("schemaVersion", 99); });
@@ -428,6 +467,7 @@ void transportAndOverflowTests() {
 
 int runPluginRegressions() {
     inputAndStreamingTests();
+    unaffectedVoiceTest();
     portableValidationTests();
     ownershipAndRecallTests();
     hostValidationAndMigrationTests();

@@ -66,14 +66,22 @@ int main() {
     midi.ensureSize(4 * 1024 * 1024);
     const std::array<juce::uint8, 1024> sysexPayload{};
     const auto sysex = juce::MidiMessage::createSysExMessage(sysexPayload.data(), static_cast<int>(sysexPayload.size()));
+    juce::MidiBuffer denseInput;
+    denseInput.ensureSize(512 * 1024);
+    for (int event = 0; event < 32768; ++event) {
+        const std::array<juce::uint8, 3> release{0x80, static_cast<juce::uint8>(event % 128), 0};
+        denseInput.addEvent(release.data(), 3, 0);
+    }
     std::chrono::nanoseconds total{}, maximum{};
     std::size_t callbacks{}, failures{};
-    const auto measure = [&](const char* scenario, int frames, int count, bool input, bool bypass) {
+    const auto measure = [&](const char* scenario, int frames, int count, int input, bool bypass) {
         audio.setSize(2, frames, false, false, true);
         threebs::allocationProbe::Counts counts;
+        std::chrono::nanoseconds scenarioTotal{}, scenarioMaximum{};
         for (int block = 0; block < count; ++block) {
             midi.clear();
-            if (input) {
+            if (input == 2) { midi = denseInput; midi.ensureSize(4 * 1024 * 1024); }
+            if (input == 1) {
                 midi.addEvent(sysex, 0);
                 midi.addEvent(juce::MidiMessage::noteOn(1, 60, static_cast<juce::uint8>(100)), frames / 4);
                 midi.addEvent(juce::MidiMessage::noteOff(1, 60), frames * 3 / 4);
@@ -88,14 +96,18 @@ int main() {
             counts.frees += observed.frees;
             const auto elapsed = std::chrono::steady_clock::now() - start;
             total += elapsed; maximum = std::max(maximum, elapsed); ++callbacks;
+            scenarioTotal += elapsed; scenarioMaximum = std::max(scenarioMaximum, elapsed);
         }
         std::cout << scenario << " blocks=" << count << " frames=" << frames
                   << " cpp_allocations=" << counts.cppAllocations << " c_allocations=" << counts.cAllocations
-                  << " frees=" << counts.frees << '\n';
+                  << " frees=" << counts.frees
+                  << " average_us=" << std::chrono::duration<double, std::micro>(scenarioTotal).count() / count
+                  << " maximum_us=" << std::chrono::duration<double, std::micro>(scenarioMaximum).count() << '\n';
         failures += counts.cppAllocations != 0 || counts.cAllocations != 0 || counts.frees != 0;
     };
     measure("cold-command-consumption", 512, 1, false, false);
     measure("short-input-and-long-sysex", 128, 128, true, false);
+    measure("dense-input-releases", 64, 4, 2, false);
     measure("steady-state", 512, 2048, false, false);
     processor.requestReset();
     measure("reset-with-input", 64, 1, true, false);

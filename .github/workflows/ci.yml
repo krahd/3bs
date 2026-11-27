@@ -5,7 +5,13 @@ name: CI
 
 on:
   push:
+    paths-ignore:
+      - '*.md'
+      - '**/*.md'
   pull_request:
+    paths-ignore:
+      - '*.md'
+      - '**/*.md'
 
 permissions:
   contents: read
@@ -56,9 +62,38 @@ jobs:
       - name: Check concurrent ownership
         run: ctest --test-dir build/ci-tsan -R 'threebs_(standalone|core_regression|command_mailbox|renderer_data)_tests' --output-on-failure
 
+  processor-concurrency-sanitizer:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - name: Configure actual processor with ThreadSanitizer
+        run: >-
+          cmake -S . -B build/ci-processor-tsan
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-fsanitize=thread -g"
+          -DCMAKE_OBJCXX_FLAGS="-fsanitize=thread -g"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
+          -DCMAKE_OSX_ARCHITECTURES=arm64
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
+          -DTHREEBS_BUILD_PLUGINS=ON -DTHREEBS_BUILD_TESTS=ON
+      - name: Build processor concurrency regression
+        run: cmake --build build/ci-processor-tsan --target threebs_processor_concurrency_tests --parallel 4
+      - name: Exercise processing, publication and state capture concurrently
+        run: ctest --test-dir build/ci-processor-tsan -R '^threebs_processor_concurrency_tests$' --output-on-failure --output-junit processor-tsan-results.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: processor-concurrency-evidence-${{ github.sha }}
+          path: |
+            build/ci-processor-tsan/processor-tsan-results.xml
+            build/ci-processor-tsan/Testing/Temporary/LastTest.log
+
   arm64-bundles:
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
         with:
@@ -112,6 +147,9 @@ jobs:
           shasum -a 256 build/pluginval.zip > build/evidence/pluginval-download.sha256
           ditto -x -k build/pluginval.zip build/pluginval
           build/pluginval/pluginval.app/Contents/MacOS/pluginval --strictness-level 5 --validate "$(pwd)/build/ci-plugin/src/plugin/ThreeBSVST3_artefacts/Release/VST3/The Three Body Solution.vst3" | tee build/evidence/pluginval.txt
+      - name: Thirty-minute virtual CoreMIDI timing and cleanup soak
+        timeout-minutes: 35
+        run: python3 scripts/run_standalone_soak.py --binary build/ci-plugin/src/standalone/threebs_standalone_runtime_tests --seconds 1800 --output build/evidence
       - name: Package development candidate with provenance
         run: python3 scripts/package_candidate.py --build build/ci-plugin --output build/candidate --commit "$GITHUB_SHA"
       - uses: actions/upload-artifact@v4

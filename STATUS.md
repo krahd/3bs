@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-11-27 19-45 GMT-3
+Last updated: 2026-11-27 20-19 GMT-3
 
 ## Project purpose
 
@@ -30,10 +30,14 @@ host sessions](RELIABILITY-ACCEPTANCE.md).
 The audited baseline `fbc5b226416362d9b058793ab2df9947f9f066cd` passed native
 macOS core tests and Release AU/VST3/standalone compilation (CI run
 46073880635). Current portable repairs pass the registered core suite, numerical
-factory sweep and focused standalone/renderer-data regressions. Native candidate
-results will be recorded after they execute. Logic, Ableton, physical CoreMIDI,
-long-duration stress and signing/notarisation remain separate evidence gates.
-No released binary has been replaced.
+factory sweep and focused standalone/renderer-data regressions. Candidate
+`988b5fd625bd192c3b34dd8b6bb35c98d7e14340` built all Release formats and passed
+14 of 15 native CTest entries (run 46079678297), including real Metal rendering
+and the C/C++ allocation profile. The remaining test exposed a screenshot-host
+size restriction; its viewport correction is awaiting execution with the newer
+CoreMIDI delivery, input-ledger and processor-concurrency regressions. Logic,
+Ableton, physical CoreMIDI, long-duration stress and signing/notarisation remain
+separate evidence gates. No released binary has been replaced.
 
 ## Architecture overview
 
@@ -95,7 +99,7 @@ a destination-owned delivery ledger in standalone.
 
 ## Setup and run instructions
 
-Requirements are Apple Silicon macOS 13+, Xcode, CMake 3.22+, and recursive Git
+Requirements are Apple Silicon macOS 13+, Xcode, CMake 3.22+, Python 3, and recursive Git
 submodules. Use `cmake --preset dev` for core tests or
 `cmake --preset plugin-debug` for all formats, then the matching build and test
 presets. Detailed commands and artifact paths are in `README.md`. VS Code tasks
@@ -131,6 +135,11 @@ repository.
 
 ## Recent changes
 
+- 2026-11-27: implemented reliability repairs across core MIDI, coherent state
+  publication, standalone timing/destination ownership, GPU frame ownership,
+  complete controls and exact-state/preset workflows. Added numerical,
+  allocation, concurrency, native UI/Metal/CoreMIDI, prior-executable recall and
+  distribution gates; candidate acceptance is recorded separately below.
 - 2026-11-27: completed a source audit and targeted portable diagnostics; added
   the detailed improvement plan and reproducible evidence without modifying
   production source, presets, dependencies or released binaries.
@@ -312,5 +321,5 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-11-27 19-45 GMT-3
+Last updated: 2026-11-27 20-19 GMT-3
 
