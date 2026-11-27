@@ -184,6 +184,7 @@ bool MusicEngine::reset(const SimulationState& initial, EventSink noteOffs) noex
     const auto sounding = runtime_;
     initial_ = initial;
     simulation_.reset(initial);
+    ++trajectoryRevision_;
     runtime_ = {};
     // A reset without an output route must retain cleanup, not forget notes
     // already sent. The next processing/cleanup call flushes them first.
@@ -450,6 +451,7 @@ void MusicEngine::emitContinuousControllers(
 void MusicEngine::applyTransportReset(std::uint32_t sampleOffset, EventSink output) noexcept {
     allNotesOff(sampleOffset, output);
     simulation_.reset(initial_);
+    ++trajectoryRevision_;
     runtime_ = {};
     pendingNotes_ = {};
     random_.seedGenerator(initial_.seed, 0x4D494449ULL);
@@ -524,7 +526,9 @@ void MusicEngine::process(const ProcessContext& context, EventSink output) noexc
     for (std::uint32_t sample = 0; sample < context.sampleCount; ++sample) {
         const auto beat = timelineBeat_;
         const auto resetPeriodBeats = config_.autoResetBars * currentBeatsPerBar_;
-        const auto resetIndex = std::floor(beat / std::max(1.0e-9, resetPeriodBeats));
+        // Use the same grid tolerance as clock triggers: accumulated binary
+        // rounding must not retrigger the old system one sample before reset.
+        const auto resetIndex = std::floor((beat + 1.0e-9) / std::max(1.0e-9, resetPeriodBeats));
         if (!hasAutoResetIndex_) {
             lastAutoResetIndex_ = resetIndex;
             hasAutoResetIndex_ = true;
@@ -542,7 +546,10 @@ void MusicEngine::process(const ProcessContext& context, EventSink output) noexc
                 pending.active = false;
             }
         }
+        const auto previousRespawns = simulation_.state().respawnCount;
         simulation_.advance(context.beatsPerSample);
+        if (simulation_.state().respawnCount != previousRespawns)
+            ++trajectoryRevision_;
         if (simulation_.faulted()) {
             allNotesOff(sample, output);
             wasPlaying_ = false;

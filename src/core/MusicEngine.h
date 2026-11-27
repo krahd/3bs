@@ -148,6 +148,9 @@ public:
     const ThreeBodySimulation& simulation() const noexcept { return simulation_; }
     ThreeBodySimulation& simulation() noexcept { return simulation_; }
     const EngineConfig& config() const noexcept { return config_; }
+    // Monotonic discontinuity counter. Synchronous event sinks may read it to
+    // tag notes across a bar reset or respawn inside a processing block.
+    std::uint64_t trajectoryRevision() const noexcept { return trajectoryRevision_; }
     std::array<BodyMeasurements, bodyCount> measurements() const noexcept;
 
 private:
@@ -214,6 +217,7 @@ private:
     double processedSeconds_{};
     double lastChordTriggerBeat_{-1.0e12};
     std::uint64_t chordIndex_{};
+    std::uint64_t trajectoryRevision_{};
     double currentBeatsPerBar_{4.0};
     bool hasAutoResetIndex_{};
     double lastAutoResetIndex_{};

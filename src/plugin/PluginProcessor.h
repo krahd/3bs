@@ -152,7 +152,6 @@ private:
     int lastBlockSize_{};
     bool hostWasPlaying_{}, haveHostPosition_{};
     std::uint64_t snapshotSequence_{}, noteVisualizationSequence_{}, trajectoryRevision_{1};
-    std::array<std::uint32_t, bodyCount> lastRespawnCounts_{};
     juce::MidiBuffer* outputMidi_{};
     std::uint32_t outputOffset_{};
 

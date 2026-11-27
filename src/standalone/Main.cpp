@@ -62,11 +62,16 @@ public:
             config_ = configuration;
             panel_.setAdvancedConfiguration(config_);
             publishControls();
+            return true;
         };
         panel_.onSaveConfiguration = [this] { saveConfiguration(); };
         panel_.onLoadConfiguration = [this] { loadConfiguration(); };
         panel_.onCaptureConfiguration = [this] { return currentConfiguration(); };
-        panel_.onApplyUserConfiguration = [this](const UserConfiguration& configuration) { applyConfiguration(configuration); };
+        panel_.onApplyUserConfiguration = [this](const UserConfiguration& configuration) {
+            juce::String error;
+            if (!validateUserConfiguration(configuration, error)) { panel_.setStatus("LOAD FAILED / " + error); return false; }
+            applyConfiguration(configuration); return true;
+        };
         panel_.syncButton().setToggleState(false, juce::dontSendNotification);
         panel_.syncButton().setButtonText("INTERNAL 120 BPM");
         panel_.syncButton().setTooltip("Standalone generation always runs from its internal 120 BPM clock.");

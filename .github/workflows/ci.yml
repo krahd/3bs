@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -52,9 +52,9 @@ jobs:
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
           -DTHREEBS_BUILD_PLUGINS=OFF -DTHREEBS_BUILD_TESTS=ON
       - name: Build queue and ownership regressions
-        run: cmake --build build/ci-tsan --target threebs_standalone_tests threebs_core_regression_tests --parallel 4
+        run: cmake --build build/ci-tsan --target threebs_standalone_tests threebs_core_regression_tests threebs_command_mailbox_tests threebs_renderer_data_tests --parallel 4
       - name: Check concurrent ownership
-        run: ctest --test-dir build/ci-tsan -R 'threebs_(standalone|core_regression)_tests' --output-on-failure
+        run: ctest --test-dir build/ci-tsan -R 'threebs_(standalone|core_regression|command_mailbox|renderer_data)_tests' --output-on-failure
 
   arm64-bundles:
     runs-on: macos-15
@@ -89,6 +89,16 @@ jobs:
           THREEBS_RENDER_CAPTURE_PATH: ${{ github.workspace }}/build/evidence/metal-frame.png
           THREEBS_UI_CAPTURE_DIR: ${{ github.workspace }}/build/evidence/ui
         run: ctest --test-dir build/ci-plugin --output-on-failure --output-junit native-results.xml
+      - uses: actions/checkout@v5
+        with:
+          repository: krahd/3bs
+          ref: 06066967b243e250d97da37ea0195b31f5c9521c
+          path: build/legacy-source
+          submodules: recursive
+      - name: Capture states from the exact pre-repair executable
+        run: python3 scripts/capture_legacy_states.py --source build/legacy-source --build build/legacy-build --output build/evidence/legacy-states
+      - name: Verify prior-executable state recall and immediate resave
+        run: build/ci-plugin/src/plugin/threebs_legacy_state_tests "$(pwd)/build/evidence/legacy-states"
       - name: Validate Audio Unit
         run: |
           set -o pipefail

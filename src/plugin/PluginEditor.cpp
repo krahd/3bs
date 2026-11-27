@@ -112,12 +112,20 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
     panel_.onReset = [this] { processor_.requestReset(); };
     panel_.onPanic = [this] { processor_.requestPanic(); };
     panel_.onAdvancedConfiguration = [this](const EngineConfig& configuration) {
-        if (!processor_.applyAdvancedConfiguration(configuration)) panel_.setStatus(processor_.lastStateError());
+        if (!processor_.applyAdvancedConfiguration(configuration)) {
+            panel_.setStatus(processor_.lastStateError());
+            return false;
+        }
+        return true;
     };
     panel_.onCaptureConfiguration = [this] { return processor_.currentUserConfiguration(); };
     panel_.onApplyUserConfiguration = [this](const UserConfiguration& configuration) {
-        if (!processor_.applyUserConfiguration(configuration)) panel_.setStatus(processor_.lastStateError());
-        else refreshFromProcessor();
+        if (!processor_.applyUserConfiguration(configuration)) {
+            panel_.setStatus(processor_.lastStateError());
+            return false;
+        }
+        refreshFromProcessor();
+        return true;
     };
     panel_.onCameraChanged = [this](const CameraState& camera) {
         presentation_.camera = camera;

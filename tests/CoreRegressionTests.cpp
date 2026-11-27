@@ -319,6 +319,32 @@ void strumTimingChanges() {
     check(emptyLedger(timed), "sample-rate-changing strum cleans all voices");
 }
 
+void resetRevisions() {
+    auto config = voices();
+    config.voices[0].clockDivisionBeats = 0.25;
+    config.autoResetEnabled = true;
+    config.autoResetBars = 1.0 / 16.0;
+    MusicEngine engine(makeInitialState(InitialSystem::FigureEight, 42), config);
+    struct Tagged {
+        MusicEngine* engine;
+        std::array<std::uint64_t, 4> samples{}, revisions{};
+        std::size_t count{};
+    } tagged{&engine};
+    const EventSink sink{&tagged, [](void* opaque, const MidiEvent& event) noexcept {
+        auto& output = *static_cast<Tagged*>(opaque);
+        if (event.type == MidiEventType::NoteOn && output.count < output.samples.size()) {
+            output.samples[output.count] = event.sampleOffset;
+            output.revisions[output.count++] = output.engine->trajectoryRevision();
+        }
+    }};
+    engine.process(context(12000, true), sink);
+    check(tagged.count == 2 && tagged.samples[0] == 0 && tagged.samples[1] == 6000,
+          "bar reset and clock trigger share the exact musical boundary");
+    check(tagged.revisions[1] > tagged.revisions[0]
+              && tagged.revisions[1] == engine.trajectoryRevision(),
+          "event sinks observe internal reset revisions before the final snapshot");
+}
+
 void invalidCandidates() {
     const auto initial = makeInitialState(InitialSystem::FigureEight, 1);
     const auto config = voices();
@@ -373,6 +399,7 @@ int main() {
     run("streaming and partition invariance", boundedStreaming);
     run("physical speed extrema", speedExtrema);
     run("strum tempo and sample-rate changes", strumTimingChanges);
+    run("internal reset event revisions", resetRevisions);
     run("invalid candidate rejection", invalidCandidates);
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

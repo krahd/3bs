@@ -139,6 +139,8 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     configureKnob(softening_);
     configureKnob(chaos_, "%");
     configureKnob(density_, "%");
+    density_.setSliderStyle(juce::Slider::LinearHorizontal);
+    density_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 18);
     configureKnob(trail_, " s");
     configureKnob(bloom_, "%");
     configureKnob(massOne_);
@@ -372,8 +374,8 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
                 auto candidate = safe->advancedConfiguration_;
                 copyAdvancedConfigurationFields(source, candidate);
                 if (!isValidEngineConfig(candidate)) { safe->setStatus("SETTINGS INVALID"); return; }
+                if (safe->onAdvancedConfiguration && !safe->onAdvancedConfiguration(candidate)) return;
                 safe->advancedConfiguration_ = candidate;
-                if (safe->onAdvancedConfiguration) safe->onAdvancedConfiguration(candidate);
                 safe->markVoicingCustom();
                 safe->setStatus("VOICE AND SYSTEM SETTINGS APPLIED");
             });
@@ -455,7 +457,7 @@ void ArtworkPanel::resized() {
 
     auto content = deck.reduced(18, 8);
     auto left = content.removeFromLeft(262);
-    pageHelp_.setBounds(left.removeFromTop(50));
+    pageHelp_.setBounds(left.removeFromTop(38));
     left.removeFromTop(6);
     auto actions = left.removeFromBottom(28);
     reset_.setBounds(actions.removeFromLeft(124));
@@ -475,9 +477,9 @@ void ArtworkPanel::resized() {
 
     switch (deckPage_) {
     case DeckPage::System: {
-        randomize_.setBounds(left.removeFromTop(26).removeFromLeft(124));
-        left.removeFromTop(5);
-        advanced_.setBounds(left.removeFromTop(26).removeFromLeft(124));
+        auto stateActions = left.removeFromTop(26);
+        randomize_.setBounds(stateActions.removeFromLeft(124));
+        advanced_.setBounds(stateActions.reduced(4, 0));
         left.removeFromTop(8);
         autoReset_.setBounds(left.removeFromTop(24).removeFromLeft(124));
         autoResetLabel_.setBounds(left.removeFromTop(12));
@@ -507,7 +509,7 @@ void ArtworkPanel::resized() {
         chordScaleLabel_.setBounds(scaleCell.removeFromTop(12));
         chordScale_.setBounds(scaleCell.removeFromTop(24));
         left.removeFromTop(3);
-        layoutKnobs({{4U, &density_}}, left.removeFromTop(58));
+        layoutKnobs({{4U, &density_}}, left.removeFromTop(46));
         advancedConfigurationButton_.setBounds(left.removeFromTop(26).reduced(0, 2));
         auto grid = content;
         auto gutter = grid.removeFromLeft(70);
@@ -581,10 +583,10 @@ void ArtworkPanel::resized() {
         configurationState_.setBounds(left.removeFromTop(42));
         break;
         }
-    case DeckPage::Settings:
-        saveConfiguration_.setBounds(left.removeFromTop(28).removeFromLeft(124));
-        left.removeFromTop(5);
-        loadConfiguration_.setBounds(left.removeFromTop(28).removeFromLeft(124));
+    case DeckPage::Settings: {
+        auto fileActions = left.removeFromTop(28);
+        saveConfiguration_.setBounds(fileActions.removeFromLeft(124));
+        loadConfiguration_.setBounds(fileActions.reduced(4, 0));
         left.removeFromTop(8);
         if (midiOutputAvailable_)
             midiOutput_.setBounds(left.removeFromTop(30));
@@ -600,6 +602,7 @@ void ArtworkPanel::resized() {
         refreshUserPresets_.setBounds(buttons.removeFromLeft(100).reduced(3));
         userPresetFolder_.setBounds(buttons.removeFromLeft(100).reduced(3));
         break;
+    }
     }
 }
 
@@ -954,6 +957,8 @@ void ArtworkPanel::setStatus(const juce::String& status) {
 void ArtworkPanel::setMidiOutputAvailable(bool available) {
     midiOutputAvailable_ = available;
     updateDeckVisibility();
+    resized();
+    repaint();
 }
 
 void ArtworkPanel::setPlaneTilts(const std::array<double, bodyCount>& tiltDegrees) {
@@ -1002,7 +1007,7 @@ void ArtworkPanel::loadUserPreset() {
     if (file.getSize() > 1024 * 1024) { setStatus("LOAD FAILED / FILE EXCEEDS 1 MiB"); return; }
     UserConfiguration configuration; juce::String error;
     if (!deserializeUserConfiguration(file.loadFileAsString(), configuration, error)) { setStatus("LOAD FAILED / " + error); return; }
-    onApplyUserConfiguration(configuration);
+    if (!onApplyUserConfiguration(configuration)) return;
     userPresetName_.setText(file.getFileNameWithoutExtension());
     configurationState_.setText("LOADED / " + file.getFileNameWithoutExtension(), juce::dontSendNotification);
     setStatus("LOADED / " + file.getFileName());

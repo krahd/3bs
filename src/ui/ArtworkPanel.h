@@ -18,6 +18,7 @@ class ArtworkPanel final : public juce::Component, private juce::ComboBox::Liste
 public:
     ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
                  NoteVisualizationQueue& noteVisualizationEvents);
+    ~ArtworkPanel() override { stopTimer(); setLookAndFeel(nullptr); }
 
     void paint(juce::Graphics& graphics) override;
     void resized() override;
@@ -103,9 +104,9 @@ public:
     std::function<void()> onReset;
     std::function<void()> onAdvanced;
     std::function<void()> onPanic;
-    std::function<void(const EngineConfig&)> onAdvancedConfiguration;
+    std::function<bool(const EngineConfig&)> onAdvancedConfiguration;
     std::function<UserConfiguration()> onCaptureConfiguration;
-    std::function<void(const UserConfiguration&)> onApplyUserConfiguration;
+    std::function<bool(const UserConfiguration&)> onApplyUserConfiguration;
     std::function<void()> onSaveConfiguration;
     std::function<void()> onLoadConfiguration;
     std::function<void(int)> onPresetSelected;
@@ -116,6 +117,7 @@ public:
     std::function<void(NotePaneStyle)> onNotePaneStyleChanged;
 
 private:
+    friend class ArtworkPanelTestAccess;
     class DeckLookAndFeel final : public juce::LookAndFeel_V4 {
     public:
         DeckLookAndFeel();

@@ -385,7 +385,10 @@ bool ThreeBSProcessor::publishConfigurationLocked(const UserConfiguration& candi
     parameterTransaction_.fetch_add(1, std::memory_order_acq_rel);
     installParameterValues(candidate);
     desired_ = candidate;
-    parameterBaseline_ = readParameters();
+    // Keep the projection of this accepted configuration as the baseline. A
+    // simultaneous host automation write must remain observable on the next
+    // callback, rather than being mistaken for part of this transaction.
+    parameterBaseline_ = legalParameterValues(candidate);
     const auto revision = publishedRevision_.load(std::memory_order_relaxed) + 1;
     if (reset) resetRevision_ = revision;
     commands_.publish({candidate, parameterBaseline_, revision, resetRevision_});
@@ -609,7 +612,7 @@ void ThreeBSProcessor::emitEvent(const MidiEvent& event) noexcept {
     visual.body = event.sourceBody; visual.note = event.data1; visual.velocity = event.data2;
     visual.sequence = ++noteVisualizationSequence_;
     visual.timelineSeconds = processingSeconds_ + static_cast<double>(absoluteOffset) / sampleRate_;
-    visual.trajectoryRevision = trajectoryRevision_;
+    visual.trajectoryRevision = trajectoryRevision_ + engine_.trajectoryRevision();
     (void)noteVisualizationEvents_.push(visual);
 }
 
@@ -681,7 +684,8 @@ void ThreeBSProcessor::processBlock(juce::AudioBuffer<float>& audio, juce::MidiB
             bpm = position->getBpm().orFallback(120.0);
             ppq = position->getPpqPosition().orFallback(freeBeat_);
             hostPlaying = position->getIsPlaying();
-            timingValid = std::isfinite(bpm) && bpm > 0.0 && bpm <= 1000.0 && std::isfinite(ppq);
+            timingValid = std::isfinite(bpm) && bpm > 0.0 && bpm <= 1000.0
+                && std::isfinite(ppq) && std::abs(ppq) <= 1.0e12;
             if (current.timeSignatureSource == TimeSignatureSource::Host)
                 if (const auto signature = position->getTimeSignature()) {
                     timingValid = timingValid && signature->numerator >= 1 && signature->numerator <= 64
@@ -763,8 +767,6 @@ void ThreeBSProcessor::processBlock(juce::AudioBuffer<float>& audio, juce::MidiB
     lastPpq_ = ppq;
     lastBeatsPerSample_ = beatsPerSample;
     lastBlockSize_ = static_cast<int>(sampleCount);
-    const auto& respawns = engine_.simulation().state().respawnCount;
-    if (respawns != lastRespawnCounts_) { lastRespawnCounts_ = respawns; ++trajectoryRevision_; }
     publishSnapshot();
     outputMidi_ = nullptr;
 }
@@ -786,7 +788,7 @@ void ThreeBSProcessor::publishSnapshot() noexcept {
     snapshot.bodies = engine_.simulation().state().bodies;
     snapshot.escaped = engine_.simulation().state().escaped;
     snapshot.sequence = ++snapshotSequence_;
-    snapshot.trajectoryRevision = trajectoryRevision_;
+    snapshot.trajectoryRevision = trajectoryRevision_ + engine_.trajectoryRevision();
     snapshot.interpolationAlpha = engine_.simulation().interpolationAlpha();
     snapshot.timelineSeconds = processingSeconds_;
     std::uint32_t escaped{};
@@ -892,18 +894,20 @@ void ThreeBSProcessor::setStateInformation(const void* data, int size) {
         candidate.loopPolicy = preset.loopPolicy;
         candidate.presetIndex = selected;
     }
-    if (state.hasProperty("configurationTemplateJson")) {
+    const bool hasTemplate = state.hasProperty("configurationTemplateJson");
+    if (hasTemplate) {
         const auto json = state.getProperty("configurationTemplateJson");
-        if (!json.isString() || !deserializeUserConfiguration(json.toString(), candidate, stateError_)) return;
+        if (!json.isString()) { reject("Invalid complete host configuration."); return; }
+        if (!deserializeUserConfiguration(json.toString(), candidate, stateError_)) return;
     } else if (schema >= 8) { reject("Host state is missing its complete configuration."); return; }
 
     const auto initialSeed = state.getProperty("seed", juce::String(candidate.initial.seed));
     if (!hostSeed(initialSeed, candidate.initial.seed)) { reject("Invalid host-state seed."); return; }
-    candidate.baseInitial.seed = candidate.initial.seed;
+    if (!hasTemplate) candidate.baseInitial.seed = candidate.initial.seed;
     for (std::size_t body = 0; body < bodyCount; ++body) {
         for (int base = 0; base < 2; ++base) {
             auto& value = (base == 0 ? candidate.initial : candidate.baseInitial).bodies[body];
-            if (base == 1 && !state.hasProperty("baseBody" + juce::String(body) + "_px"))
+            if (base == 1 && !hasTemplate && !state.hasProperty("baseBody" + juce::String(body) + "_px"))
                 value = candidate.initial.bodies[body];
             const auto prefix = juce::String(base == 0 ? "body" : "baseBody") + juce::String(body) + "_";
             value.mass = property(prefix + "mass", value.mass, 0.05, 1000.0);
@@ -914,7 +918,7 @@ void ThreeBSProcessor::setStateInformation(const void* data, int size) {
             value.velocity.y = property(prefix + "vy", value.velocity.y, -1.0e6, 1.0e6);
             value.velocity.z = property(prefix + "vz", value.velocity.z, -1.0e6, 1.0e6);
         }
-        candidate.planeTilts[body] = property("initialTiltBody" + juce::String(body), 0, -75.0, 75.0);
+        candidate.planeTilts[body] = property("initialTiltBody" + juce::String(body), candidate.planeTilts[body], -75.0, 75.0);
     }
     candidate.loopPolicy = static_cast<LoopPolicy>(static_cast<int>(property(
         "loopPolicy", static_cast<int>(candidate.loopPolicy), 0, 1, true)));
@@ -928,15 +932,15 @@ void ThreeBSProcessor::setStateInformation(const void* data, int size) {
     visual.palette = static_cast<PaletteId>(static_cast<int>(property("visualPalette", static_cast<int>(visual.palette), 0, 5, true)));
     visual.quality = static_cast<GraphicsQuality>(static_cast<int>(property("visualQuality", static_cast<int>(visual.quality), 0, 2, true)));
     camera.yaw = static_cast<float>(property("cameraYaw", camera.yaw, -1000, 1000));
-    camera.pitch = static_cast<float>(property("cameraPitch", camera.pitch, -1.49, 1.49));
+    camera.pitch = static_cast<float>(property("cameraPitch", camera.pitch, static_cast<double>(-1.49F), static_cast<double>(1.49F)));
     camera.distance = static_cast<float>(property("cameraDistance", camera.distance, 1, 80));
-    camera.minimumDistance = static_cast<float>(property("cameraMinimumDistance", 2.5, 1, 20));
-    camera.maximumDistance = static_cast<float>(property("cameraMaximumDistance", 40, 5, 80));
+    camera.minimumDistance = static_cast<float>(property("cameraMinimumDistance", schema < 4 ? 2.5 : camera.minimumDistance, 1, 20));
+    camera.maximumDistance = static_cast<float>(property("cameraMaximumDistance", schema < 4 ? 40.0 : camera.maximumDistance, 5, 80));
     camera.autoOrbit = static_cast<float>(property("cameraAutoOrbit", camera.autoOrbit, -2, 2));
     camera.focusBody = static_cast<int>(property("cameraFocusBody", camera.focusBody, -1, 2, true));
-    camera.autoFrame = property("cameraAutoFrame", 1, 0, 1, true) != 0;
-    candidate.presentation.notePaneMinimized = property("notePaneMinimized", 0, 0, 1, true) != 0;
-    candidate.presentation.notePaneStyle = static_cast<NotePaneStyle>(static_cast<int>(property("notePaneStyle", 0, 0, 1, true)));
+    camera.autoFrame = property("cameraAutoFrame", schema < 4 ? 1 : static_cast<int>(camera.autoFrame), 0, 1, true) != 0;
+    candidate.presentation.notePaneMinimized = property("notePaneMinimized", schema < 4 ? 0 : static_cast<int>(candidate.presentation.notePaneMinimized), 0, 1, true) != 0;
+    candidate.presentation.notePaneStyle = static_cast<NotePaneStyle>(static_cast<int>(property("notePaneStyle", static_cast<int>(candidate.presentation.notePaneStyle), 0, 1, true)));
     if (!hostSeed(state.getProperty("visualSeed", juce::String(candidate.presentation.visualSeed)), candidate.presentation.visualSeed))
         valid = false;
     if (!valid) { reject("Host state contains an invalid numeric value."); return; }
@@ -996,6 +1000,15 @@ void ThreeBSProcessor::setStateInformation(const void* data, int size) {
     for (std::size_t i = 0; i < ParameterCount; ++i)
         if (std::abs(incoming[i] - expected[i]) > 1.0e-6F)
             changed |= std::uint64_t{1} << i;
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        const auto minimumIndex = Voice1 + body * 10 + DurationMinimum;
+        const auto maximumIndex = Voice1 + body * 10 + DurationMaximum;
+        const auto minimum = (changed & (std::uint64_t{1} << minimumIndex)) != 0
+            ? incoming[minimumIndex] : candidate.engine.voices[body].minimumDurationBeats;
+        const auto maximum = (changed & (std::uint64_t{1} << maximumIndex)) != 0
+            ? incoming[maximumIndex] : candidate.engine.voices[body].maximumDurationBeats;
+        if (minimum > maximum) { reject("Host state contains inverted duration bounds."); return; }
+    }
     applyParameters(candidate, incoming, changed);
     // Published schemas <=3 did not contain camera limits; their established
     // defaults are applied above. Reject contradictory present limits in newer states.

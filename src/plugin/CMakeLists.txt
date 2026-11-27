@@ -60,7 +60,12 @@ if(THREEBS_ADHOC_SIGN)
 endif()
 
 if(THREEBS_BUILD_TESTS)
-    add_executable(threebs_plugin_tests ../../tests/PluginTests.cpp)
+    add_executable(threebs_legacy_state_tests ../../tests/LegacyStateTests.cpp)
+    target_include_directories(threebs_legacy_state_tests PRIVATE ..)
+    target_compile_definitions(threebs_legacy_state_tests PRIVATE THREEBS_AU_MIDI_EFFECT=0)
+    target_link_libraries(threebs_legacy_state_tests PRIVATE
+        ThreeBSVST3 threebs_presentation juce::juce_audio_utils juce::juce_gui_extra)
+    add_executable(threebs_plugin_tests ../../tests/PluginTests.cpp ../../tests/PluginRegressionTests.cpp)
     target_include_directories(threebs_plugin_tests PRIVATE ..)
     target_compile_definitions(threebs_plugin_tests PRIVATE THREEBS_AU_MIDI_EFFECT=0)
     target_link_libraries(threebs_plugin_tests PRIVATE

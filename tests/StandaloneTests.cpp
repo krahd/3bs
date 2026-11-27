@@ -113,5 +113,84 @@ void pendingPanicTest() {
               "epoch panic/reset contract cannot replay cancelled strum notes or strand delivered notes");
     }
 }
+
+void voiceCancellationTest() {
+    using namespace threebs;
+    EngineConfig before;
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        before.voices[body].channel = static_cast<std::uint8_t>(body + 1U);
+        before.voices[body].clockDivisionBeats = 16;
+        before.voices[body].minimumDurationBeats = before.voices[body].maximumDurationBeats = 8;
+    }
+    const std::array<bool, bodyCount> none{}, all{true, true, true};
+    check(cancelledStandaloneVoices(before, before) == none,
+          "unchanged controls preserve all scheduled voice epochs");
+    auto next = before;
+    next.simulation.gravitationalConstant = 2;
+    check(cancelledStandaloneVoices(before, next) == none,
+          "physical controls preserve existing note lifetimes");
+    next = before;
+    next.voices[1].enabled = false;
+    check(cancelledStandaloneVoices(before, next) == std::array<bool, bodyCount>{false, true, false},
+          "disabling one voice cancels only that voice's scheduled epoch");
+    next = before;
+    next.voices[0].channel = 16;
+    const auto channelMask = cancelledStandaloneVoices(before, next);
+    check(channelMask == std::array<bool, bodyCount>{true, false, false},
+          "channel reassignment cancels only the reassigned voice");
+
+    // Exercise the mask with real sounding identities. The destination owner
+    // flushes only the changed voice; the engine's subsequent cleanup remains
+    // addressed to its old channel and must not terminate unrelated voices.
+    MusicEngine engine(makeInitialState(InitialSystem::FigureEight, 42), before);
+    std::array<DeliveredNoteLedger, bodyCount> destinations;
+    struct Delivery { std::array<DeliveredNoteLedger, bodyCount>* ledgers; } delivery{&destinations};
+    const EventSink send{&delivery, [](void* opaque, const MidiEvent& event) noexcept {
+        auto& target = *static_cast<Delivery*>(opaque);
+        (*target.ledgers)[event.sourceBody].record(event);
+    }};
+    ProcessContext first; first.sampleCount = 1; first.transportStarted = true;
+    engine.process(first, send);
+    check(destinations[0].activeCount() == 1U && destinations[1].activeCount() == 1U
+          && destinations[2].activeCount() == 1U,
+          "independent voices establish distinct delivered note identities");
+    FixedEventBuffer<16> cleanup;
+    for (std::size_t body = 0; body < bodyCount; ++body)
+        if (channelMask[body]) destinations[body].flush(cleanup.sink());
+    check(cleanup.size() == 1U && cleanup[0].channel == 1U
+          && destinations[0].activeCount() == 0U && destinations[1].activeCount() == 1U
+          && destinations[2].activeCount() == 1U,
+          "per-voice destination cleanup uses the old channel and preserves unaffected notes");
+    check(engine.setConfig(next), "channel reassignment is accepted by the engine");
+    ProcessContext after; after.sampleCount = 1; after.beatAtStart = first.beatsPerSample;
+    FixedEventBuffer<16> generated;
+    engine.process(after, generated.sink());
+    check(generated.size() == 1U && generated[0].type == MidiEventType::NoteOff
+          && generated[0].sourceBody == 0U && generated[0].channel == 1U,
+          "engine reconfiguration emits only the changed voice's original-channel cleanup");
+
+    next = before;
+    next.voicingMode = VoicingMode::Chord;
+    check(cancelledStandaloneVoices(before, next) == all,
+          "mode transition invalidates every queued voicing event");
+    next = before;
+    next.inputGateEnabled = true;
+    next.inputGateOpen = true;
+    check(cancelledStandaloneVoices(before, next) == none,
+          "enabling an open gate preserves sounding voices");
+    auto closed = next;
+    closed.inputGateOpen = false;
+    check(cancelledStandaloneVoices(next, closed) == all,
+          "gate closure invalidates every queued voice event");
+    check(cancelledStandaloneVoices(closed, next) == none,
+          "gate reopening does not cancel newly eligible voice epochs");
+    next = before;
+    next.chordSystem.root = 2;
+    check(cancelledStandaloneVoices(before, next) == all,
+          "global chord-frame edits invalidate the complete queued voicing");
 }
-int main() { clockTest(); ledgerTest(); mailboxTest(); pendingPanicTest(); return failures == 0 ? 0 : 1; }
+}
+int main() {
+    clockTest(); ledgerTest(); mailboxTest(); pendingPanicTest(); voiceCancellationTest();
+    return failures == 0 ? 0 : 1;
+}

@@ -11,6 +11,8 @@
 #include <chrono>
 #include <cstring>
 #include <memory>
+#include <map>
+#include <string>
 #include <thread>
 
 namespace threebs {
@@ -57,6 +59,18 @@ public:
     bool timingFault() const noexcept { return timingFault_.load(std::memory_order_relaxed); }
     std::uint64_t overruns() const noexcept { return overruns_.load(std::memory_order_relaxed); }
     std::uint64_t visualDrops() const noexcept { return visualDrops_.load(std::memory_order_relaxed); }
+    std::uint64_t deliveredEvents() const noexcept { return deliveredEvents_.load(std::memory_order_relaxed); }
+    double latenessPercentileMilliseconds(double percentile) const noexcept {
+        const auto total = deliveredEvents();
+        if (total == 0U) return 0.0;
+        const auto target = static_cast<std::uint64_t>(std::ceil(std::clamp(percentile, 0.0, 1.0) * static_cast<double>(total)));
+        std::uint64_t accumulated{};
+        for (std::size_t bucket = 0; bucket < latenessHistogram_.size(); ++bucket) {
+            accumulated += latenessHistogram_[bucket].load(std::memory_order_relaxed);
+            if (accumulated >= target) return static_cast<double>(bucket + 1U) * 0.1;
+        }
+        return maximumLatenessMilliseconds();
+    }
     double maximumLatenessMilliseconds() const noexcept {
         return static_cast<double>(maximumLatenessMicros_.load(std::memory_order_relaxed)) / 1000.0;
     }
@@ -75,10 +89,13 @@ private:
         MidiEvent event{};
         double due{};
         std::uint64_t epoch{};
+        std::uint64_t voiceEpoch{};
     };
     struct Emission {
         StandaloneRuntime* runtime{};
         const StandaloneTimeline* timeline{};
+        const MusicEngine* engine{};
+        std::array<std::uint64_t, bodyCount> voiceEpochs{};
         std::uint64_t epoch{};
         std::uint64_t trajectoryRevision{};
         bool failed{};
@@ -92,7 +109,8 @@ private:
         auto& self = *emission.runtime;
         if (emission.failed) return;
         const auto sample = emission.timeline->cursor() + event.sampleOffset;
-        if (!self.events_.push({event, emission.timeline->deadline(sample), emission.epoch})) {
+        const auto body = std::min<std::size_t>(event.sourceBody, bodyCount - 1U);
+        if (!self.events_.push({event, emission.timeline->deadline(sample), emission.epoch, emission.voiceEpochs[body]})) {
             emission.failed = true;
             self.timingFault_.store(true, std::memory_order_release);
             self.epoch_.fetch_add(1U, std::memory_order_acq_rel);
@@ -107,7 +125,7 @@ private:
             visual.velocity = event.data2;
             visual.sequence = ++self.noteSequence_;
             visual.timelineSeconds = static_cast<double>(sample) / StandaloneTimeline::sampleRate;
-            visual.trajectoryRevision = emission.trajectoryRevision;
+            visual.trajectoryRevision = emission.trajectoryRevision + emission.engine->trajectoryRevision();
             if (!self.notes_.push(visual)) self.visualDrops_.fetch_add(1U, std::memory_order_relaxed);
         }
     }
@@ -118,7 +136,7 @@ private:
         StandaloneControls controls;
         std::uint64_t resetRevision{}, panicRevision{}, trajectoryRevision{1}, sequence{}, knownEpoch{};
         bool wasPlaying{};
-        std::array<std::uint32_t, bodyCount> respawns{};
+        std::array<std::uint64_t, bodyCount> voiceEpochs{};
         while (!stopping_.load(std::memory_order_acquire)) {
             StandaloneControls incoming;
             if (controls_.consume(incoming)) {
@@ -134,6 +152,9 @@ private:
                 }
                 if (resetting || panic || (!controls.playing && incoming.playing))
                     timingFault_.store(false, std::memory_order_release);
+                const auto cancelled = cancelledStandaloneVoices(controls.engine, incoming.engine);
+                for (std::size_t body = 0; body < bodyCount; ++body)
+                    if (cancelled[body]) voiceEpochs_[body].fetch_add(1U, std::memory_order_acq_rel);
                 controls = incoming;
                 (void)engine.setConfig(controls.engine);
                 if (resetting) (void)engine.reset(controls.initial, discardAfterEpochCleanup());
@@ -171,20 +192,18 @@ private:
             context.playing = controls.playing && !timingFault_.load(std::memory_order_acquire);
             context.transportStarted = context.playing && !wasPlaying;
             if (context.transportStarted) ++trajectoryRevision;
-            Emission emission{this, &timeline, knownEpoch, trajectoryRevision, false};
+            for (std::size_t body = 0; body < bodyCount; ++body)
+                voiceEpochs[body] = voiceEpochs_[body].load(std::memory_order_acquire);
+            Emission emission{this, &timeline, &engine, voiceEpochs, knownEpoch, trajectoryRevision, false};
             engine.process(context, EventSink{&emission, enqueue});
             timeline.advance();
             wasPlaying = context.playing;
-            if (engine.simulation().state().respawnCount != respawns) {
-                respawns = engine.simulation().state().respawnCount;
-                ++trajectoryRevision;
-            }
             if (++sequence % 5U == 0U) {
                 RenderSnapshot snapshot;
                 snapshot.bodies = engine.simulation().state().bodies;
                 snapshot.escaped = engine.simulation().state().escaped;
                 snapshot.sequence = sequence;
-                snapshot.trajectoryRevision = trajectoryRevision;
+                snapshot.trajectoryRevision = trajectoryRevision + engine.trajectoryRevision();
                 snapshot.interpolationAlpha = engine.simulation().interpolationAlpha();
                 snapshot.timelineSeconds = timeline.seconds();
                 if (!snapshots_.push(snapshot)) visualDrops_.fetch_add(1U, std::memory_order_relaxed);
@@ -204,31 +223,78 @@ private:
     }
     void deliver() {
         std::unique_ptr<juce::MidiOutput> output;
-        DeliveredNoteLedger ledger;
+        std::array<DeliveredNoteLedger, bodyCount> ledgers;
+        std::array<std::uint64_t, bodyCount> knownVoiceEpochs{};
+        const auto flushAll = [&] { for (auto& ledger : ledgers) ledger.flush({output.get(), send}); };
         std::uint64_t knownEpoch{}, maximumLateness{};
+        Route currentRoute;
+        bool hasRoute{};
+        double nextDeviceCheck{};
+        std::map<std::string, std::array<DeliveredNoteLedger, bodyCount>> disconnectedNotes;
+        const auto devicePresent = [](const Route& route) {
+            if (route.virtualOutput) return true;
+            const auto identifier = juce::String::fromUTF8(route.identifier.data());
+            for (const auto& device : juce::MidiOutput::getAvailableDevices())
+                if (device.identifier == identifier) return true;
+            return false;
+        };
+        const auto closeOutput = [&](bool disconnected) {
+            if (disconnected && hasRoute && !currentRoute.virtualOutput)
+                disconnectedNotes[currentRoute.identifier.data()] = ledgers;
+            flushAll();
+            epoch_.fetch_add(1U, std::memory_order_acq_rel);
+            output.reset();
+            outputReady_.store(false, std::memory_order_relaxed);
+        };
+        const auto openOutput = [&] {
+            output = currentRoute.virtualOutput ? juce::MidiOutput::createNewDevice("The Three Body Solution")
+                : juce::MidiOutput::openDevice(juce::String::fromUTF8(currentRoute.identifier.data()));
+            if (output != nullptr && !currentRoute.virtualOutput) {
+                const auto pendingCleanup = disconnectedNotes.find(currentRoute.identifier.data());
+                if (pendingCleanup != disconnectedNotes.end()) {
+                    for (auto& ledger : pendingCleanup->second) ledger.flush({output.get(), send});
+                    disconnectedNotes.erase(pendingCleanup);
+                }
+            }
+            epoch_.fetch_add(1U, std::memory_order_acq_rel);
+            outputReady_.store(output != nullptr, std::memory_order_relaxed);
+        };
         ScheduledEvent pending;
         bool hasPending{};
         while (!stopping_.load(std::memory_order_acquire)) {
             Route route;
             if (routes_.consume(route)) {
-                ledger.flush({output.get(), send});
-                epoch_.fetch_add(1U, std::memory_order_acq_rel);
-                output.reset();
-                output = route.virtualOutput ? juce::MidiOutput::createNewDevice("The Three Body Solution")
-                    : juce::MidiOutput::openDevice(juce::String::fromUTF8(route.identifier.data()));
-                outputReady_.store(output != nullptr, std::memory_order_relaxed);
+                closeOutput(output != nullptr && !devicePresent(currentRoute));
+                currentRoute = route;
+                hasRoute = true;
+                openOutput();
+                nextDeviceCheck = now() + 1.0;
+            }
+            if (hasRoute && !currentRoute.virtualOutput && now() >= nextDeviceCheck) {
+                const auto available = devicePresent(currentRoute);
+                if (output != nullptr && !available) closeOutput(true);
+                else if (output == nullptr && available) openOutput();
+                nextDeviceCheck = now() + 1.0;
             }
             const auto epoch = epoch_.load(std::memory_order_acquire);
             if (knownEpoch != epoch) {
-                ledger.flush({output.get(), send});
+                flushAll();
                 knownEpoch = epoch;
+            }
+            for (std::size_t body = 0; body < bodyCount; ++body) {
+                const auto revision = voiceEpochs_[body].load(std::memory_order_acquire);
+                if (revision != knownVoiceEpochs[body]) {
+                    ledgers[body].flush({output.get(), send});
+                    knownVoiceEpochs[body] = revision;
+                }
             }
             if (!hasPending) hasPending = events_.pop(pending);
             if (!hasPending) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 continue;
             }
-            if (pending.epoch != epoch) { hasPending = false; continue; }
+            const auto body = std::min<std::size_t>(pending.event.sourceBody, bodyCount - 1U);
+            if (pending.epoch != epoch || pending.voiceEpoch != knownVoiceEpochs[body]) { hasPending = false; continue; }
             const auto lateness = now() - pending.due;
             if (lateness < 0.0) {
                 const auto sleep = std::min(-lateness, 0.001);
@@ -246,13 +312,20 @@ private:
             maximumLatenessMicros_.store(maximumLateness, std::memory_order_relaxed);
             // Epoch is rechecked immediately before handoff; a transition racing
             // this call is followed by the destination-owned cleanup next loop.
-            if (pending.epoch == epoch_.load(std::memory_order_acquire) && output != nullptr) {
-                send(output.get(), pending.event);
-                ledger.record(pending.event);
+            if (pending.epoch == epoch_.load(std::memory_order_acquire)
+                && pending.voiceEpoch == voiceEpochs_[body].load(std::memory_order_acquire) && output != nullptr) {
+                if (pending.event.type != MidiEventType::NoteOff || ledgers[body].contains(pending.event)) {
+                    send(output.get(), pending.event);
+                    ledgers[body].record(pending.event);
+                    const auto bucket = std::min<std::size_t>(latenessHistogram_.size() - 1U,
+                        static_cast<std::size_t>(lateness * 10000.0));
+                    latenessHistogram_[bucket].fetch_add(1U, std::memory_order_relaxed);
+                    deliveredEvents_.fetch_add(1U, std::memory_order_relaxed);
+                }
             }
             hasPending = false;
         }
-        ledger.flush({output.get(), send});
+        flushAll();
         outputReady_.store(false, std::memory_order_relaxed);
     }
 
@@ -264,6 +337,9 @@ private:
     std::thread generation_, delivery_;
     std::atomic<bool> stopping_{true}, outputReady_{}, timingFault_{};
     std::atomic<std::uint64_t> epoch_{1}, overruns_{}, visualDrops_{}, maximumLatenessMicros_{};
+    std::array<std::atomic<std::uint64_t>, bodyCount> voiceEpochs_{};
+    std::atomic<std::uint64_t> deliveredEvents_{};
+    std::array<std::atomic<std::uint64_t>, 1001> latenessHistogram_{};
     std::uint64_t routeRevision_{}, noteSequence_{};
 };
 

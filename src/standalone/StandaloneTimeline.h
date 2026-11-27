@@ -6,6 +6,7 @@
 #include "core/MusicEngine.h"
 
 #include <array>
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdint>
@@ -74,6 +75,23 @@ private:
     std::uint64_t cursor_{};
 };
 
+inline std::array<bool, bodyCount> cancelledStandaloneVoices(const EngineConfig& previous,
+                                                             const EngineConfig& next) noexcept {
+    const bool global = previous.voicingMode != next.voicingMode
+        || previous.chordSystem.root != next.chordSystem.root
+        || previous.chordSystem.scale != next.chordSystem.scale
+        || previous.chordSystem.customScale != next.chordSystem.customScale
+        || previous.chordStrumUnit != next.chordStrumUnit
+        || previous.chordStrumValue != next.chordStrumValue
+        || previous.chordStrumMilliseconds != next.chordStrumMilliseconds
+        || previous.inputTranspose != next.inputTranspose
+        || (next.inputGateEnabled && !next.inputGateOpen);
+    std::array<bool, bodyCount> result{};
+    for (std::size_t body = 0; body < bodyCount; ++body)
+        result[body] = global || previous.voices[body] != next.voices[body];
+    return result;
+}
+
 // The destination ledger records only messages actually handed to that output.
 // Overlapping voices sharing a channel/key are counted, including repeated-ons.
 class DeliveredNoteLedger {
@@ -97,6 +115,10 @@ public:
                                static_cast<std::uint8_t>(note), 0, 0});
                     --notes_[channel][note];
                 }
+    }
+    bool contains(const MidiEvent& event) const noexcept {
+        return event.channel >= 1U && event.channel <= 16U && event.data1 <= 127U
+            && notes_[event.channel - 1U][event.data1] != 0U;
     }
     std::size_t activeCount() const noexcept {
         std::size_t result{};

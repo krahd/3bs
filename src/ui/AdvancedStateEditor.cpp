@@ -39,7 +39,7 @@ public:
                 source.position.z, source.velocity.x, source.velocity.y, source.velocity.z};
             for (std::size_t field = 0; field < values.size(); ++field) {
                 auto& editor = fields_[body * values.size() + field];
-                editor.setText(juce::String(values[field], 8), false);
+                editor.setText(formatExactNumber(values[field]), false);
                 editor.setInputRestrictions(0, "-+.0123456789eE");
                 editor.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff101726));
                 editor.setColour(juce::TextEditor::outlineColourId, juce::Colour(0xff2c3a52));

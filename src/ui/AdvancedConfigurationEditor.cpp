@@ -16,7 +16,7 @@ void styleLabel(juce::Label& label, const juce::String& text) {
     label.setFont(juce::Font(juce::FontOptions(12.0F)));
 }
 void styleField(juce::TextEditor& field, double value) {
-    field.setText(juce::String(value, 8), false);
+    field.setText(formatExactNumber(value), false);
     field.setInputRestrictions(0, "-+.0123456789eE");
     field.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff101726));
     field.setColour(juce::TextEditor::textColourId, juce::Colour(0xffdce7ef));

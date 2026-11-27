@@ -36,13 +36,17 @@ public:
         if (value.getDynamicObject() != nullptr) return true;
         fail(field); return false;
     }
+    static bool has(const juce::var& target, const char* name) {
+        const auto* object = target.getDynamicObject();
+        return object != nullptr && object->hasProperty(name);
+    }
     static bool numeric(const juce::var& value) {
         return value.isInt() || value.isInt64() || value.isDouble();
     }
     double number(const juce::var& target, const char* name, double fallback,
                   double minimum, double maximum) {
         const auto value = get(target, name);
-        if (value.isVoid()) return fallback; // Explicit legacy/default migration only.
+        if (!has(target, name)) return fallback; // Explicit legacy/default migration only.
         if (!numeric(value)) { fail(name); return fallback; }
         const auto result = static_cast<double>(value);
         if (!std::isfinite(result) || result < minimum || result > maximum) {
@@ -57,13 +61,13 @@ public:
     }
     bool boolean(const juce::var& target, const char* name, bool fallback) {
         const auto value = get(target, name);
-        if (value.isVoid()) return fallback;
+        if (!has(target, name)) return fallback;
         if (!value.isBool()) { fail(name); return fallback; }
         return static_cast<bool>(value);
     }
     std::uint64_t seed(const juce::var& target, const char* name, std::uint64_t fallback) {
         const auto value = get(target, name);
-        if (value.isVoid()) return fallback;
+        if (!has(target, name)) return fallback;
         if (value.isInt() || value.isInt64()) {
             const auto signedValue = static_cast<juce::int64>(value);
             if (signedValue >= 0) return static_cast<std::uint64_t>(signedValue);
@@ -78,7 +82,7 @@ public:
     }
     bool booleanArray(const juce::var& objectValue, const char* name, std::array<bool, 12>& out) {
         const auto value = get(objectValue, name);
-        if (value.isVoid()) return true;
+        if (!has(objectValue, name)) return true;
         const auto* values = value.getArray();
         if (values == nullptr || values->size() != 12) { fail(name); return false; }
         for (int i = 0; i < 12; ++i) {
@@ -233,7 +237,7 @@ bool readEngine(const juce::var& source, EngineConfig& config, Reader& reader) {
     result.chordStrumMilliseconds = reader.number(source, "strumMilliseconds", 24.0, 0.0, 250.0);
     result.chordStrumUnit = static_cast<StrumUnit>(reader.integer(source, "strumUnit", 0, 0, 2));
     result.chordStrumValue = reader.number(source, "strumValue", 0.0625, 0.0, 4.0);
-    result.minimumChordIntervalBeats = reader.number(source, "minimumChordInterval", 0.125, 0.0, 16.0);
+    result.minimumChordIntervalBeats = reader.number(source, "minimumChordInterval", 0.125, 0.0, 64.0);
     result.chordSystem.root = static_cast<std::uint8_t>(reader.integer(source, "chordRoot", 0, 0, 11));
     result.chordSystem.scale = static_cast<ScaleId>(reader.integer(source, "chordScale", 8, 0, 14));
     reader.booleanArray(source, "chordCustomScale", result.chordSystem.customScale);
@@ -271,7 +275,7 @@ bool readEngine(const juce::var& source, EngineConfig& config, Reader& reader) {
         reader.booleanArray(item, "customScale", voice.customScale);
         const auto laneValue = get(item, "ccLanes");
         const auto* lanes = laneValue.getArray();
-        if (!laneValue.isVoid() && (lanes == nullptr || lanes->size() != 2)) {
+        if (Reader::has(item, "ccLanes") && (lanes == nullptr || lanes->size() != 2)) {
             reader.fail("ccLanes"); return false;
         }
         if (lanes != nullptr) {
@@ -335,7 +339,7 @@ PresentationState readPresentation(const juce::var& source, Reader& reader) {
     const auto camera = get(source, "camera");
     reader.object(camera, "camera");
     result.camera.yaw = static_cast<float>(reader.number(camera, "yaw", 0.0, -1000.0, 1000.0));
-    result.camera.pitch = static_cast<float>(reader.number(camera, "pitch", -0.34, -1.49, 1.49));
+    result.camera.pitch = static_cast<float>(reader.number(camera, "pitch", -0.34, static_cast<double>(-1.49F), static_cast<double>(1.49F)));
     result.camera.distance = static_cast<float>(reader.number(camera, "distance", 7.0, 1.0, 80.0));
     result.camera.minimumDistance = static_cast<float>(reader.number(camera, "minimumDistance", 2.5, 1.0, 20.0));
     result.camera.maximumDistance = static_cast<float>(reader.number(camera, "maximumDistance", 40.0, 5.0, 80.0));
@@ -446,7 +450,7 @@ bool validateUserConfiguration(const UserConfiguration& configuration, juce::Str
         || !within(visual.starDensity, 0.0, 1.0)
         || static_cast<int>(visual.palette) > 5 || static_cast<int>(visual.quality) > 2
         || static_cast<int>(configuration.presentation.notePaneStyle) > 1
-        || !within(camera.yaw, -1000.0, 1000.0) || !within(camera.pitch, -1.49, 1.49)
+        || !within(camera.yaw, -1000.0, 1000.0) || !within(camera.pitch, static_cast<double>(-1.49F), static_cast<double>(1.49F))
         || !within(camera.distance, 1.0, 80.0) || !within(camera.minimumDistance, 1.0, 20.0)
         || !within(camera.maximumDistance, 5.0, 80.0)
         || camera.minimumDistance > camera.maximumDistance
