@@ -30,10 +30,13 @@ with (args.output / 'standalone-soak.log').open('w') as log:
             measurement = json.loads(line)['standalone_runtime']
     result = process.wait()
 status = 'passed' if result == 0 else 'skipped' if result == 77 else 'failed'
+measurement_complete = measurement is not None and measurement.get('stress_seconds', 0) >= args.seconds
+if result == 0 and not measurement_complete:
+    status = 'failed'
 record = {'status': status, 'requested_seconds': args.seconds, 'elapsed_seconds': time.monotonic() - started,
           'exit_code': result, 'measurement': measurement,
           'scope': 'actual virtual CoreMIDI delivery while message-thread dispatch is stalled; physical-device and DAW sessions remain separate'}
 (args.output / 'standalone-soak.json').write_text(json.dumps(record, indent=2) + '\n')
-if result == 0 and (measurement is None or measurement['stress_seconds'] < args.seconds):
+if result == 0 and not measurement_complete:
     raise SystemExit('Missing full-duration measurement')
 raise SystemExit(0 if result in (0, 77) else result)

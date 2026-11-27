@@ -7,6 +7,10 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <chrono>
+#include <clocale>
+#include <cstring>
+#include <string>
 #include <functional>
 #include <iostream>
 #include <limits>
@@ -218,6 +222,33 @@ void portableValidationTests() {
               "portable round trip preserves unsigned seeds, exact mass/duration, and meter");
     }
     const auto validJson = serializeUserConfiguration(configuration);
+    for (const auto* literal : {"1e999999999999999999", "0e999999999999999999", "1e-999999999999999999",
+                                "999999999999999999999999999999", "999999999999999999999999999999.0"}) {
+        // These are raw JSON numbers, not strings. They reach the lexical
+        // boundary before JUCE's signed integer/exponent accumulators.
+        const auto malformed = "{\"unsafeNumber\":" + juce::String(literal) + "," + validJson.substring(1);
+        auto output = configuration;
+        juce::String error;
+        check(!deserializeUserConfiguration(malformed, output, error) && error.isNotEmpty()
+                  && serializeUserConfiguration(output) == validJson,
+              "unsafe raw JSON numeric token is rejected before conversion without mutation");
+    }
+    {
+        const auto quoted = "{\"note\":\"escaped \\\" 1e999999999999999999\"," + validJson.substring(1);
+        UserConfiguration output;
+        juce::String error;
+        check(deserializeUserConfiguration(quoted, output, error),
+              "numeric preflight ignores quoted text and escaped quotes");
+    }
+    {
+        const auto nested = "{\"extra\":" + juce::String::repeatedString("[", 256) + "0"
+            + juce::String::repeatedString("]", 256) + "," + validJson.substring(1);
+        auto output = configuration;
+        juce::String error;
+        check(!deserializeUserConfiguration(nested, output, error) && error.contains("unsafe JSON nesting")
+                  && serializeUserConfiguration(output) == validJson,
+              "excessive JSON nesting is rejected before recursive parsing without mutation");
+    }
     const auto reject = [&](const std::function<void(juce::var&)>& mutate) {
         auto source = juce::JSON::parse(validJson);
         mutate(source);
@@ -265,6 +296,80 @@ void portableValidationTests() {
               "portable schemas 1-3 migrate to established host/4:4 meter defaults");
     }
 }
+void boundedFileLoadingTest() {
+    auto processor = makeProcessor();
+    auto expected = processor->currentUserConfiguration();
+    expected.initial.bodies[0].position.x = 0.12345678901234566;
+    expected.baseInitial.bodies[0].position.x = expected.initial.bodies[0].position.x;
+    expected.initial.bodies[1].velocity.z = 0.00012345678901234566;
+    expected.baseInitial.bodies[1].velocity.z = expected.initial.bodies[1].velocity.z;
+    const auto json = serializeUserConfiguration(expected);
+    const juce::TemporaryFile temporary(".3bs");
+    const auto& file = temporary.getFile();
+    check(file.replaceWithText(json), "test-owned configuration file can be written");
+    UserConfiguration loaded;
+    juce::String error;
+    check(loadUserConfiguration(file, loaded, error)
+              && serializeUserConfiguration(loaded) == json,
+          "bounded file loader preserves a normal configuration round trip");
+    check(loaded.initial.bodies[0].position.x == expected.initial.bodies[0].position.x
+              && loaded.baseInitial.bodies[0].position.x == expected.baseInitial.bodies[0].position.x
+              && loaded.initial.bodies[1].velocity.z == expected.initial.bodies[1].velocity.z,
+          "portable files preserve full-precision initial coordinates and small velocities");
+    check(processor->applyUserConfiguration(expected), "precise host fixture is accepted");
+    juce::MemoryBlock hostState;
+    processor->getStateInformation(hostState);
+    auto restored = makeProcessor();
+    restored->setStateInformation(hostState.getData(), static_cast<int>(hostState.getSize()));
+    restored->getStateInformation(hostState);
+    processor->setStateInformation(hostState.getData(), static_cast<int>(hostState.getSize()));
+    const auto recalled = processor->currentUserConfiguration();
+    check(recalled.initial.bodies[0].position.x == expected.initial.bodies[0].position.x
+              && recalled.baseInitial.bodies[0].position.x == expected.baseInitial.bodies[0].position.x
+              && recalled.initial.bodies[1].velocity.z == expected.initial.bodies[1].velocity.z,
+          "host immediate restore/resave preserves full-precision initial double values");
+    for (const auto magnitude : {std::numeric_limits<double>::denorm_min(), 1.0e-310,
+                                 std::nextafter(std::numeric_limits<double>::min(), 0.0)}) {
+        for (const auto sign : {1.0, -1.0}) {
+            const auto value = magnitude * sign;
+            auto tiny = expected;
+            tiny.initial.bodies[0].position.x = tiny.baseInitial.bodies[0].position.x = value;
+            tiny.initial.bodies[1].velocity.z = tiny.baseInitial.bodies[1].velocity.z = value;
+            const auto exact = [value](const UserConfiguration& configuration) {
+                return configuration.initial.bodies[0].position.x == value
+                    && configuration.baseInitial.bodies[0].position.x == value
+                    && configuration.initial.bodies[1].velocity.z == value
+                    && configuration.baseInitial.bodies[1].velocity.z == value;
+            };
+            UserConfiguration tinyLoaded;
+            check(file.replaceWithText(serializeUserConfiguration(tiny))
+                      && loadUserConfiguration(file, tinyLoaded, error) && exact(tinyLoaded),
+                  "portable files preserve positive and negative subnormal coordinates and velocities");
+            check(processor->applyUserConfiguration(tiny), "subnormal host fixture is accepted");
+            processor->getStateInformation(hostState);
+            restored->setStateInformation(hostState.getData(), static_cast<int>(hostState.getSize()));
+            check(restored->lastStateError().isEmpty() && exact(restored->currentUserConfiguration()),
+                  "host recall preserves positive and negative subnormal coordinates and velocities");
+            restored->getStateInformation(hostState);
+            processor->setStateInformation(hostState.getData(), static_cast<int>(hostState.getSize()));
+            check(processor->lastStateError().isEmpty() && exact(processor->currentUserConfiguration()),
+                  "host immediate resave preserves positive and negative subnormal values");
+        }
+    }
+    juce::MemoryBlock oversized(maximumUserConfigurationBytes + 1U);
+    std::memset(oversized.getData(), ' ', oversized.getSize());
+    std::memcpy(oversized.getData(), json.toRawUTF8(), json.getNumBytesAsUTF8());
+    check(file.replaceWithData(oversized.getData(), oversized.getSize()),
+          "test-owned oversized configuration file can be written");
+    check(!loadUserConfiguration(file, loaded, error) && error.contains("2 MiB")
+              && serializeUserConfiguration(loaded) == json,
+          "oversized file is rejected before parsing without changing the destination");
+    check(file.deleteFile(), "test-owned configuration file can be removed");
+    check(!loadUserConfiguration(file, loaded, error) && error.isNotEmpty()
+              && serializeUserConfiguration(loaded) == json,
+          "file-open failure preserves the destination configuration");
+}
+
 void ownershipAndRecallTests() {
     auto processor = makeProcessor();
     auto configuration = clockConfiguration(*processor);
@@ -339,21 +444,39 @@ void ownershipAndRecallTests() {
     std::unique_ptr<juce::AudioProcessorEditor> editor(restored->createEditor());
     auto changed = configuration;
     changed.presentation.camera.yaw = 1.125F;
+    changed.presentation.camera.autoOrbit = 0.0F; // Keep the recall fixture stationary.
     changed.presentation.notePaneMinimized = false;
     changed.presentation.notePaneStyle = NotePaneStyle::Vertical;
     check(processor->applyUserConfiguration(changed), "editor recall source is accepted");
     processor->getStateInformation(state);
     restored->setStateInformation(state.getData(), static_cast<int>(state.getSize()));
-    // Exercise the real timer path on the message thread, without a manual UI.
-    juce::Thread::sleep(80);
-    juce::Timer::callPendingTimersSynchronously();
     ArtworkPanel* panel{};
     for (int child = 0; child < editor->getNumChildComponents(); ++child)
         if (auto* candidate = dynamic_cast<ArtworkPanel*>(editor->getChildComponent(child))) panel = candidate;
-    check(panel != nullptr && std::abs(panel->presentationState().camera.yaw - 1.125F) < 1.0e-6F
-              && !panel->presentationState().notePaneMinimized
-              && panel->presentationState().notePaneStyle == NotePaneStyle::Vertical,
-          "already-open editor refreshes presentation after host recall");
+    const auto panelMatches = [&] {
+        return panel != nullptr && std::abs(panel->presentationState().camera.yaw - 1.125F) < 1.0e-6F
+            && !panel->presentationState().notePaneMinimized
+            && panel->presentationState().notePaneStyle == NotePaneStyle::Vertical;
+    };
+    // JUCE's timer thread can be waiting up to 300ms for an earlier message;
+    // one synchronous dispatch need not advance a newly-created timer. Drive
+    // the actual timer callbacks until the complete recall is observed.
+    const auto refreshDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (!panelMatches() && std::chrono::steady_clock::now() < refreshDeadline) {
+        juce::Timer::callPendingTimersSynchronously();
+        if (!panelMatches()) juce::Thread::sleep(10);
+    }
+    if (!panelMatches()) {
+        std::cerr << "Editor recall diagnostics: panel=" << (panel != nullptr);
+        if (panel != nullptr) {
+            const auto actual = panel->presentationState();
+            std::cerr << " yaw=" << actual.camera.yaw << " minimized=" << actual.notePaneMinimized
+                      << " style=" << static_cast<int>(actual.notePaneStyle);
+        }
+        std::cerr << " revision=" << restored->configurationRevision()
+                  << " state_error=" << restored->lastStateError() << '\n';
+    }
+    check(panelMatches(), "already-open editor refreshes presentation after host recall");
     check(std::abs(restored->presentationState().camera.yaw - 1.125F) < 1.0e-6F,
           "editor timer does not write stale presentation back into restored state");
 }
@@ -392,6 +515,20 @@ void hostValidationAndMigrationTests() {
         auto* duplicate = xml.createNewChildElement("PARAM");
         duplicate->setAttribute("id", "mass1"); duplicate->setAttribute("value", 1);
     });
+    const auto* activeLocale = std::setlocale(LC_NUMERIC, nullptr);
+    const std::string previousLocale = activeLocale != nullptr ? activeLocale : "C";
+    const auto* commaLocale = std::setlocale(LC_NUMERIC, "fr_FR.UTF-8");
+    if (commaLocale == nullptr) commaLocale = std::setlocale(LC_NUMERIC, "de_DE.UTF-8");
+    if (commaLocale != nullptr && std::localeconv()->decimal_point[0] == ',') {
+        const auto before = processor->configurationRevision();
+        processor->setStateInformation(source.getData(), static_cast<int>(source.getSize()));
+        check(processor->lastStateError().isEmpty() && processor->configurationRevision() > before,
+              "host XML decimal recall is independent of a comma-decimal C locale");
+    } else {
+        std::cout << "SKIP comma-decimal C locale unavailable on this runtime\n";
+    }
+    check(std::setlocale(LC_NUMERIC, previousLocale.c_str()) != nullptr,
+          "numeric locale is restored after the host-state regression");
     for (int schema = 1; schema <= 7; ++schema) {
         auto xml = juce::AudioProcessor::getXmlFromBinary(source.getData(), static_cast<int>(source.getSize()));
         xml->setAttribute("schemaVersion", schema);
@@ -469,6 +606,7 @@ int runPluginRegressions() {
     inputAndStreamingTests();
     unaffectedVoiceTest();
     portableValidationTests();
+    boundedFileLoadingTest();
     ownershipAndRecallTests();
     hostValidationAndMigrationTests();
     transportAndOverflowTests();

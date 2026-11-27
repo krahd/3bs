@@ -72,11 +72,25 @@ public:
             if (event.type == MidiEventType::NoteOn) {
                 ++ons;
                 if (measureIntervals && event.channel == 1U) {
-                    if (intervalNotes == 0U) firstOn = value.received;
-                    else maximumIntervalError = std::max(maximumIntervalError,
-                        std::abs(value.received - lastOn - expectedPeriod));
-                    lastOn = value.received;
                     ++intervalNotes;
+                    // Clock starts immediately at the current absolute beat;
+                    // the next onset lands on the quarter-beat grid. Retain the
+                    // immediate onset in continuity counts, but measure steady
+                    // period drift/jitter only between subsequent grid onsets.
+                    if (intervalNotes == 1U) {
+                        initialOn = value.received;
+                        ++excludedInitialOnsets;
+                    } else {
+                        if (periodNotes == 0U) {
+                            firstOn = value.received;
+                            initialInterval = value.received - initialOn;
+                        } else {
+                            maximumIntervalError = std::max(maximumIntervalError,
+                                std::abs(value.received - lastOn - expectedPeriod));
+                        }
+                        lastOn = value.received;
+                        ++periodNotes;
+                    }
                 }
             } else {
                 ++offs;
@@ -91,8 +105,9 @@ public:
     static constexpr double expectedPeriod = 0.125; // 1/4 beat at 120 BPM.
     DeliveredNoteLedger ledger;
     std::uint64_t ons{}, offs{}, unmatchedOffs{}, intervalNotes{};
+    std::uint64_t excludedInitialOnsets{}, periodNotes{};
     std::size_t peakActive{};
-    double firstOn{}, lastOn{}, maximumIntervalError{};
+    double initialOn{}, initialInterval{}, firstOn{}, lastOn{}, maximumIntervalError{};
     bool measureIntervals{true};
 private:
     SpscQueue<TimedEvent, 32768> events_;
@@ -247,11 +262,12 @@ int main() {
     check(measuredIntervals + 2U >= expectedIntervals && measuredIntervals <= expectedIntervals + 2U,
           "captured note count covers the complete elapsed stall interval");
     original.measureIntervals = false;
-    const auto drift = original.intervalNotes > 1U
+    const auto measuredPeriodIntervals = original.periodNotes > 0U ? original.periodNotes - 1U : 0U;
+    const auto drift = measuredPeriodIntervals > 0U
         ? (original.lastOn - original.firstOn)
-            - static_cast<double>(original.intervalNotes - 1U) * Capture::expectedPeriod
+            - static_cast<double>(measuredPeriodIntervals) * Capture::expectedPeriod
         : 1.0e9;
-    check(original.intervalNotes > 2U && std::abs(drift) < 0.2,
+    check(measuredPeriodIntervals > 1U && original.excludedInitialOnsets == 1U && std::abs(drift) < 0.2,
           "captured MIDI period does not accumulate message-thread timing drift");
     check(!harness.runtime->timingFault() && harness.runtime->overruns() == 0U
           && harness.runtime->outputFailures() == 0U
@@ -350,6 +366,9 @@ int main() {
     std::cout << "{\"standalone_runtime\":{\"stress_seconds\":" << duration
               << ",\"measured_stress_seconds\":" << measuredStressSeconds
               << ",\"stress_voice1_note_ons\":" << measuredIntervals
+              << ",\"excluded_initial_onsets\":" << original.excludedInitialOnsets
+              << ",\"initial_to_grid_interval_seconds\":" << original.initialInterval
+              << ",\"measured_period_intervals\":" << measuredPeriodIntervals
               << ",\"captured_note_ons\":" << original.ons + replacement.ons
               << ",\"period_drift_seconds\":" << drift
               << ",\"max_interval_error_seconds\":" << original.maximumIntervalError

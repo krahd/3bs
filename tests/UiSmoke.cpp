@@ -262,10 +262,10 @@ private:
     static constexpr const char* configurationTitle = "VOICE AND SYSTEM SETTINGS";
     static constexpr std::array<const char*, 5> pageNames{"system", "voices", "space", "presets", "settings"};
 
-    void capture(const juce::String& name) {
+    void capture(juce::Component& target, const juce::String& name) {
         if (captures_ == juce::File{}) return;
-        auto image = panel_->createComponentSnapshot(panel_->getLocalBounds(), true, 1.0F);
-        check(image.isValid() && image.getWidth() == panel_->getWidth() && image.getHeight() == panel_->getHeight(),
+        auto image = target.createComponentSnapshot(target.getLocalBounds(), true, 1.0F);
+        check(image.isValid() && image.getWidth() == target.getWidth() && image.getHeight() == target.getHeight(),
               "JUCE control capture has incorrect dimensions");
         auto output = captures_.getChildFile(name + ".png").createOutputStream();
         check(output != nullptr && output->openedOk(), "cannot open UI capture file");
@@ -274,6 +274,8 @@ private:
         output->flush();
         check(output->getStatus().wasOk(), "PNG control capture write failed");
     }
+
+    void capture(const juce::String& name) { capture(*panel_, name); }
 
     void addSteps() {
         for (const auto size : {juce::Point<int>{900, 600}, {1280, 820}, {1920, 1400}}) {
@@ -362,6 +364,7 @@ private:
             auto fields = descendants<juce::TextEditor>(content);
             check(fields.size() == 21, "body-state dialog does not expose all 21 fields");
             for (auto* field : fields) checkVisibleBounds(*field, content);
+            capture(content, "advanced-body-state");
             fields.front()->setText("1..2", false);
             button(content, "APPLY + RESET").triggerClick();
         });
@@ -395,6 +398,8 @@ private:
                     if (field->isShowing()) checkVisibleBounds(*field, *field->getParentComponent());
                 for (auto* selector : descendants<juce::ComboBox>(content))
                     if (selector->isShowing()) checkVisibleBounds(*selector, *selector->getParentComponent());
+                capture(content, tab < 3 ? "advanced-planet-" + juce::String(tab + 1)
+                                         : juce::String("advanced-system"));
             }
             tabs.front()->setCurrentTabIndex(0);
             auto fields = descendants<juce::TextEditor>(content);

@@ -11,8 +11,14 @@
 #include <memory>
 #include <thread>
 
+#ifndef THREEBS_PROCESSOR_TEST_TIMEOUT_SECONDS
+#define THREEBS_PROCESSOR_TEST_TIMEOUT_SECONDS 20
+#endif
+
 namespace {
 using namespace threebs;
+constexpr int testDeadlineSeconds = THREEBS_PROCESSOR_TEST_TIMEOUT_SECONDS;
+static_assert(testDeadlineSeconds > 0);
 
 UserConfiguration fixture(ThreeBSProcessor& processor, int index) {
     auto value = processor.currentUserConfiguration();
@@ -96,7 +102,7 @@ int exerciseProcessor() {
     std::atomic<std::uint64_t> finalRevision{};
     std::atomic<unsigned> failures{}, publications{}, saves{}, callbackCount{}, noteOns{}, snapshots{};
     constexpr unsigned publicationCount = 384, saveCount = 768;
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(testDeadlineSeconds);
     const auto timedOut = [&] {
         if (std::chrono::steady_clock::now() < deadline) return false;
         aborted.store(true, std::memory_order_release);
@@ -200,7 +206,8 @@ int exerciseProcessor() {
               << " save_restore_pairs=" << saves.load() << " callbacks=" << callbackCount.load()
               << " notes=" << noteOns.load() << " snapshots=" << snapshots.load()
               << " errors=" << failures.load() << " final_ack=" << audioAcknowledged.load()
-              << " timed_out=" << aborted.load() << '\n';
+              << " timed_out=" << aborted.load()
+              << " deadline_seconds=" << testDeadlineSeconds << '\n';
     return completed && failures.load() == 0 ? 0 : 1;
 }
 }

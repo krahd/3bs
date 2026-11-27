@@ -3,10 +3,10 @@
 
 #include "plugin/PluginProcessor.h"
 #include "plugin/PluginEditor.h"
+#include "ui/NumericText.h"
 
 #include <algorithm>
 #include <array>
-#include <cerrno>
 #include <charconv>
 #include <cmath>
 #include <cstdlib>
@@ -57,12 +57,10 @@ bool hostNumber(const juce::var& value, double& result) {
         result = static_cast<double>(value); return std::isfinite(result);
     }
     if (!value.isString()) return false;
-    const auto text = value.toString().toStdString();
-    if (text.empty() || text.front() == ' ' || text.back() == ' ') return false;
-    char* end{};
-    errno = 0;
-    result = std::strtod(text.c_str(), &end);
-    return errno != ERANGE && end == text.c_str() + text.size() && std::isfinite(result);
+    const auto text = value.toString();
+    if (text.isEmpty() || text != text.trim()) return false;
+    // Host XML uses decimal syntax even when the host changes its C locale.
+    return parseFiniteNumber(text, result);
 }
 bool hostSeed(const juce::var& value, std::uint64_t& result) {
     const auto text = value.toString().toStdString();
@@ -811,17 +809,17 @@ void ThreeBSProcessor::getStateInformation(juce::MemoryBlock& destination) {
     state.setProperty("seed", juce::String(configuration.initial.seed), nullptr);
     state.setProperty("loopPolicy", static_cast<int>(configuration.loopPolicy), nullptr);
     for (std::size_t body = 0; body < bodyCount; ++body) {
-        state.setProperty("initialTiltBody" + juce::String(body), configuration.planeTilts[body], nullptr);
+        state.setProperty("initialTiltBody" + juce::String(body), formatExactNumber(configuration.planeTilts[body]), nullptr);
         for (int base = 0; base < 2; ++base) {
             const auto prefix = juce::String(base == 0 ? "body" : "baseBody") + juce::String(body) + "_";
             const auto& value = (base == 0 ? configuration.initial : configuration.baseInitial).bodies[body];
-            state.setProperty(prefix + "mass", value.mass, nullptr);
-            state.setProperty(prefix + "px", value.position.x, nullptr);
-            state.setProperty(prefix + "py", value.position.y, nullptr);
-            state.setProperty(prefix + "pz", value.position.z, nullptr);
-            state.setProperty(prefix + "vx", value.velocity.x, nullptr);
-            state.setProperty(prefix + "vy", value.velocity.y, nullptr);
-            state.setProperty(prefix + "vz", value.velocity.z, nullptr);
+            state.setProperty(prefix + "mass", formatExactNumber(value.mass), nullptr);
+            state.setProperty(prefix + "px", formatExactNumber(value.position.x), nullptr);
+            state.setProperty(prefix + "py", formatExactNumber(value.position.y), nullptr);
+            state.setProperty(prefix + "pz", formatExactNumber(value.position.z), nullptr);
+            state.setProperty(prefix + "vx", formatExactNumber(value.velocity.x), nullptr);
+            state.setProperty(prefix + "vy", formatExactNumber(value.velocity.y), nullptr);
+            state.setProperty(prefix + "vz", formatExactNumber(value.velocity.z), nullptr);
         }
     }
     if (auto xml = state.createXml()) copyXmlToBinary(*xml, destination);

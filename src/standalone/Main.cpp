@@ -430,7 +430,7 @@ private:
                     return;
                 UserConfiguration configuration;
                 juce::String error;
-                if (!deserializeUserConfiguration(file.loadFileAsString(), configuration, error)) {
+                if (!loadUserConfiguration(file, configuration, error)) {
                     safe->panel_.setStatus("LOAD FAILED / " + error);
                     return;
                 }

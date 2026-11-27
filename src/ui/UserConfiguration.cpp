@@ -2,11 +2,15 @@
 // Copyright (c) 2026 Tomas Laurenzo
 
 #include "ui/UserConfiguration.h"
+#include "ui/NumericText.h"
 
 #include <algorithm>
 #include <cmath>
 #include <charconv>
 #include <limits>
+#include <iomanip>
+#include <locale>
+#include <sstream>
 
 namespace threebs {
 namespace {
@@ -21,6 +25,117 @@ juce::var get(const juce::var& target, const char* name) {
     if (auto* object = target.getDynamicObject())
         return object->getProperty(name);
     return {};
+}
+
+// JUCE's JSON formatter uses fixed decimal places through much of the physical
+// range. Its JSON reader counts leading fractional zeros in its digit budget.
+// Scientific max_digits10 output retains precision. For subnormal values,
+// hold the exponent at -308 and shift the decimal point to avoid JUCE's early
+// underflow path, retaining JSON number types and the configuration structure.
+void writeExactJson(juce::OutputStream& output, const juce::var& value) {
+    if (value.isDouble()) {
+        const auto number = static_cast<double>(value);
+        if (!std::isfinite(number)) { output << "null"; return; }
+        std::ostringstream text;
+        text.imbue(std::locale::classic());
+        text << std::scientific << std::setprecision(std::numeric_limits<double>::max_digits10 - 1) << number;
+        auto encoded = text.str();
+        const auto exponentMarker = encoded.find("e-");
+        if (exponentMarker != std::string::npos) {
+            int exponentMagnitude{};
+            const auto converted = std::from_chars(encoded.data() + exponentMarker + 2U,
+                                                   encoded.data() + encoded.size(), exponentMagnitude);
+            constexpr auto minimumExponentMagnitude = 1 - std::numeric_limits<double>::min_exponent10;
+            if (converted.ec == std::errc{} && exponentMagnitude > minimumExponentMagnitude) {
+                const auto signLength = encoded.front() == '-' ? 1U : 0U;
+                auto digits = encoded.substr(signLength, exponentMarker - signLength);
+                digits.erase(1U, 1U); // Scientific formatting always has one digit before the decimal.
+                encoded = std::string(signLength != 0U ? "-0." : "0.")
+                    + std::string(static_cast<std::size_t>(exponentMagnitude - minimumExponentMagnitude - 1), '0')
+                    + digits + "e-" + std::to_string(minimumExponentMagnitude);
+            }
+        }
+        output << juce::String(encoded);
+    } else if (const auto* object = value.getDynamicObject()) {
+        output << '{';
+        const auto& properties = object->getProperties();
+        for (int index = 0; index < properties.size(); ++index) {
+            if (index != 0) output << ',';
+            const auto name = properties.getName(index);
+            output << juce::JSON::toString(juce::var(name.toString()), true) << ':';
+            writeExactJson(output, object->getProperty(name));
+        }
+        output << '}';
+    } else if (const auto* values = value.getArray()) {
+        output << '[';
+        for (int index = 0; index < values->size(); ++index) {
+            if (index != 0) output << ',';
+            writeExactJson(output, (*values)[index]);
+        }
+        output << ']';
+    } else {
+        output << juce::JSON::toString(value, true);
+    }
+}
+
+// JUCE parses integer prefixes and exponents with signed accumulation before
+// property validation. Bound those tokens and recursive nesting first; leave
+// structural JSON grammar to JUCE. Quoted strings and escapes are ignored.
+bool safeJsonInput(const juce::String& json) {
+    const auto* bytes = json.toRawUTF8();
+    const auto length = static_cast<std::size_t>(json.getNumBytesAsUTF8());
+    bool quoted{}, escaped{};
+    std::size_t nesting{};
+    constexpr std::size_t maximumNesting = 64U;
+    const auto digit = [](char value) { return value >= '0' && value <= '9'; };
+    const auto delimiter = [](char value) {
+        return value == ',' || value == ']' || value == '}' || value == ' '
+            || value == '\t' || value == '\r' || value == '\n';
+    };
+    for (std::size_t position = 0; position < length;) {
+        const auto character = bytes[position];
+        if (quoted) {
+            if (escaped) escaped = false;
+            else if (character == '\\') escaped = true;
+            else if (character == '"') quoted = false;
+            ++position;
+            continue;
+        }
+        if (character == '"') { quoted = true; ++position; continue; }
+        if (character == '[' || character == '{') {
+            if (++nesting > maximumNesting) return false;
+        } else if (character == ']' || character == '}') {
+            if (nesting != 0U) --nesting;
+        }
+        if (character != '-' && !digit(character)) { ++position; continue; }
+        const auto start = position;
+        while (position < length && !delimiter(bytes[position])) ++position;
+        auto cursor = start + (bytes[start] == '-' ? 1U : 0U);
+        const auto integerStart = cursor;
+        while (cursor < position && digit(bytes[cursor])) ++cursor;
+        if (cursor == integerStart) return false;
+        std::uint64_t integer{};
+        const auto converted = std::from_chars(bytes + integerStart, bytes + cursor, integer);
+        if (converted.ec != std::errc{} || converted.ptr != bytes + cursor
+            || integer > static_cast<std::uint64_t>(std::numeric_limits<juce::int64>::max()))
+            return false;
+        for (auto exponent = cursor; exponent < position; ++exponent) {
+            if (bytes[exponent] != 'e' && bytes[exponent] != 'E') continue;
+            auto digits = exponent + 1U;
+            if (digits < position && (bytes[digits] == '+' || bytes[digits] == '-')) ++digits;
+            const auto exponentStart = digits;
+            while (digits < position && digit(bytes[digits])) ++digits;
+            // digits10 leaves room for JUCE's extra mantissa exponent as well.
+            if (digits == exponentStart || digits != position
+                || digits - exponentStart > static_cast<std::size_t>(std::numeric_limits<int>::digits10))
+                return false;
+            break;
+        }
+        double value{};
+        if (!parseFiniteNumber(juce::String::fromUTF8(bytes + start, static_cast<int>(position - start)), value))
+            return false;
+    }
+    return true;
 }
 
 class Reader {
@@ -375,13 +490,52 @@ juce::String serializeUserConfiguration(const UserConfiguration& configuration) 
     set(root, "timeSignatureSource", static_cast<int>(configuration.timeSignatureSource));
     set(root, "timeSignatureNumerator", configuration.timeSignatureNumerator);
     set(root, "timeSignatureDenominator", configuration.timeSignatureDenominator);
-    return juce::JSON::toString(root, true);
+    juce::MemoryOutputStream output;
+    writeExactJson(output, root);
+    return output.toUTF8();
+}
+
+bool loadUserConfiguration(const juce::File& file, UserConfiguration& configuration,
+                           juce::String& error) {
+    juce::FileInputStream input(file);
+    if (!input.openedOk()) {
+        error = "Cannot read configuration file: " + input.getStatus().getErrorMessage();
+        return false;
+    }
+    if (input.getTotalLength() > static_cast<juce::int64>(maximumUserConfigurationBytes)) {
+        error = "Configuration file is larger than 2 MiB.";
+        return false;
+    }
+    constexpr auto readLimit = maximumUserConfigurationBytes + 1U;
+    juce::MemoryBlock data(readLimit);
+    std::size_t used{};
+    while (used < readLimit) {
+        const auto count = input.read(static_cast<char*>(data.getData()) + used,
+                                      static_cast<int>(readLimit - used));
+        if (count < 0 || input.getStatus().failed()) {
+            error = "Cannot read configuration file: " + input.getStatus().getErrorMessage();
+            return false;
+        }
+        if (count == 0) break;
+        used += static_cast<std::size_t>(count);
+        if (used > maximumUserConfigurationBytes) {
+            error = "Configuration file is larger than 2 MiB.";
+            return false;
+        }
+    }
+    // Retain JUCE's established BOM/encoding handling, with a bounded byte span.
+    const auto text = juce::String::createStringFromData(data.getData(), static_cast<int>(used));
+    return deserializeUserConfiguration(text, configuration, error);
 }
 
 bool deserializeUserConfiguration(const juce::String& json, UserConfiguration& configuration,
                                   juce::String& error) {
-    if (json.getNumBytesAsUTF8() > 2 * 1024 * 1024) {
-        error = "Configuration file is larger than 2 MB."; return false;
+    if (json.getNumBytesAsUTF8() > maximumUserConfigurationBytes) {
+        error = "Configuration file is larger than 2 MiB."; return false;
+    }
+    if (!safeJsonInput(json)) {
+        error = "The configuration contains unsafe JSON nesting or an invalid numeric literal.";
+        return false;
     }
     Reader reader;
     const auto root = juce::JSON::parse(json);

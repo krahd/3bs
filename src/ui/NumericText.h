@@ -14,7 +14,7 @@ inline juce::String formatExactNumber(double value) {
     output << std::setprecision(std::numeric_limits<double>::max_digits10) << value;
     return juce::String(output.str());
 }
-// Strict decimal grammar and classic-locale conversion, used only by UI fields.
+// Strict decimal grammar and classic-locale conversion for non-real-time text inputs.
 // Apple's deployment-target libc++ lacks floating-point std::from_chars.
 inline bool parseFiniteNumber(const juce::String& source, double& value) {
     const auto text = source.trim();

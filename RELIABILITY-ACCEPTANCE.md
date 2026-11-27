@@ -22,6 +22,24 @@ a requested native window exceeded the runner display; the corrected harness
 preserves the logical layout inside a visible viewport. Newer changes and the
 remaining native gates require their own execution evidence.
 
+Checkpoint `268a77fcced238ccdafd5767db44f665f76a64ec` passed all 12 portable
+CTest entries on both Linux and macOS and the separate queue/ownership TSan
+job in [run 46082083483](https://github.com/krahd/3bs/actions/runs/46082083483).
+The actual-processor TSan test reached its original 20-second deadline after
+127 publications, 53 save/restore pairs and 4,176 callbacks; no race warning or
+assertion error was reported during that partial run. Its instrumented limit
+is now 600 seconds, retaining the full 384 publications, 768 save/restore pairs,
+final acknowledgement and receiver-ledger checks. Ordinary builds retain the
+20-second limit. The Release build passed 17 of 18 native entries. Its only
+failure was the editor-recall test's single 80 ms timer-dispatch assumption;
+JUCE can wait 300 ms for an outstanding timer message. The regression now
+dispatches until the unchanged complete-state assertions pass, bounded to one
+second. Product editor behaviour is unchanged. All 15 main-page size/layout
+captures passed inspection. The two-second real CoreMIDI loopback and actual
+processor concurrency tests passed; all 2,188 profiled callbacks reported zero
+C/C++ allocations/frees. Final validators, compatibility capture and the long
+CoreMIDI soak have not yet run.
+
 ## Implemented contracts
 
 - Core MIDI uses an allocation-free event sink; bounded diagnostic collectors
@@ -57,6 +75,9 @@ The CI workflow builds Release AU, VST3 and standalone bundles on arm64 macOS,
 executes applicable native tests, runs real drawable Metal checks with API
 validation, invokes `auval` and pluginval 1.0.4, and retains logs and candidate
 archives. A Metal-less runner reports a skip rather than a render pass.
+Portable and native Release builds install the official, checksum-verified
+CMake 3.22.6 release and configure through the documented presets, exercising
+the stated minimum minor version rather than relying only on newer runners.
 Portable builds also execute Linux/macOS tests and a separate ThreadSanitizer
 ownership check. Another ThreadSanitizer job exercises the actual processor
 under concurrent audio, configuration publication and save/restore. The native

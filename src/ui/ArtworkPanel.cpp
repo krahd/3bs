@@ -1006,9 +1006,8 @@ void ArtworkPanel::loadUserPreset() {
     const auto index = userPresets_.getSelectedId() - 1;
     if (index < 0 || index >= userPresetFiles_.size() || !onApplyUserConfiguration) return;
     const auto file = userPresetFiles_[index];
-    if (file.getSize() > 1024 * 1024) { setStatus("LOAD FAILED / FILE EXCEEDS 1 MiB"); return; }
     UserConfiguration configuration; juce::String error;
-    if (!deserializeUserConfiguration(file.loadFileAsString(), configuration, error)) { setStatus("LOAD FAILED / " + error); return; }
+    if (!loadUserConfiguration(file, configuration, error)) { setStatus("LOAD FAILED / " + error); return; }
     const auto safe = juce::Component::SafePointer<ArtworkPanel>(this);
     const auto callback = onApplyUserConfiguration;
     if (!callback(configuration) || safe == nullptr) return;

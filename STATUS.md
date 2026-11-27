@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-11-27 20-19 GMT-3
+Last updated: 2026-11-27 20-51 GMT-3
 
 ## Project purpose
 
@@ -37,7 +37,16 @@ and the C/C++ allocation profile. The remaining test exposed a screenshot-host
 size restriction; its viewport correction is awaiting execution with the newer
 CoreMIDI delivery, input-ledger and processor-concurrency regressions. Logic,
 Ableton, physical CoreMIDI, long-duration stress and signing/notarisation remain
-separate evidence gates. No released binary has been replaced.
+separate evidence gates. Checkpoint `268a77f` passed both 12-entry portable
+suites and queue/ownership TSan; actual-processor TSan exhausted its original
+20-second test budget without a reported race and is being rerun with a
+measured-workload allowance. Official CMake 3.22.6 now exercises the minimum
+version in portable/native Release CI. Checkpoint `268a77f` also built all
+formats and passed 17/18 native entries: UI/Metal, actual processor
+concurrency, profiling and real CoreMIDI passed. The remaining editor test
+needed bounded repeated dispatch of JUCE timers instead of one 80 ms wait;
+its unchanged recall assertions will be rerun. No released binary has been
+replaced.
 
 ## Architecture overview
 
@@ -321,5 +330,5 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-11-27 20-19 GMT-3
+Last updated: 2026-11-27 20-51 GMT-3
 
