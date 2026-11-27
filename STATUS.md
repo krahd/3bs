@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-10-06 15-14 GMT-3
+Last updated: 2026-11-27 18-58 GMT-3
 
 ## Project purpose
 
@@ -20,13 +20,19 @@ simulation, and presentation configurations across plugin and standalone.
 
 ## Active focus
 
-Finish hands-on host and interaction validation for the published
-`v0.1.0-alpha.3` Tomas Laurenzo-branded binaries. Automated validation is green
-again on the current Mac: dev and plugin-debug suites pass, including the Metal
-smoke test, the installed AU passes `auval`, and installed AU/VST3 signatures
-and arm64 architectures verify. Ableton Live 12 Suite is installed and has
-previously scanned and loaded the VST3, but the current alpha.3 routing/editor
-workflow still needs a fresh hands-on pass. Logic is not installed on this Mac.
+Execute the [27 November code audit and improvement plan](AUDIT-AND-IMPROVEMENT-PLAN.md)
+within the existing gravitational MIDI/artwork concept. The audit of
+`06066967b243e250d97da37ea0195b31f5c9521c` found concrete MIDI lifecycle,
+input-timing, queue/state ownership, recall and Metal data-contract defects.
+Prioritise the regression baseline, note integrity and state ownership before
+finishing alpha.3-derived host and interaction qualification.
+
+The existing core test entry point passes in a portable Linux build, but five
+additional tests are defined without being called; targeted diagnostic probes
+reproduce defects outside that entry point. Native JUCE/Metal/CoreMIDI and
+Logic/Ableton validation were not repeated in this audit. Historical October
+results below remain dated evidence. Production code and released binaries
+have not been changed by this documentation checkpoint.
 
 ## Architecture overview
 
@@ -107,6 +113,8 @@ repository.
 - `doc/releases/`: versioned release notes and known limitations.
 - `docs/`: dependency-free GitHub Pages source and product screenshot.
 - `AGENTS.md`: authoritative repository working rules.
+- `AUDIT-AND-IMPROVEMENT-PLAN.md`: dated audit, prioritised repairs and acceptance criteria.
+- `audit/2026-11-27/`: isolated diagnostic sources, commands and observed results.
 - `doc/project-initial-description.md`: original concept.
 - `doc/AGENTS.md`: source agent-policy template.
 - `doc/STATUS.md`: source status template.
@@ -121,6 +129,9 @@ repository.
 
 ## Recent changes
 
+- 2026-11-27: completed a source audit and targeted portable diagnostics; added
+  the detailed improvement plan and reproducible evidence without modifying
+  production source, presets, dependencies or released binaries.
 - Added fixed-step double-precision Verlet physics and deterministic PCG state.
 - Added five pitch mappings, four trigger mappings, scale quantization, three
   monophonic voices, CC lanes, note cleanup, and escape policies.
@@ -216,6 +227,27 @@ repository.
 
 ## Tests and verification status
 
+- 2026-11-27: directly compiled the unchanged core and presentation model with
+  GCC 14/C++20 on Linux; the existing core test entry point passed. CMake was
+  unavailable, so CMake/CTest presets and catalogue validators were not run.
+- Invoking five omitted core tests revealed four failed assertions across
+  three functions. Octave/duration failures expose constructor replacement of
+  explicit configuration; the bar-fraction strum failure includes a test-horizon
+  error and is not evidence of an independent strum-engine defect.
+- Targeted probes reproduced lost/wrong-channel note cleanup, delayed strums
+  after disable/gate closure, block-dependent input processing, event-buffer
+  loss, false SpeedPeak triggers, torn snapshots under the producer-pop policy,
+  and an undefined conversion from malformed non-finite state. A trail helper
+  also reproduced duration loss under subdivision pressure.
+- All 24 factory initial systems remained finite in a 60-beat diagnostic with
+  escape handling set to Leave. This does not establish convergence or native
+  runtime readiness. Full commands/results are in `audit/2026-11-27/EVIDENCE.md`.
+- Metal buffer ownership/inline upload limits, state-recall paths and incoming
+  SysEx allocation were source-audited; native manifestations and fixes still
+  require the plan's Mac/DAW acceptance checks.
+
+Historical native evidence:
+
 - 2026-10-06 plugin-debug validation passes 7/7 tests, including Metal smoke,
   plugin behavior, and the steady-state real-time profile.
 - The steady-state `processBlock` profile runs 2,048 warmed 512-sample blocks at
@@ -233,28 +265,31 @@ repository.
 
 ## Pending tasks
 
-- Complete hands-on mouse/trackpad interaction, final foreground renderer
-  inspection, and 60 fps profiling.
-- Test the installed alpha.3 AU MIDI effect on a Mac with Logic installed.
-- Run a fresh alpha.3 VST3 routing/editor pass in Ableton Live and run
-  `pluginval` when it is available.
-- Decide whether to add and support a Max for Live MIDI Effect for same-chain
-  Ableton operation.
-- Complete remaining voice controls (range and custom scale) and authored
-  user-preset library management.
-- Use the new live renderer telemetry during hands-on interaction to confirm
-  sustained frame rate and inspect worst-case rendering under representative
-  presets/window sizes.
+- Execute W0-W2 of `AUDIT-AND-IMPROVEMENT-PLAN.md`: complete the regression
+  baseline, repair note lifecycle/event capacity, and establish queue/state
+  ownership with explicit command acceptance.
+- Execute W3-W4: sample-accurate MIDI input, independent standalone timing,
+  allocation checks, validated complete configurations and reliable recall.
+- Execute W5-W7: GPU resource ownership and actual-frame validation, remaining
+  existing voice controls, native interaction inspection, per-preset numerical
+  checks and representative performance measurements.
+- Complete W8 with fresh Logic AU, Ableton VST3 and standalone routing/recall
+  acceptance, plus `auval`, `pluginval` and release provenance where available.
+- Preserve the existing optional Max for Live question as a separate future
+  scope decision; it is outside this audit's three-format improvement plan.
 
 ## Next steps
 
-1. Complete interaction/performance and host validation.
-2. Close the remaining control-surface gaps and rerun the full suite.
-3. Continue alpha.3 release validation in Logic and Ableton.
+1. Make the regression suite exercise its intended tests and captured failures.
+2. Repair MIDI note integrity and queue/state ownership in focused changes.
+3. Follow the plan's dependencies through timing, recall, rendering and controls.
+4. Qualify the exact repaired build in all three existing formats before
+   reporting release readiness.
 
 ## Longer-term steps
 
-1. Author and validate 24 complete artwork presets.
+1. Maintain and qualify the existing 24 complete artwork presets and 12 voicing
+   presets, preserving published behaviour or explicitly versioning corrections.
 2. Maintain the public website, release notes, and binary checksums for each
    published version.
 3. Add signed and notarized release packaging when credentials are available.
@@ -275,4 +310,5 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-10-06 15-14 GMT-3
+Last updated: 2026-11-27 18-58 GMT-3
+
