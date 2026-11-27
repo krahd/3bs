@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Tomas Laurenzo
 
 #include "ui/AdvancedStateEditor.h"
+#include "ui/NumericText.h"
+#include "core/ThreeBodySimulation.h"
 
 #include <array>
 #include <cmath>
@@ -88,8 +90,7 @@ private:
             std::array<double, 7> values{};
             for (std::size_t field = 0; field < values.size(); ++field) {
                 const auto text = fields_[body * values.size() + field].getText().trim();
-                values[field] = text.getDoubleValue();
-                if (text.isEmpty() || !std::isfinite(values[field])) {
+                if (!parseFiniteNumber(text, values[field])) {
                     error_.setText("Every field must contain a finite number.", juce::dontSendNotification);
                     return;
                 }
@@ -101,6 +102,10 @@ private:
             result.bodies[body].mass = values[0];
             result.bodies[body].position = {values[1], values[2], values[3]};
             result.bodies[body].velocity = {values[4], values[5], values[6]};
+        }
+        if (!isValidSimulationState(result)) {
+            error_.setText("Position and velocity must stay within ±1000000.", juce::dontSendNotification);
+            return;
         }
         onApply_(result);
         dismiss();
@@ -129,7 +134,9 @@ private:
 void showAdvancedStateEditor(const SimulationState& state, juce::Rectangle<int> targetArea,
                              juce::Component& parent,
                              std::function<void(const SimulationState&)> onApply) {
-    auto editor = std::make_unique<AdvancedStateEditor>(state, std::move(onApply));
+    auto guard = juce::Component::SafePointer<juce::Component>(&parent);
+    auto editor = std::make_unique<AdvancedStateEditor>(state,
+        [guard, callback = std::move(onApply)](const SimulationState& candidate) { if (guard != nullptr) callback(candidate); });
     juce::DialogWindow::LaunchOptions options;
     options.dialogTitle = "SET INITIAL BODY STATE";
     options.dialogBackgroundColour = juce::Colour(0xff080d18);

@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-11-27 18-58 GMT-3
+Last updated: 2026-11-27 19-45 GMT-3
 
 ## Project purpose
 
@@ -12,27 +12,28 @@ standalone artwork driven by a normalized three-body gravitational simulation.
 The repository builds a deterministic core library, Logic AU MIDI effect,
 Ableton-oriented VST3 instrument, and standalone CoreMIDI application. It has a
 native interactive HDR Metal presentation layer, shared control deck, 24
-schema-v2 factory presets, 12 schema-v1 voicing presets, schema-v7 host state
+schema-v2 factory presets, 12 schema-v1 voicing presets, schema-v8 host state
 serialization, automatic camera framing, live note-stream visualization,
 automated tests, and macOS CI.
-Portable schema-v3 `.3bs` JSON files save and restore complete musical,
+Portable schema-v4 `.3bs` JSON files save and restore complete musical,
 simulation, and presentation configurations across plugin and standalone.
 
 ## Active focus
 
-Execute the [27 November code audit and improvement plan](AUDIT-AND-IMPROVEMENT-PLAN.md)
-within the existing gravitational MIDI/artwork concept. The audit of
-`06066967b243e250d97da37ea0195b31f5c9521c` found concrete MIDI lifecycle,
-input-timing, queue/state ownership, recall and Metal data-contract defects.
-Prioritise the regression baseline, note integrity and state ownership before
-finishing alpha.3-derived host and interaction qualification.
+Implement the [27 November audit plan](AUDIT-AND-IMPROVEMENT-PLAN.md) in full while
+preserving the existing instrument. The reliability candidate now contains core
+note/timing repairs, streaming event delivery, validated state ownership,
+monotonic standalone scheduling, completion-owned GPU buffers and extended
+controls. Native integration is underway; see [acceptance evidence and remaining
+host sessions](RELIABILITY-ACCEPTANCE.md).
 
-The existing core test entry point passes in a portable Linux build, but five
-additional tests are defined without being called; targeted diagnostic probes
-reproduce defects outside that entry point. Native JUCE/Metal/CoreMIDI and
-Logic/Ableton validation were not repeated in this audit. Historical October
-results below remain dated evidence. Production code and released binaries
-have not been changed by this documentation checkpoint.
+The audited baseline `fbc5b226416362d9b058793ab2df9947f9f066cd` passed native
+macOS core tests and Release AU/VST3/standalone compilation (CI run
+46073880635). Current portable repairs pass the registered core suite, numerical
+factory sweep and focused standalone/renderer-data regressions. Native candidate
+results will be recorded after they execute. Logic, Ableton, physical CoreMIDI,
+long-duration stress and signing/notarisation remain separate evidence gates.
+No released binary has been replaced.
 
 ## Architecture overview
 
@@ -59,7 +60,7 @@ The same engine is shared by all three runtime surfaces.
     <text x="135" y="85" font-size="17">Logic AU MIDI FX</text><text x="135" y="106" font-size="12" fill="#7f9bb4">host adapter</text>
     <text x="135" y="185" font-size="17">VST3 Instrument</text><text x="135" y="206" font-size="12" fill="#7f9bb4">silent audio + MIDI out</text>
     <text x="135" y="285" font-size="17">Standalone</text><text x="135" y="306" font-size="12" fill="#7f9bb4">CoreMIDI adapter</text>
-    <text x="455" y="150" font-size="19">Deterministic Engine</text><text x="455" y="182" font-size="13" fill="#9cb4c8">Verlet physics · measurements</text><text x="455" y="204" font-size="13" fill="#9cb4c8">pitch/trigger mapping · state</text><text x="455" y="226" font-size="13" fill="#9cb4c8">fixed MIDI event buffers</text>
+    <text x="455" y="150" font-size="19">Deterministic Engine</text><text x="455" y="182" font-size="13" fill="#9cb4c8">Verlet physics · measurements</text><text x="455" y="204" font-size="13" fill="#9cb4c8">pitch/trigger mapping · state</text><text x="455" y="226" font-size="13" fill="#9cb4c8">streaming MIDI event delivery</text>
     <text x="795" y="82" font-size="18">MIDI Destination</text><text x="795" y="106" font-size="12" fill="#7f9bb4">host events or CoreMIDI</text>
     <text x="795" y="238" font-size="18">Presentation</text><text x="795" y="264" font-size="13" fill="#9cb4c8">JUCE control deck</text><text x="795" y="286" font-size="13" fill="#9cb4c8">Metal scene + note streams</text>
   </g>
@@ -70,8 +71,9 @@ The same engine is shared by all three runtime surfaces.
 
 ### Data-flow diagram
 
-Commands and render snapshots use fixed-capacity queues; MIDI stays on the
-processing path.
+Complete control revisions use bounded mailboxes; expendable visual snapshots
+use SPSC queues. MIDI stays on the processing path, with a monotonic worker and
+a destination-owned delivery ledger in standalone.
 
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="330" viewBox="0 0 960 330" role="img" aria-labelledby="flow-title flow-desc">
   <title id="flow-title">Real-time data flow</title><desc id="flow-desc">Host transport and parameters enter processing, simulation produces mappings and MIDI, while snapshots and bounded note events go independently to Metal.</desc>
@@ -310,5 +312,5 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-11-27 18-58 GMT-3
+Last updated: 2026-11-27 19-45 GMT-3
 

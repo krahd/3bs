@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <charconv>
+#include <limits>
 
 namespace threebs {
 namespace {
@@ -21,25 +23,71 @@ juce::var get(const juce::var& target, const char* name) {
     return {};
 }
 
-double number(const juce::var& target, const char* name, double fallback,
-              double minimum, double maximum) {
-    const auto property = get(target, name);
-    if (property.isVoid())
-        return fallback;
-    const auto value = static_cast<double>(property);
-    return std::isfinite(value) ? std::clamp(value, minimum, maximum) : fallback;
-}
+class Reader {
+public:
+    bool valid{true};
+    juce::String error;
 
-int integer(const juce::var& target, const char* name, int fallback, int minimum, int maximum) {
-    const auto property = get(target, name);
-    return property.isVoid() ? fallback
-                             : std::clamp(static_cast<int>(property), minimum, maximum);
-}
-
-bool boolean(const juce::var& target, const char* name, bool fallback) {
-    const auto property = get(target, name);
-    return property.isBool() ? static_cast<bool>(property) : fallback;
-}
+    void fail(const char* field) {
+        valid = false;
+        if (error.isEmpty()) error = "Invalid configuration field: " + juce::String(field);
+    }
+    bool object(const juce::var& value, const char* field) {
+        if (value.getDynamicObject() != nullptr) return true;
+        fail(field); return false;
+    }
+    static bool numeric(const juce::var& value) {
+        return value.isInt() || value.isInt64() || value.isDouble();
+    }
+    double number(const juce::var& target, const char* name, double fallback,
+                  double minimum, double maximum) {
+        const auto value = get(target, name);
+        if (value.isVoid()) return fallback; // Explicit legacy/default migration only.
+        if (!numeric(value)) { fail(name); return fallback; }
+        const auto result = static_cast<double>(value);
+        if (!std::isfinite(result) || result < minimum || result > maximum) {
+            fail(name); return fallback;
+        }
+        return result;
+    }
+    int integer(const juce::var& target, const char* name, int fallback, int minimum, int maximum) {
+        const auto value = number(target, name, fallback, minimum, maximum);
+        if (std::trunc(value) != value) { fail(name); return fallback; }
+        return static_cast<int>(value);
+    }
+    bool boolean(const juce::var& target, const char* name, bool fallback) {
+        const auto value = get(target, name);
+        if (value.isVoid()) return fallback;
+        if (!value.isBool()) { fail(name); return fallback; }
+        return static_cast<bool>(value);
+    }
+    std::uint64_t seed(const juce::var& target, const char* name, std::uint64_t fallback) {
+        const auto value = get(target, name);
+        if (value.isVoid()) return fallback;
+        if (value.isInt() || value.isInt64()) {
+            const auto signedValue = static_cast<juce::int64>(value);
+            if (signedValue >= 0) return static_cast<std::uint64_t>(signedValue);
+        } else if (value.isString()) {
+            const auto text = value.toString().toStdString();
+            std::uint64_t result{};
+            const auto conversion = std::from_chars(text.data(), text.data() + text.size(), result);
+            if (!text.empty() && conversion.ec == std::errc{}
+                && conversion.ptr == text.data() + text.size()) return result;
+        }
+        fail(name); return fallback;
+    }
+    bool booleanArray(const juce::var& objectValue, const char* name, std::array<bool, 12>& out) {
+        const auto value = get(objectValue, name);
+        if (value.isVoid()) return true;
+        const auto* values = value.getArray();
+        if (values == nullptr || values->size() != 12) { fail(name); return false; }
+        for (int i = 0; i < 12; ++i) {
+            if (!(*values)[i].isBool()) { fail(name); return false; }
+            out[static_cast<std::size_t>(i)] = static_cast<bool>((*values)[i]);
+        }
+        return true;
+    }
+};
 
 juce::var writeVec3(Vec3 value) {
     juce::Array<juce::var> values;
@@ -47,15 +95,17 @@ juce::var writeVec3(Vec3 value) {
     return values;
 }
 
-bool readVec3(const juce::var& value, Vec3& result) {
+bool readVec3(const juce::var& value, Vec3& result, Reader& reader) {
     const auto* values = value.getArray();
-    if (values == nullptr || values->size() != 3)
-        return false;
+    if (values == nullptr || values->size() != 3) return false;
+    for (const auto& component : *values)
+        if (!Reader::numeric(component)) return false;
     const Vec3 candidate{static_cast<double>((*values)[0]), static_cast<double>((*values)[1]),
                          static_cast<double>((*values)[2])};
     if (!isFinite(candidate) || std::abs(candidate.x) > 1.0e6 || std::abs(candidate.y) > 1.0e6
-        || std::abs(candidate.z) > 1.0e6)
-        return false;
+        || std::abs(candidate.z) > 1.0e6) {
+        reader.fail("body vector"); return false;
+    }
     result = candidate;
     return true;
 }
@@ -75,19 +125,21 @@ juce::var writeSimulationState(const SimulationState& state) {
     return result;
 }
 
-bool readSimulationState(const juce::var& source, SimulationState& state) {
-    auto* bodies = get(source, "bodies").getArray();
-    if (bodies == nullptr || bodies->size() != static_cast<int>(bodyCount))
-        return false;
+bool readSimulationState(const juce::var& source, SimulationState& state, Reader& reader) {
+    if (!reader.object(source, "simulation state")) return false;
+    const auto bodiesValue = get(source, "bodies");
+    const auto* bodies = bodiesValue.getArray();
+    if (bodies == nullptr || bodies->size() != static_cast<int>(bodyCount)) return false;
     SimulationState result;
-    result.seed = static_cast<std::uint64_t>(get(source, "seed").toString().getLargeIntValue());
+    result.seed = reader.seed(source, "seed", 0x334253ULL);
     for (std::size_t body = 0; body < bodyCount; ++body) {
         const auto& item = bodies->getReference(static_cast<int>(body));
-        result.bodies[body].mass = number(item, "mass", 1.0, 0.05, 1000.0);
-        if (!readVec3(get(item, "position"), result.bodies[body].position)
-            || !readVec3(get(item, "velocity"), result.bodies[body].velocity))
-            return false;
+        if (!reader.object(item, "body")) return false;
+        result.bodies[body].mass = reader.number(item, "mass", 1.0, 0.05, 1000.0);
+        if (!readVec3(get(item, "position"), result.bodies[body].position, reader)
+            || !readVec3(get(item, "velocity"), result.bodies[body].velocity, reader)) return false;
     }
+    if (!reader.valid) return false;
     state = result;
     return true;
 }
@@ -160,75 +212,81 @@ juce::var writeEngine(const EngineConfig& config) {
     return result;
 }
 
-bool readEngine(const juce::var& source, EngineConfig& config) {
+bool readEngine(const juce::var& source, EngineConfig& config, Reader& reader) {
+    if (!reader.object(source, "engine")) return false;
     auto* voices = get(source, "voices").getArray();
     if (voices == nullptr || voices->size() != static_cast<int>(bodyCount))
         return false;
     EngineConfig result;
     const auto simulation = get(source, "simulation");
-    result.simulation.gravitationalConstant = number(simulation, "gravity", 0.65, 0.01, 3.0);
-    result.simulation.softening = number(simulation, "softening", 0.04, 0.001, 0.25);
-    result.simulation.fixedStep = number(simulation, "fixedStep", 1.0 / 480.0, 1.0e-6, 0.1);
-    result.simulation.speed = number(simulation, "speed", 1.0, 0.0, 8.0);
-    result.simulation.escapeRadius = number(simulation, "escapeRadius", 12.0, 1.0, 1000.0);
+    if (!reader.object(simulation, "engine simulation")) return false;
+    result.simulation.gravitationalConstant = reader.number(simulation, "gravity", 0.65, 0.000001, 1000.0);
+    result.simulation.softening = reader.number(simulation, "softening", 0.04, 0.000001, 4.0);
+    result.simulation.fixedStep = reader.number(simulation, "fixedStep", 1.0 / 480.0, 1.0 / 96000.0, 0.25);
+    result.simulation.speed = reader.number(simulation, "speed", 1.0, 0.0, 64.0);
+    result.simulation.escapeRadius = reader.number(simulation, "escapeRadius", 12.0, 1.0, 100000.0);
     result.simulation.maxStepsPerAdvance = static_cast<std::uint32_t>(
-        integer(simulation, "maxSteps", 16384, 1, 1000000));
+        reader.integer(simulation, "maxSteps", 16384, 1, 1000000));
     result.simulation.escapePolicy = static_cast<EscapePolicy>(
-        integer(simulation, "escapePolicy", 0, 0, static_cast<int>(EscapePolicy::Prompt)));
-    result.voicingMode = static_cast<VoicingMode>(integer(source, "voicingMode", 0, 0, 2));
-    result.chordStrumMilliseconds = number(source, "strumMilliseconds", 24.0, 0.0, 250.0);
-    result.chordStrumUnit = static_cast<StrumUnit>(integer(source, "strumUnit", 0, 0, 2));
-    result.chordStrumValue = number(source, "strumValue", 0.0625, 0.0, 4.0);
-    result.minimumChordIntervalBeats = number(source, "minimumChordInterval", 0.125, 0.0, 16.0);
-    result.chordSystem.root = static_cast<std::uint8_t>(integer(source, "chordRoot", 0, 0, 11));
-    result.chordSystem.scale = static_cast<ScaleId>(integer(source, "chordScale", 8, 0, 14));
-    if (auto* custom = get(source, "chordCustomScale").getArray(); custom != nullptr && custom->size() == 12)
-        for (int note = 0; note < 12; ++note)
-            result.chordSystem.customScale[static_cast<std::size_t>(note)] = static_cast<bool>((*custom)[note]);
-    result.autoResetEnabled = boolean(source, "autoResetEnabled", false);
-    result.autoResetBars = number(source, "autoResetBars", 1.0, 1.0 / 16.0, 256.0);
-    result.inputTransposeEnabled = boolean(source, "inputTransposeEnabled", false);
-    result.inputGateEnabled = boolean(source, "inputGateEnabled", false);
-    result.inputTranspose = static_cast<std::int8_t>(integer(source, "inputTranspose", 0, -127, 127));
+        reader.integer(simulation, "escapePolicy", 0, 0, static_cast<int>(EscapePolicy::Prompt)));
+    result.voicingMode = static_cast<VoicingMode>(reader.integer(source, "voicingMode", 0, 0, 2));
+    result.chordStrumMilliseconds = reader.number(source, "strumMilliseconds", 24.0, 0.0, 250.0);
+    result.chordStrumUnit = static_cast<StrumUnit>(reader.integer(source, "strumUnit", 0, 0, 2));
+    result.chordStrumValue = reader.number(source, "strumValue", 0.0625, 0.0, 4.0);
+    result.minimumChordIntervalBeats = reader.number(source, "minimumChordInterval", 0.125, 0.0, 16.0);
+    result.chordSystem.root = static_cast<std::uint8_t>(reader.integer(source, "chordRoot", 0, 0, 11));
+    result.chordSystem.scale = static_cast<ScaleId>(reader.integer(source, "chordScale", 8, 0, 14));
+    reader.booleanArray(source, "chordCustomScale", result.chordSystem.customScale);
+    result.autoResetEnabled = reader.boolean(source, "autoResetEnabled", false);
+    result.autoResetBars = reader.number(source, "autoResetBars", 1.0, 1.0 / 16.0, 256.0);
+    result.inputTransposeEnabled = reader.boolean(source, "inputTransposeEnabled", false);
+    result.inputGateEnabled = reader.boolean(source, "inputGateEnabled", false);
+    result.inputTranspose = static_cast<std::int8_t>(reader.integer(source, "inputTranspose", 0, -127, 127));
     for (std::size_t index = 0; index < bodyCount; ++index) {
         const auto& item = voices->getReference(static_cast<int>(index));
+        if (!reader.object(item, "voice")) return false;
         auto& voice = result.voices[index];
-        voice.enabled = boolean(item, "enabled", true);
-        voice.channel = static_cast<std::uint8_t>(integer(item, "channel", static_cast<int>(index + 1U), 1, 16));
-        voice.root = static_cast<std::uint8_t>(integer(item, "root", 0, 0, 11));
-        voice.minimumNote = static_cast<std::uint8_t>(integer(item, "minimumNote", 36, 0, 127));
-        voice.maximumNote = static_cast<std::uint8_t>(integer(item, "maximumNote", 84, 0, 127));
-        voice.scale = static_cast<ScaleId>(integer(item, "scale", 8, 0, 14));
-        voice.octave = static_cast<std::int8_t>(integer(item, "octave", 0, -4, 4));
-        voice.pitchMapping = static_cast<PitchMapping>(integer(item, "pitchMapping", 0, 0, 8));
-        voice.triggerMapping = static_cast<TriggerMapping>(integer(item, "triggerMapping", 0, 0, 7));
-        voice.durationMapping = static_cast<PitchMapping>(integer(item, "durationMapping", 3, 0, 8));
-        voice.durationGrid = static_cast<DurationGrid>(integer(
+        voice.enabled = reader.boolean(item, "enabled", true);
+        voice.channel = static_cast<std::uint8_t>(reader.integer(item, "channel", static_cast<int>(index + 1U), 1, 16));
+        voice.root = static_cast<std::uint8_t>(reader.integer(item, "root", 0, 0, 11));
+        voice.minimumNote = static_cast<std::uint8_t>(reader.integer(item, "minimumNote", 36, 0, 127));
+        voice.maximumNote = static_cast<std::uint8_t>(reader.integer(item, "maximumNote", 84, 0, 127));
+        voice.scale = static_cast<ScaleId>(reader.integer(item, "scale", 8, 0, 14));
+        voice.octave = static_cast<std::int8_t>(reader.integer(item, "octave", 0, -4, 4));
+        voice.pitchMapping = static_cast<PitchMapping>(reader.integer(item, "pitchMapping", 0, 0, 8));
+        voice.triggerMapping = static_cast<TriggerMapping>(reader.integer(item, "triggerMapping", 0, 0, 7));
+        voice.durationMapping = static_cast<PitchMapping>(reader.integer(item, "durationMapping", 3, 0, 8));
+        voice.durationGrid = static_cast<DurationGrid>(reader.integer(
             item, "durationGrid", static_cast<int>(DurationGrid::ContinuousLegacy), 0, 1));
-        voice.clockDivisionBeats = number(item, "clockDivision", 0.25, 1.0 / 128.0, 16.0);
-        voice.probability = number(item, "probability", 1.0, 0.0, 1.0);
+        voice.clockDivisionBeats = reader.number(item, "clockDivision", 0.25, 1.0 / 128.0, 16.0);
+        voice.probability = reader.number(item, "probability", 1.0, 0.0, 1.0);
         // Legacy schema-1 files store a single "duration"; fall back to it for both bounds.
-        const auto legacyDuration = number(item, "duration", 0.2, 1.0 / 1024.0, 64.0);
-        voice.minimumDurationBeats = number(item, "durationMin", legacyDuration, 1.0 / 1024.0, 64.0);
-        voice.maximumDurationBeats = number(item, "durationMax", legacyDuration, 1.0 / 1024.0, 64.0);
-        voice.minimumTriggerIntervalBeats = number(item, "minimumTriggerInterval", 0.0625, 0.0, 64.0);
-        voice.closeApproachDistance = number(item, "closeApproachDistance", 1.0, 0.0001, 1000.0);
-        voice.minimumVelocity = static_cast<std::uint8_t>(integer(item, "minimumVelocity", 44, 1, 127));
-        voice.maximumVelocity = static_cast<std::uint8_t>(integer(item, "maximumVelocity", 112, 1, 127));
-        if (auto* custom = get(item, "customScale").getArray(); custom != nullptr && custom->size() == 12)
-            for (int note = 0; note < 12; ++note)
-                voice.customScale[static_cast<std::size_t>(note)] = static_cast<bool>((*custom)[note]);
-        if (auto* lanes = get(item, "ccLanes").getArray(); lanes != nullptr && lanes->size() == 2) {
+        const auto legacyDuration = reader.number(item, "duration", 0.2, 1.0 / 1024.0, 64.0);
+        voice.minimumDurationBeats = reader.number(item, "durationMin", legacyDuration, 1.0 / 1024.0, 64.0);
+        voice.maximumDurationBeats = reader.number(item, "durationMax", legacyDuration, 1.0 / 1024.0, 64.0);
+        voice.minimumTriggerIntervalBeats = reader.number(item, "minimumTriggerInterval", 0.0625, 0.0, 64.0);
+        voice.closeApproachDistance = reader.number(item, "closeApproachDistance", 1.0, 0.0001, 1000.0);
+        voice.minimumVelocity = static_cast<std::uint8_t>(reader.integer(item, "minimumVelocity", 44, 1, 127));
+        voice.maximumVelocity = static_cast<std::uint8_t>(reader.integer(item, "maximumVelocity", 112, 1, 127));
+        reader.booleanArray(item, "customScale", voice.customScale);
+        const auto laneValue = get(item, "ccLanes");
+        const auto* lanes = laneValue.getArray();
+        if (!laneValue.isVoid() && (lanes == nullptr || lanes->size() != 2)) {
+            reader.fail("ccLanes"); return false;
+        }
+        if (lanes != nullptr) {
             for (int lane = 0; lane < 2; ++lane) {
                 const auto& cc = lanes->getReference(lane);
+                if (!reader.object(cc, "CC lane")) return false;
                 auto& destination = voice.ccLanes[static_cast<std::size_t>(lane)];
-                destination.enabled = boolean(cc, "enabled", false);
-                destination.source = static_cast<PitchMapping>(integer(cc, "source", 3, 0, 8));
-                destination.controller = static_cast<std::uint8_t>(integer(cc, "controller", 1, 0, 119));
-                destination.smoothing = number(cc, "smoothing", 0.85, 0.0, 1.0);
+                destination.enabled = reader.boolean(cc, "enabled", false);
+                destination.source = static_cast<PitchMapping>(reader.integer(cc, "source", 3, 0, 8));
+                destination.controller = static_cast<std::uint8_t>(reader.integer(cc, "controller", 1, 0, 119));
+                destination.smoothing = reader.number(cc, "smoothing", 0.85, 0.0, 1.0);
             }
         }
     }
+    if (!reader.valid || !isValidEngineConfig(result)) return false;
     config = result;
     return true;
 }
@@ -245,7 +303,7 @@ juce::var writePresentation(const PresentationState& state) {
     set(visual, "quality", static_cast<int>(state.visual.quality));
     set(result, "visual", visual);
 
-    const auto cameraState = sanitizedCameraState(state.camera);
+    const auto& cameraState = state.camera;
     auto camera = makeObject();
     set(camera, "yaw", cameraState.yaw);
     set(camera, "pitch", cameraState.pitch);
@@ -262,29 +320,31 @@ juce::var writePresentation(const PresentationState& state) {
     return result;
 }
 
-PresentationState readPresentation(const juce::var& source) {
+PresentationState readPresentation(const juce::var& source, Reader& reader) {
+    reader.object(source, "presentation");
     PresentationState result;
     const auto visual = get(source, "visual");
-    result.visual.trailSeconds = static_cast<float>(number(visual, "trailSeconds", 30.0, 5.0, 60.0));
-    result.visual.trailWidth = static_cast<float>(number(visual, "trailWidth", 1.2, 0.1, 10.0));
-    result.visual.extrusion = static_cast<float>(number(visual, "extrusion", 0.12, 0.0, 2.0));
-    result.visual.bloom = static_cast<float>(number(visual, "bloom", 0.34, 0.0, 1.0));
-    result.visual.starDensity = static_cast<float>(number(visual, "starDensity", 0.62, 0.0, 1.0));
-    result.visual.palette = static_cast<PaletteId>(integer(visual, "palette", 0, 0, 5));
-    result.visual.quality = static_cast<GraphicsQuality>(integer(visual, "quality", 2, 0, 2));
+    reader.object(visual, "visual");
+    result.visual.trailSeconds = static_cast<float>(reader.number(visual, "trailSeconds", 30.0, 5.0, 60.0));
+    result.visual.trailWidth = static_cast<float>(reader.number(visual, "trailWidth", 1.2, 0.1, 10.0));
+    result.visual.extrusion = static_cast<float>(reader.number(visual, "extrusion", 0.12, 0.0, 2.0));
+    result.visual.bloom = static_cast<float>(reader.number(visual, "bloom", 0.34, 0.0, 1.0));
+    result.visual.starDensity = static_cast<float>(reader.number(visual, "starDensity", 0.62, 0.0, 1.0));
+    result.visual.palette = static_cast<PaletteId>(reader.integer(visual, "palette", 0, 0, 5));
+    result.visual.quality = static_cast<GraphicsQuality>(reader.integer(visual, "quality", 2, 0, 2));
     const auto camera = get(source, "camera");
-    result.camera.yaw = static_cast<float>(number(camera, "yaw", 0.0, -1000.0, 1000.0));
-    result.camera.pitch = static_cast<float>(number(camera, "pitch", -0.34, -1.49, 1.49));
-    result.camera.distance = static_cast<float>(number(camera, "distance", 7.0, 1.0, 80.0));
-    result.camera.minimumDistance = static_cast<float>(number(camera, "minimumDistance", 2.5, 1.0, 20.0));
-    result.camera.maximumDistance = static_cast<float>(number(camera, "maximumDistance", 40.0, 5.0, 80.0));
-    result.camera.autoOrbit = static_cast<float>(number(camera, "autoOrbit", 0.035, -2.0, 2.0));
-    result.camera.focusBody = integer(camera, "focusBody", -1, -1, 2);
-    result.camera.autoFrame = boolean(camera, "autoFrame", true);
-    result.camera = sanitizedCameraState(result.camera);
-    result.visualSeed = static_cast<std::uint64_t>(get(source, "visualSeed").toString().getLargeIntValue());
-    result.notePaneMinimized = boolean(source, "notePaneMinimized", false);
-    result.notePaneStyle = static_cast<NotePaneStyle>(integer(source, "notePaneStyle", 0, 0, 1));
+    reader.object(camera, "camera");
+    result.camera.yaw = static_cast<float>(reader.number(camera, "yaw", 0.0, -1000.0, 1000.0));
+    result.camera.pitch = static_cast<float>(reader.number(camera, "pitch", -0.34, -1.49, 1.49));
+    result.camera.distance = static_cast<float>(reader.number(camera, "distance", 7.0, 1.0, 80.0));
+    result.camera.minimumDistance = static_cast<float>(reader.number(camera, "minimumDistance", 2.5, 1.0, 20.0));
+    result.camera.maximumDistance = static_cast<float>(reader.number(camera, "maximumDistance", 40.0, 5.0, 80.0));
+    result.camera.autoOrbit = static_cast<float>(reader.number(camera, "autoOrbit", 0.035, -2.0, 2.0));
+    result.camera.focusBody = reader.integer(camera, "focusBody", -1, -1, 2);
+    result.camera.autoFrame = reader.boolean(camera, "autoFrame", true);
+    result.visualSeed = reader.seed(source, "visualSeed", 0);
+    result.notePaneMinimized = reader.boolean(source, "notePaneMinimized", false);
+    result.notePaneStyle = static_cast<NotePaneStyle>(reader.integer(source, "notePaneStyle", 0, 0, 1));
     return result;
 }
 
@@ -308,51 +368,103 @@ juce::String serializeUserConfiguration(const UserConfiguration& configuration) 
     set(root, "voicingPresetIndex", configuration.voicingPresetIndex);
     set(root, "run", configuration.run);
     set(root, "sync", configuration.sync);
+    set(root, "timeSignatureSource", static_cast<int>(configuration.timeSignatureSource));
+    set(root, "timeSignatureNumerator", configuration.timeSignatureNumerator);
+    set(root, "timeSignatureDenominator", configuration.timeSignatureDenominator);
     return juce::JSON::toString(root, true);
 }
 
 bool deserializeUserConfiguration(const juce::String& json, UserConfiguration& configuration,
                                   juce::String& error) {
     if (json.getNumBytesAsUTF8() > 2 * 1024 * 1024) {
-        error = "Configuration file is larger than 2 MB.";
-        return false;
+        error = "Configuration file is larger than 2 MB."; return false;
     }
+    Reader reader;
     const auto root = juce::JSON::parse(json);
-    const auto fileSchema = integer(root, "schemaVersion", 0, 0, 1000);
-    if (root.getDynamicObject() == nullptr || get(root, "format").toString() != "three-body-solution"
-        || fileSchema < 1 || fileSchema > userConfigurationSchemaVersion) {
-        error = "This is not a supported .3bs configuration.";
-        return false;
+    const auto fileSchema = reader.integer(root, "schemaVersion", 0, 1, userConfigurationSchemaVersion);
+    const auto format = get(root, "format");
+    if (root.getDynamicObject() == nullptr || !format.isString()
+        || format.toString() != "three-body-solution" || !reader.valid || fileSchema < 1) {
+        error = "This is not a supported .3bs configuration."; return false;
     }
     UserConfiguration result;
-    if (!readSimulationState(get(root, "initialState"), result.initial)
-        || !readSimulationState(get(root, "baseInitialState"), result.baseInitial)
-        || !readEngine(get(root, "engine"), result.engine)) {
-        error = "The configuration is incomplete or contains invalid body data.";
+    if (!readSimulationState(get(root, "initialState"), result.initial, reader)
+        || !readSimulationState(get(root, "baseInitialState"), result.baseInitial, reader)
+        || !readEngine(get(root, "engine"), result.engine, reader)) {
+        error = reader.error.isNotEmpty() ? reader.error
+            : "The configuration is incomplete or contains invalid body or voice data.";
         return false;
     }
-    auto* tilts = get(root, "planeTilts").getArray();
+    const auto tiltsValue = get(root, "planeTilts");
+    const auto* tilts = tiltsValue.getArray();
     if (tilts == nullptr || tilts->size() != static_cast<int>(bodyCount)) {
-        error = "The configuration has invalid plane tilts.";
-        return false;
+        error = "The configuration has invalid plane tilts."; return false;
     }
     for (std::size_t body = 0; body < bodyCount; ++body) {
-        const auto tilt = static_cast<double>((*tilts)[static_cast<int>(body)]);
-        if (!std::isfinite(tilt)) {
-            error = "The configuration has a non-finite plane tilt.";
-            return false;
+        const auto& value = (*tilts)[static_cast<int>(body)];
+        if (!Reader::numeric(value)) { error = "Plane tilts must be numbers."; return false; }
+        const auto tilt = static_cast<double>(value);
+        if (!std::isfinite(tilt) || tilt < -75.0 || tilt > 75.0) {
+            error = "Plane tilts must be finite and between -75 and 75 degrees."; return false;
         }
-        result.planeTilts[body] = std::clamp(tilt, -75.0, 75.0);
+        result.planeTilts[body] = tilt;
     }
-    result.presentation = readPresentation(get(root, "presentation"));
-    result.loopPolicy = static_cast<LoopPolicy>(integer(root, "loopPolicy", 0, 0, 1));
-    result.chaosPercent = number(root, "chaosPercent", 20.0, 0.0, 100.0);
-    result.densityPercent = number(root, "densityPercent", 80.0, 0.0, 100.0);
-    result.presetIndex = integer(root, "presetIndex", 0, 0, 23);
-    result.voicingPresetIndex = integer(root, "voicingPresetIndex", -1, -1, 11);
-    result.run = boolean(root, "run", true);
-    result.sync = boolean(root, "sync", true);
+    result.presentation = readPresentation(get(root, "presentation"), reader);
+    result.loopPolicy = static_cast<LoopPolicy>(reader.integer(root, "loopPolicy", 0, 0, 1));
+    result.chaosPercent = reader.number(root, "chaosPercent", 20.0, 0.0, 100.0);
+    result.densityPercent = reader.number(root, "densityPercent", 80.0, 0.0, 100.0);
+    result.presetIndex = reader.integer(root, "presetIndex", 0, 0, 23);
+    result.voicingPresetIndex = reader.integer(root, "voicingPresetIndex", -1, -1, 11);
+    result.run = reader.boolean(root, "run", true);
+    result.sync = reader.boolean(root, "sync", true);
+    result.timeSignatureSource = static_cast<TimeSignatureSource>(
+        reader.integer(root, "timeSignatureSource", 0, 0, 1));
+    result.timeSignatureNumerator = reader.integer(root, "timeSignatureNumerator", 4, 1, 16);
+    result.timeSignatureDenominator = reader.integer(root, "timeSignatureDenominator", 4, 1, 16);
+    if (!reader.valid) { error = reader.error; return false; }
+    if (!validateUserConfiguration(result, error)) return false;
     configuration = result;
+    error.clear();
+    return true;
+}
+
+bool validateUserConfiguration(const UserConfiguration& configuration, juce::String& error) {
+    const auto within = [](double value, double minimum, double maximum) {
+        return std::isfinite(value) && value >= minimum && value <= maximum;
+    };
+    if (!isValidSimulationState(configuration.initial)
+        || !isValidSimulationState(configuration.baseInitial)
+        || !isValidEngineConfig(configuration.engine)) {
+        error = "The configuration contains invalid simulation or musical data."; return false;
+    }
+    for (const auto tilt : configuration.planeTilts)
+        if (!within(tilt, -75.0, 75.0)) { error = "Invalid orbital plane tilt."; return false; }
+    const auto& visual = configuration.presentation.visual;
+    const auto& camera = configuration.presentation.camera;
+    if (!within(visual.trailSeconds, 5.0, 60.0) || !within(visual.trailWidth, 0.1, 10.0)
+        || !within(visual.extrusion, 0.0, 2.0) || !within(visual.bloom, 0.0, 1.0)
+        || !within(visual.starDensity, 0.0, 1.0)
+        || static_cast<int>(visual.palette) > 5 || static_cast<int>(visual.quality) > 2
+        || static_cast<int>(configuration.presentation.notePaneStyle) > 1
+        || !within(camera.yaw, -1000.0, 1000.0) || !within(camera.pitch, -1.49, 1.49)
+        || !within(camera.distance, 1.0, 80.0) || !within(camera.minimumDistance, 1.0, 20.0)
+        || !within(camera.maximumDistance, 5.0, 80.0)
+        || camera.minimumDistance > camera.maximumDistance
+        || camera.distance < camera.minimumDistance || camera.distance > camera.maximumDistance
+        || !within(camera.autoOrbit, -2.0, 2.0) || camera.focusBody < -1 || camera.focusBody > 2) {
+        error = "The configuration contains invalid presentation data."; return false;
+    }
+    const auto denominator = configuration.timeSignatureDenominator;
+    if (static_cast<int>(configuration.loopPolicy) > 1
+        || static_cast<int>(configuration.timeSignatureSource) > 1
+        || configuration.timeSignatureNumerator < 1 || configuration.timeSignatureNumerator > 16
+        || !(denominator == 1 || denominator == 2 || denominator == 4 || denominator == 8 || denominator == 16)
+        || !within(configuration.chaosPercent, 0.0, 100.0)
+        || !within(configuration.densityPercent, 0.0, 100.0)
+        || configuration.presetIndex < 0 || configuration.presetIndex > 23
+        || configuration.voicingPresetIndex < -1 || configuration.voicingPresetIndex > 11) {
+        error = "The configuration contains invalid musical controls."; return false;
+    }
     error.clear();
     return true;
 }

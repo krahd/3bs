@@ -21,6 +21,7 @@ public:
 
 private:
     void timerCallback() override;
+    void refreshFromProcessor();
 
     ThreeBSProcessor& processor_;
     ArtworkPanel panel_;
@@ -28,6 +29,8 @@ private:
     VoicingPresetCatalog voicingPresets_;
     PresentationState presentation_{};
     std::array<double, bodyCount> lastPlaneTilts_{};
+    std::uint64_t displayedRevision_{};
+    std::uint32_t displayedFaults_{};
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> runAttachment_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncAttachment_;
     std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>, 11> sliderAttachments_;

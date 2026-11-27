@@ -79,7 +79,7 @@ inline bool isFinite(const Vec3& value) noexcept {
 }
 
 inline double clamp01(double value) noexcept {
-    return std::clamp(value, 0.0, 1.0);
+    return std::isfinite(value) ? std::clamp(value, 0.0, 1.0) : 0.0;
 }
 
 } // namespace threebs

@@ -7,39 +7,112 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   core-tests:
-    runs-on: macos-15
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
-        with:
-          submodules: recursive
-      - name: Configure native core tests
+      - name: Configure portable tests
         run: >-
           cmake -S . -B build/ci-core
-          -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_OSX_ARCHITECTURES=$(uname -m)
+          -DCMAKE_BUILD_TYPE=Release
           -DTHREEBS_BUILD_PLUGINS=OFF
           -DTHREEBS_BUILD_TESTS=ON
       - name: Build
         run: cmake --build build/ci-core --parallel 4
-      - name: Test
-        run: ctest --test-dir build/ci-core --output-on-failure
+      - name: Test and retain reports
+        run: ctest --test-dir build/ci-core --output-on-failure --output-junit results.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-evidence-${{ matrix.os }}
+          path: |
+            build/ci-core/results.xml
+            build/ci-core/Testing/Temporary/LastTest.log
+
+  concurrency-sanitizer:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Configure ThreadSanitizer
+        run: >-
+          cmake -S . -B build/ci-tsan
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-fsanitize=thread -g"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
+          -DTHREEBS_BUILD_PLUGINS=OFF -DTHREEBS_BUILD_TESTS=ON
+      - name: Build queue and ownership regressions
+        run: cmake --build build/ci-tsan --target threebs_standalone_tests threebs_core_regression_tests --parallel 4
+      - name: Check concurrent ownership
+        run: ctest --test-dir build/ci-tsan -R 'threebs_(standalone|core_regression)_tests' --output-on-failure
 
   arm64-bundles:
     runs-on: macos-15
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
-      - name: Configure arm64 bundles
+      - name: Record native environment
+        run: |
+          mkdir -p build/evidence
+          sw_vers > build/evidence/environment.txt
+          uname -a >> build/evidence/environment.txt
+          xcodebuild -version >> build/evidence/environment.txt
+          cmake --version >> build/evidence/environment.txt
+          git rev-parse HEAD >> build/evidence/environment.txt
+          git submodule status >> build/evidence/environment.txt
+      - name: Configure arm64 bundles and integration tests
         run: >-
           cmake -S . -B build/ci-plugin
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_OSX_ARCHITECTURES=arm64
           -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
           -DTHREEBS_BUILD_PLUGINS=ON
-          -DTHREEBS_BUILD_TESTS=OFF
+          -DTHREEBS_BUILD_TESTS=ON
           -DTHREEBS_ADHOC_SIGN=ON
-      - name: Build AU, VST3, and standalone
+      - name: Build AU, VST3, standalone and tests
         run: cmake --build build/ci-plugin --parallel 4
+      - name: Execute native integration and drawable tests
+        env:
+          MTL_DEBUG_LAYER: '1'
+          THREEBS_RENDER_CAPTURE_PATH: ${{ github.workspace }}/build/evidence/metal-frame.png
+          THREEBS_UI_CAPTURE_DIR: ${{ github.workspace }}/build/evidence/ui
+        run: ctest --test-dir build/ci-plugin --output-on-failure --output-junit native-results.xml
+      - name: Validate Audio Unit
+        run: |
+          set -o pipefail
+          mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
+          ditto "build/ci-plugin/src/plugin/ThreeBSAU_artefacts/Release/AU/The Three Body Solution.component" "$HOME/Library/Audio/Plug-Ins/Components/The Three Body Solution.component"
+          /usr/bin/auval -v aumi Tbs1 Tmlz | tee build/evidence/auval.txt
+      - name: Validate VST3 with pluginval 1.0.4
+        run: |
+          set -o pipefail
+          curl --fail --location --retry 3 https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_macOS.zip -o build/pluginval.zip
+          shasum -a 256 build/pluginval.zip > build/evidence/pluginval-download.sha256
+          ditto -x -k build/pluginval.zip build/pluginval
+          build/pluginval/pluginval.app/Contents/MacOS/pluginval --strictness-level 5 --validate "$(pwd)/build/ci-plugin/src/plugin/ThreeBSVST3_artefacts/Release/VST3/The Three Body Solution.vst3" | tee build/evidence/pluginval.txt
+      - name: Package development candidate with provenance
+        run: python3 scripts/package_candidate.py --build build/ci-plugin --output build/candidate --commit "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-evidence-${{ github.sha }}
+          path: |
+            build/evidence
+            build/ci-plugin/native-results.xml
+            build/ci-plugin/Testing/Temporary/LastTest.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: threebs-candidate-${{ github.sha }}
+          path: build/candidate

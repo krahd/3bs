@@ -5,6 +5,7 @@
 
 #include "render/MetalSceneComponent.h"
 #include "ui/PresetCatalog.h"
+#include "ui/UserConfiguration.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -29,6 +30,7 @@ public:
     void setVoicingPresetCatalog(const VoicingPresetCatalog& catalog);
     void setSelectedVoicingPresetIndex(int index);
     void setStatus(const juce::String& status);
+    void setAdvancedConfiguration(const EngineConfig& config) { advancedConfiguration_ = config; }
     void setMidiOutputAvailable(bool available);
     void setPlaneTilts(const std::array<double, bodyCount>& tiltDegrees);
     std::array<double, bodyCount> planeTilts() const noexcept;
@@ -100,6 +102,10 @@ public:
     std::function<void()> onRandomize;
     std::function<void()> onReset;
     std::function<void()> onAdvanced;
+    std::function<void()> onPanic;
+    std::function<void(const EngineConfig&)> onAdvancedConfiguration;
+    std::function<UserConfiguration()> onCaptureConfiguration;
+    std::function<void(const UserConfiguration&)> onApplyUserConfiguration;
     std::function<void()> onSaveConfiguration;
     std::function<void()> onLoadConfiguration;
     std::function<void(int)> onPresetSelected;
@@ -135,6 +141,10 @@ private:
     void updateDeckVisibility();
     void updateVoiceModeControls();
     void markVoicingCustom();
+    void refreshUserPresets();
+    void saveUserPreset();
+    void loadUserPreset();
+    static juce::File userPresetDirectory();
     void comboBoxChanged(juce::ComboBox* comboBox) override;
     void timerCallback() override;
 
@@ -142,6 +152,8 @@ private:
     juce::Label title_;
     juce::Label subtitle_;
     juce::Label status_;
+    juce::Label notification_;
+    juce::Label configurationState_;
     juce::Label pageHelp_;
     juce::ToggleButton run_{"RUN"};
     juce::ToggleButton sync_{"HOST SYNC"};
@@ -196,6 +208,13 @@ private:
     juce::TextButton randomize_{"NEW SYSTEM"};
     juce::TextButton reset_{"RESET"};
     juce::TextButton advanced_{"SET STATE"};
+    juce::TextButton advancedConfigurationButton_{"VOICE / SYSTEM SETTINGS"};
+    juce::TextButton panic_{"ALL NOTES OFF"};
+    juce::ComboBox userPresets_;
+    juce::TextEditor userPresetName_;
+    juce::TextButton saveUserPreset_{"SAVE COPY"}, loadUserPreset_{"LOAD"}, refreshUserPresets_{"REFRESH"}, userPresetFolder_{"FOLDER"};
+    juce::Array<juce::File> userPresetFiles_;
+    EngineConfig advancedConfiguration_{};
     juce::TextButton saveConfiguration_{"SAVE .3BS"};
     juce::TextButton loadConfiguration_{"LOAD .3BS"};
     juce::TextButton present_{"PRESENT"};

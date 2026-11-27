@@ -34,9 +34,31 @@ target_compile_options(threebs_presentation_model PRIVATE
 
 if(THREEBS_BUILD_TESTS)
     enable_testing()
+    find_package(Threads REQUIRED)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
     add_executable(threebs_core_tests tests/CoreTests.cpp)
     target_link_libraries(threebs_core_tests PRIVATE threebs_core threebs_presentation_model)
     add_test(NAME threebs_core_tests COMMAND threebs_core_tests)
+    add_executable(threebs_core_regression_tests tests/CoreRegressionTests.cpp)
+    target_link_libraries(threebs_core_regression_tests PRIVATE threebs_core Threads::Threads)
+    add_test(NAME threebs_core_regression_tests COMMAND threebs_core_regression_tests)
+    add_executable(threebs_numerical_tests tests/NumericalTests.cpp)
+    target_link_libraries(threebs_numerical_tests PRIVATE threebs_core)
+    add_test(NAME threebs_numerical_tests COMMAND threebs_numerical_tests)
+    add_test(NAME threebs_numerical_presets COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/RunNumericalPresets.py
+        --binary $<TARGET_FILE:threebs_numerical_tests>
+        --presets ${CMAKE_CURRENT_SOURCE_DIR}/resources/presets/factory-presets.json)
+    add_executable(threebs_core_realtime_profile tests/CoreRealtimeProfile.cpp)
+    target_link_libraries(threebs_core_realtime_profile PRIVATE threebs_core)
+    add_test(NAME threebs_core_realtime_profile COMMAND threebs_core_realtime_profile)
+    add_executable(threebs_standalone_tests tests/StandaloneTests.cpp)
+    target_link_libraries(threebs_standalone_tests PRIVATE threebs_core Threads::Threads)
+    add_test(NAME threebs_standalone_tests COMMAND threebs_standalone_tests)
+    add_executable(threebs_renderer_data_tests tests/RendererDataTests.cpp)
+    target_link_libraries(threebs_renderer_data_tests PRIVATE threebs_core threebs_presentation_model Threads::Threads)
+    add_test(NAME threebs_renderer_data_tests COMMAND threebs_renderer_data_tests)
+
     add_test(
         NAME threebs_factory_presets
         COMMAND ${CMAKE_COMMAND}

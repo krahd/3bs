@@ -12,7 +12,7 @@
 namespace threebs {
 
 inline constexpr std::size_t bodyCount = 3;
-inline constexpr std::uint32_t stateSchemaVersion = 7;
+inline constexpr std::uint32_t stateSchemaVersion = 8;
 
 enum class InitialSystem : std::uint8_t {
     FigureEight,
@@ -115,6 +115,7 @@ struct CcLaneConfig {
     PitchMapping source{PitchMapping::Speed};
     std::uint8_t controller{1};
     double smoothing{0.85};
+    bool operator==(const CcLaneConfig&) const = default;
 };
 
 struct VoiceConfig {
@@ -140,6 +141,7 @@ struct VoiceConfig {
     std::uint8_t minimumVelocity{44};
     std::uint8_t maximumVelocity{112};
     std::array<CcLaneConfig, 2> ccLanes{};
+    bool operator==(const VoiceConfig&) const = default;
 };
 
 struct ChordSystemConfig {

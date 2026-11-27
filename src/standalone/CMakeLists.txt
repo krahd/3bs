@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (c) 2026 Tomas Laurenzo
 
+find_package(Threads REQUIRED)
+
 juce_add_gui_app(ThreeBSStandalone
     PRODUCT_NAME "The Three Body Solution"
     COMPANY_NAME "Tomas Laurenzo"
@@ -14,6 +16,7 @@ target_compile_definitions(ThreeBSStandalone PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE
 target_link_libraries(ThreeBSStandalone
     PRIVATE
         threebs_presentation
+        Threads::Threads
         juce::juce_audio_devices
         juce::juce_gui_extra
     PUBLIC

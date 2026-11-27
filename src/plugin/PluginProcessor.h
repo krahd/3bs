@@ -5,14 +5,15 @@
 
 #include "core/MusicEngine.h"
 #include "core/SnapshotQueue.h"
+#include "plugin/LatestCommandMailbox.h"
 #include "ui/PresetCatalog.h"
 #include "ui/UserConfiguration.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
-#include <algorithm>
 #include <array>
 #include <atomic>
+#include <mutex>
 
 namespace threebs {
 
@@ -20,13 +21,11 @@ class ThreeBSProcessor final : public juce::AudioProcessor {
 public:
     ThreeBSProcessor();
     ~ThreeBSProcessor() override = default;
-
     void prepareToPlay(double sampleRate, int maximumBlockSize) override;
     void releaseResources() override;
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     void processBlockBypassed(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
-
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
     const juce::String getName() const override { return "The Three Body Solution"; }
@@ -46,140 +45,116 @@ public:
     SpscQueue<RenderSnapshot, 64>& snapshots() noexcept { return snapshots_; }
     NoteVisualizationQueue& noteVisualizationEvents() noexcept { return noteVisualizationEvents_; }
     std::uint32_t escapePromptMask() const noexcept { return escapePromptMask_.load(std::memory_order_relaxed); }
+    std::uint32_t realtimeFaults() const noexcept { return realtimeFaults_.load(std::memory_order_relaxed); }
+    std::uint64_t droppedSnapshots() const noexcept { return droppedSnapshots_.load(std::memory_order_relaxed); }
+    std::uint64_t configurationRevision() const noexcept { return publishedRevision_.load(std::memory_order_acquire); }
+    std::uint64_t appliedConfigurationRevision() const noexcept { return appliedRevision_.load(std::memory_order_acquire); }
+    juce::String lastStateError() const;
+
     void requestPreset(const ArtworkPreset& preset, int presetIndex);
     void requestVoicingPreset(const VoicingPreset& preset, int presetIndex);
-    void setSelectedVoicingPresetIndex(int index) noexcept {
-        selectedVoicingPreset_.store(std::clamp(index, -1, 11), std::memory_order_relaxed);
-    }
+    void setSelectedVoicingPresetIndex(int index);
     void requestRandomize(double chaos);
     void requestReset();
+    void requestPanic() noexcept { panicRequested_.store(true, std::memory_order_release); }
     void requestExactState(const SimulationState& state);
     void requestPlaneTilts(const std::array<double, bodyCount>& tiltDegrees);
-    SimulationState currentInitialState() const noexcept { return storedInitial_.load(); }
-    std::array<double, bodyCount> initialPlaneTilts() const noexcept;
-    void setPresentationState(const PresentationState& state) noexcept { storedPresentation_.store(state); }
-    PresentationState presentationState() const noexcept { return storedPresentation_.load(); }
+    SimulationState currentInitialState() const;
+    std::array<double, bodyCount> initialPlaneTilts() const;
+    bool setPresentationState(const PresentationState& state, std::uint64_t expectedRevision = 0);
+    PresentationState presentationState() const;
     UserConfiguration currentUserConfiguration() const;
-    void applyUserConfiguration(const UserConfiguration& configuration);
+    bool applyUserConfiguration(const UserConfiguration& configuration);
+    bool applyAdvancedConfiguration(const EngineConfig& configuration);
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:
-    enum class CommandType : std::uint8_t { Reset, Replace, Reconfigure };
-    struct EngineCommand {
-        CommandType type{CommandType::Reset};
-        SimulationState state{};
-        EngineConfig config{};
-        LoopPolicy loopPolicy{LoopPolicy::Restart};
+    enum ParameterIndex : std::size_t {
+        Run, Sync, Speed, Gravity, Softening, Chaos, Density, Trail, Bloom,
+        Mass1, Mass2, Mass3,
+        Voice1, Voice2 = Voice1 + 10, Voice3 = Voice2 + 10,
+        Voicing = Voice3 + 10, StrumMilliseconds, ChordRoot, ChordScale,
+        StrumUnits, StrumAmount, MeterSource, MeterNumerator, MeterDenominator,
+        AutoReset, AutoResetBars, InputMode, Preset, ParameterCount
     };
+    enum VoiceField : std::size_t {
+        Enabled, Scale, Root, Pitch, Trigger, Octave, DurationMap, DurationGridValue,
+        DurationMinimum, DurationMaximum
+    };
+    static_assert(ParameterCount <= 64);
+    using ParameterValues = std::array<float, ParameterCount>;
+    struct EngineCommand {
+        UserConfiguration configuration{};
+        ParameterValues parameters{};
+        std::uint64_t revision{};
+        std::uint64_t resetRevision{};
+    };
+    struct InputEvent {
+        std::uint32_t offset{};
+        std::uint8_t status{}, data1{}, data2{};
+    };
+    static constexpr std::size_t maximumInputEvents = 32768;
 
-    struct AtomicState {
-        std::atomic<std::uint64_t> seed{0x334253ULL};
-        std::array<std::atomic<double>, bodyCount> mass{};
-        std::array<std::atomic<double>, bodyCount> px{}, py{}, pz{}, vx{}, vy{}, vz{};
-        void store(const SimulationState& state) noexcept;
-        SimulationState load() const noexcept;
-    } storedInitial_;
-
-    AtomicState storedBaseInitial_;
-
-    struct AtomicPlaneTilts {
-        std::array<std::atomic<double>, bodyCount> degrees{};
-        void store(const std::array<double, bodyCount>& values) noexcept;
-        std::array<double, bodyCount> load() const noexcept;
-    } storedPlaneTilts_;
-
-    struct AtomicPresentationState {
-        std::atomic<float> trailSeconds{30.0F};
-        std::atomic<float> trailWidth{1.2F};
-        std::atomic<float> extrusion{0.12F};
-        std::atomic<float> bloom{0.34F};
-        std::atomic<float> starDensity{0.62F};
-        std::atomic<int> palette{static_cast<int>(PaletteId::Eclipse)};
-        std::atomic<int> quality{static_cast<int>(GraphicsQuality::High)};
-        std::atomic<float> yaw{};
-        std::atomic<float> pitch{-0.34F};
-        std::atomic<float> distance{7.0F};
-        std::atomic<float> minimumDistance{2.5F};
-        std::atomic<float> maximumDistance{40.0F};
-        std::atomic<float> autoOrbit{0.035F};
-        std::atomic<int> focusBody{-1};
-        std::atomic<bool> autoFrame{true};
-        std::atomic<std::uint64_t> visualSeed{0x334253ULL};
-        std::atomic<bool> notePaneMinimized{};
-        std::atomic<int> notePaneStyle{static_cast<int>(NotePaneStyle::Horizontal)};
-        void store(const PresentationState& state) noexcept;
-        PresentationState load() const noexcept;
-    } storedPresentation_;
-
-    struct ParameterRefs {
-        std::atomic<float>* run{};
-        std::atomic<float>* sync{};
-        std::atomic<float>* speed{};
-        std::atomic<float>* gravity{};
-        std::atomic<float>* softening{};
-        std::atomic<float>* chaos{};
-        std::atomic<float>* density{};
-        std::atomic<float>* trail{};
-        std::atomic<float>* bloom{};
-        std::array<std::atomic<float>*, bodyCount> masses{};
-        std::array<std::atomic<float>*, bodyCount> voiceEnabled{};
-        std::array<std::atomic<float>*, bodyCount> voiceScale{};
-        std::array<std::atomic<float>*, bodyCount> voiceRoot{};
-        std::array<std::atomic<float>*, bodyCount> voicePitch{};
-        std::array<std::atomic<float>*, bodyCount> voiceTrigger{};
-        std::array<std::atomic<float>*, bodyCount> voiceOctave{};
-        std::array<std::atomic<float>*, bodyCount> voiceDurMap{};
-        std::array<std::atomic<float>*, bodyCount> voiceDurGrid{};
-        std::array<std::atomic<float>*, bodyCount> voiceDurMin{};
-        std::array<std::atomic<float>*, bodyCount> voiceDurMax{};
-        std::atomic<float>* voicingMode{};
-        std::atomic<float>* chordStrum{};
-        std::atomic<float>* chordRoot{};
-        std::atomic<float>* chordScale{};
-        std::atomic<float>* strumUnit{};
-        std::atomic<float>* strumValue{};
-        std::atomic<float>* timeSigSource{};
-        std::atomic<float>* timeSigNum{};
-        std::atomic<float>* timeSigDenom{};
-        std::atomic<float>* autoReset{};
-        std::atomic<float>* autoResetBars{};
-        std::atomic<float>* inputMode{};
-        std::atomic<float>* preset{};
-    } parameterRefs_;
-
-    void consumeCommands(MusicEngine::EventBuffer& eventBuffer) noexcept;
+    static const std::array<const char*, ParameterCount> parameterIds_;
+    ParameterValues readParameters() const noexcept;
+    static ParameterValues plainParameterValues(const UserConfiguration&) noexcept;
+    ParameterValues legalParameterValues(const UserConfiguration&) const;
+    static void applyParameters(UserConfiguration&, const ParameterValues&, std::uint64_t changedMask) noexcept;
+    UserConfiguration currentConfigurationLocked() const;
+    bool publishConfigurationLocked(const UserConfiguration&, bool reset);
+    void installParameterValues(const UserConfiguration&);
+    bool consumeCommand(EventSink) noexcept;
     void updateEngineConfigFromParameters() noexcept;
+    void clearInputKeys() noexcept;
+    void applyInputEvent(const InputEvent&) noexcept;
     void publishSnapshot() noexcept;
-    void publishNoteVisualization(const MusicEngine::EventBuffer&) noexcept;
+    void emitEvent(const MidiEvent&) noexcept;
+    static void writeEvent(void*, const MidiEvent&) noexcept;
     void setParameterValue(const juce::String& id, float plainValue);
     void applyVoiceParameters(const std::array<VoiceConfig, bodyCount>& voices);
-    static void addEvents(const MusicEngine::EventBuffer&, juce::MidiBuffer&);
 
     juce::AudioProcessorValueTreeState parameters_;
+    std::array<std::atomic<float>*, ParameterCount> parameterRefs_{};
+    ParameterValues parameterMinimums_{}, parameterMaximums_{}, parameterDefaults_{};
+
+    // Only non-processing entry points take this mutex. The callback consumes
+    // immutable mailbox slots and never touches desired_ or this mutex.
+    mutable std::recursive_mutex configurationMutex_;
+    UserConfiguration desired_{};
+    ParameterValues parameterBaseline_{};
+    juce::String stateError_;
+    std::uint64_t resetRevision_{1};
+    std::atomic<std::uint64_t> publishedRevision_{0};
+    std::atomic<std::uint64_t> parameterTransaction_{0};
+    LatestCommandMailbox<EngineCommand> commands_;
+
     MusicEngine engine_;
-    EngineConfig engineConfig_{};
-    EngineConfig storedConfigurationTemplate_{};
+    UserConfiguration activeConfiguration_{};
+    ParameterValues activeParameters_{};
+    std::uint64_t activeRevision_{}, activeResetRevision_{}, activeChangedMask_{};
+    std::atomic<std::uint64_t> appliedRevision_{0}, appliedChangedMask_{0};
     SpscQueue<RenderSnapshot, 64> snapshots_;
     NoteVisualizationQueue noteVisualizationEvents_;
-    SpscQueue<EngineCommand, 8> commands_;
     std::atomic<std::uint64_t> nextSeed_{0x33425310ULL};
-    std::atomic<int> selectedVoicingPreset_{-1};
-    std::atomic<int> loopPolicy_{static_cast<int>(LoopPolicy::Restart)};
-    std::atomic<std::uint32_t> escapePromptMask_{};
-    double sampleRate_{48000.0};
-    double freeBeat_{};
-    double lastPpq_{};
-    double lastBeatsPerSample_{2.0 / 48000.0};
-    int lastBlockSize_{};
+    std::atomic<std::uint32_t> escapePromptMask_{0}, realtimeFaults_{0};
+    std::atomic<std::uint64_t> droppedSnapshots_{0};
+    std::atomic<bool> panicRequested_{false};
+    std::array<InputEvent, maximumInputEvents> inputEvents_{};
+    std::array<std::array<std::uint16_t, 128>, 16> heldKeys_{};
+    std::array<std::array<std::uint64_t, 128>, 16> keyOrder_{};
+    std::uint64_t inputOrder_{};
     int heldNotes_{};
     std::int8_t inputTranspose_{};
-    bool hostWasPlaying_{};
-    bool haveHostPosition_{};
-    std::uint64_t snapshotSequence_{};
-    std::uint64_t noteVisualizationSequence_{};
-    std::uint64_t trajectoryRevision_{1};
+    double sampleRate_{48000.0};
+    double freeBeat_{}, lastPpq_{}, processingSeconds_{};
+    double lastBeatsPerSample_{2.0 / 48000.0};
+    int lastBlockSize_{};
+    bool hostWasPlaying_{}, haveHostPosition_{};
+    std::uint64_t snapshotSequence_{}, noteVisualizationSequence_{}, trajectoryRevision_{1};
     std::array<std::uint32_t, bodyCount> lastRespawnCounts_{};
+    juce::MidiBuffer* outputMidi_{};
+    std::uint32_t outputOffset_{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ThreeBSProcessor)
 };

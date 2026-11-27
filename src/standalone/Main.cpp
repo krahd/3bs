@@ -3,6 +3,7 @@
 
 #include "core/MusicEngine.h"
 #include "core/SnapshotQueue.h"
+#include "standalone/StandaloneRuntime.h"
 #include "ui/ArtworkPanel.h"
 #include "ui/AdvancedStateEditor.h"
 #include "ui/PresetCatalog.h"
@@ -20,7 +21,11 @@ namespace threebs {
 
 class StandaloneContent final : public juce::Component, private juce::Timer {
 public:
-    StandaloneContent() : panel_(snapshots_, noteVisualizationEvents_) {
+    StandaloneContent() : panel_(snapshots_, noteVisualizationEvents_), runtime_(snapshots_, noteVisualizationEvents_) {
+        MusicEngine defaults;
+        config_ = defaults.config();
+        initial_ = defaults.simulation().initialState();
+        baseInitial_ = initial_;
         setWantsKeyboardFocus(true);
         addAndMakeVisible(panel_);
         panel_.setPresetCatalog(presets_);
@@ -32,12 +37,12 @@ public:
             baseInitial_ = makeInitialState(InitialSystem::ControlledChaos, ++seed_,
                                             panel_.chaosSlider().getValue() / 100.0);
             initial_ = applyInitialPlaneTilts(baseInitial_, planeTilts_);
-            engine_.reset(initial_);
+            requestReset();
             presentation_.visualSeed = initial_.seed;
             panel_.setPresentationState(presentation_);
-            ++trajectoryRevision_;
+            
         };
-        panel_.onReset = [this] { engine_.reset(initial_); ++trajectoryRevision_; };
+        panel_.onReset = [this] { requestReset();  };
         panel_.onCameraChanged = [this](const CameraState& camera) { presentation_.camera = camera; };
         panel_.onNotePaneMinimizedChanged = [this](bool minimized) {
             presentation_.notePaneMinimized = minimized;
@@ -47,22 +52,21 @@ public:
         };
         panel_.onAdvanced = [this] {
             const auto target = panel_.getLocalArea(&panel_.advancedButton(), panel_.advancedButton().getLocalBounds());
-            showAdvancedStateEditor(initial_, target, panel_, [this](const SimulationState& state) {
-                initial_ = state;
-                baseInitial_ = state;
-                planeTilts_.fill(0.0);
-                engine_.reset(initial_);
-                presentation_.visualSeed = initial_.seed;
-                panel_.setPresentationState(presentation_);
-                panel_.setPlaneTilts(planeTilts_);
-                ++trajectoryRevision_;
-                const auto masses = panel_.massSliders();
-                for (std::size_t body = 0; body < bodyCount; ++body)
-                    masses[body]->setValue(initial_.bodies[body].mass, juce::dontSendNotification);
+            showAdvancedStateEditor(initial_, target, panel_, [safe = juce::Component::SafePointer<StandaloneContent>(this)](const SimulationState& state) {
+                if (safe == nullptr) return;
+                safe->applyExactState(state);
             });
+        };
+        panel_.onPanic = [this] { ++panicRevision_; publishControls(); };
+        panel_.onAdvancedConfiguration = [this](const EngineConfig& configuration) {
+            config_ = configuration;
+            panel_.setAdvancedConfiguration(config_);
+            publishControls();
         };
         panel_.onSaveConfiguration = [this] { saveConfiguration(); };
         panel_.onLoadConfiguration = [this] { loadConfiguration(); };
+        panel_.onCaptureConfiguration = [this] { return currentConfiguration(); };
+        panel_.onApplyUserConfiguration = [this](const UserConfiguration& configuration) { applyConfiguration(configuration); };
         panel_.syncButton().setToggleState(false, juce::dontSendNotification);
         panel_.syncButton().setButtonText("INTERNAL 120 BPM");
         panel_.syncButton().setTooltip("Standalone generation always runs from its internal 120 BPM clock.");
@@ -71,21 +75,26 @@ public:
         populateMidiOutputs();
         panel_.midiOutputSelector().onChange = [this] { openSelectedOutput(); };
         panel_.midiOutputSelector().setSelectedId(1, juce::sendNotificationSync);
-        initial_ = engine_.simulation().initialState();
-        engine_.prepare(sampleRate_);
         applyPreset(0);
-        startTimerHz(timerRate_);
+        panel_.timeSigSourceSelector().setSelectedId(2, juce::dontSendNotification);
+        panel_.timeSigSourceSelector().setEnabled(false);
+        panel_.timeSigSourceSelector().setTooltip("Standalone uses the saved manual meter.");
+        publishControls();
+        runtime_.start();
+        startTimerHz(30);
     }
 
     ~StandaloneContent() override {
         stopTimer();
-        if (midiOutput_ != nullptr)
-            midiOutput_->stopBackgroundThread();
+        runtime_.stop();
     }
 
     void resized() override { panel_.setBounds(getLocalBounds()); }
 
     bool keyPressed(const juce::KeyPress& key) override {
+        const auto* focused = juce::Component::getCurrentlyFocusedComponent();
+        if (focused != nullptr && (dynamic_cast<const juce::TextEditor*>(focused) != nullptr
+            || focused->findParentComponentOfClass<juce::TextEditor>() != nullptr)) return false;
         if (key.getTextCharacter() == 'f' || key.getTextCharacter() == 'F') {
             if (auto* window = findParentComponentOfClass<juce::DocumentWindow>())
                 window->setFullScreen(!window->isFullScreen());
@@ -105,18 +114,45 @@ private:
     }
 
     void openSelectedOutput() {
-        if (midiOutput_ != nullptr)
-            midiOutput_->stopBackgroundThread();
         const auto selected = panel_.midiOutputSelector().getSelectedId();
-        midiOutput_ = selected == 1
-            ? juce::MidiOutput::createNewDevice("The Three Body Solution")
-            : juce::MidiOutput::openDevice(devices_.getReference(selected - 2).identifier);
-        if (midiOutput_ != nullptr) {
-            midiOutput_->startBackgroundThread();
-            panel_.setStatus("COREMIDI / " + panel_.midiOutputSelector().getText());
-        } else {
-            panel_.setStatus("MIDI OUTPUT UNAVAILABLE");
+        if (selected < 1 || selected > devices_.size() + 1) return;
+        const auto identifier = selected == 1 ? juce::String{} : devices_.getReference(selected - 2).identifier;
+        if (!runtime_.selectOutput(selected == 1, identifier)) {
+            panel_.setStatus("MIDI OUTPUT IDENTIFIER TOO LONG");
+            return;
         }
+        panel_.setStatus("MIDI OUTPUT / " + panel_.midiOutputSelector().getText());
+    }
+
+    void requestReset() { ++resetRevision_; publishControls(); }
+
+    void applyExactState(const SimulationState& state) {
+        initial_ = state;
+        baseInitial_ = state;
+        planeTilts_.fill(0.0);
+        presentation_.visualSeed = state.seed;
+        panel_.setPresentationState(presentation_);
+        panel_.setPlaneTilts(planeTilts_);
+        const auto masses = panel_.massSliders();
+        for (std::size_t body = 0; body < bodyCount; ++body) {
+            masses[body]->setValue(state.bodies[body].mass, juce::dontSendNotification);
+            lastMassControls_[body] = masses[body]->getValue();
+        }
+        requestReset();
+    }
+
+    void publishControls() {
+        StandaloneControls controls;
+        controls.engine = config_;
+        controls.initial = initial_;
+        controls.resetRevision = resetRevision_;
+        controls.panicRevision = panicRevision_;
+        controls.playing = panel_.runButton().getToggleState();
+        controls.numerator = std::max(1, panel_.timeSigNumeratorSelector().getSelectedItemIndex() + 1);
+        constexpr std::array<int, 5> denominators{1, 2, 4, 8, 16};
+        controls.denominator = denominators[static_cast<std::size_t>(std::clamp(
+            panel_.timeSigDenominatorSelector().getSelectedItemIndex(), 0, 4))];
+        runtime_.publish(controls);
     }
 
     void applyPreset(int index) {
@@ -132,11 +168,9 @@ private:
         initial_ = baseInitial_;
         config_.simulation = preset.simulation;
         config_.voices = preset.voices;
-        engine_.setConfig(config_);
-        engine_.reset(initial_);
         presentation_ = preset.presentation;
         panel_.setPresentationState(presentation_);
-        ++trajectoryRevision_;
+        
         panel_.gravitySlider().setValue(preset.simulation.gravitationalConstant, juce::dontSendNotification);
         panel_.softeningSlider().setValue(preset.simulation.softening, juce::dontSendNotification);
         panel_.speedSlider().setValue(preset.simulation.speed, juce::dontSendNotification);
@@ -173,15 +207,18 @@ private:
             durationMaxs[body]->setValue(preset.voices[body].maximumDurationBeats,
                                          juce::dontSendNotification);
         }
+        lastDensityControl_ = panel_.densitySlider().getValue() / 100.0;
+        for (std::size_t body = 0; body < bodyCount; ++body) lastMassControls_[body] = masses[body]->getValue();
+        panel_.setAdvancedConfiguration(config_);
+        captureVisibleControls();
+        requestReset();
     }
 
     void applyVoicingPreset(int index) {
         if (!voicingPresets_.valid() || index < 0
             || static_cast<std::size_t>(index) >= voicingPresets_.size())
             return;
-        MusicEngine::EventBuffer noteOffs;
-        engine_.allNotesOff(0, noteOffs);
-        sendMidiEvents(noteOffs);
+        ++panicRevision_;
 
         const auto& preset = voicingPresets_[static_cast<std::size_t>(index)];
         selectedVoicingPresetIndex_ = index;
@@ -191,7 +228,6 @@ private:
         config_.chordStrumUnit = preset.chordStrumUnit;
         config_.chordStrumValue = preset.chordStrumValue;
         config_.chordSystem = preset.chordSystem;
-        engine_.setConfig(config_);
 
         panel_.densitySlider().setValue(preset.densityPercent, juce::dontSendNotification);
         panel_.voicingModeSelector().setSelectedId(static_cast<int>(preset.mode) + 1,
@@ -230,9 +266,14 @@ private:
             durationMaxs[body]->setValue(voice.maximumDurationBeats, juce::dontSendNotification);
         }
         panel_.setSelectedVoicingPresetIndex(index);
+        lastDensityControl_ = panel_.densitySlider().getValue() / 100.0;
+        panel_.setAdvancedConfiguration(config_);
+        captureVisibleControls();
+        publishControls();
     }
 
     UserConfiguration currentConfiguration() {
+        timerCallback();
         UserConfiguration result;
         result.initial = initial_;
         result.baseInitial = baseInitial_;
@@ -245,6 +286,12 @@ private:
         result.voicingPresetIndex = selectedVoicingPresetIndex_;
         result.run = panel_.runButton().getToggleState();
         result.sync = false;
+        result.loopPolicy = loopPolicy_;
+        result.timeSignatureSource = TimeSignatureSource::Manual;
+        result.timeSignatureNumerator = std::max(1, panel_.timeSigNumeratorSelector().getSelectedItemIndex() + 1);
+        constexpr std::array<int, 5> denominators{1, 2, 4, 8, 16};
+        result.timeSignatureDenominator = denominators[static_cast<std::size_t>(std::clamp(
+            panel_.timeSigDenominatorSelector().getSelectedItemIndex(), 0, 4))];
         return result;
     }
 
@@ -253,17 +300,19 @@ private:
         baseInitial_ = configuration.baseInitial;
         planeTilts_ = configuration.planeTilts;
         config_ = configuration.engine;
+        loopPolicy_ = configuration.loopPolicy;
         presentation_ = configuration.presentation;
         selectedPresetIndex_ = configuration.presetIndex;
         selectedVoicingPresetIndex_ = configuration.voicingPresetIndex;
-        engine_.setConfig(config_);
-        engine_.reset(initial_);
-        ++trajectoryRevision_;
-
         panel_.setSelectedPresetIndex(selectedPresetIndex_);
         panel_.setPresentationState(presentation_);
         panel_.setPlaneTilts(planeTilts_);
         panel_.runButton().setToggleState(configuration.run, juce::dontSendNotification);
+        panel_.timeSigSourceSelector().setSelectedId(2, juce::dontSendNotification);
+        panel_.timeSigNumeratorSelector().setSelectedId(configuration.timeSignatureNumerator, juce::dontSendNotification);
+        constexpr std::array<int, 5> denominators{1, 2, 4, 8, 16};
+        const auto denominator = std::find(denominators.begin(), denominators.end(), configuration.timeSignatureDenominator);
+        panel_.timeSigDenominatorSelector().setSelectedId(static_cast<int>(denominator - denominators.begin()) + 1, juce::dontSendNotification);
         panel_.chaosSlider().setValue(configuration.chaosPercent, juce::dontSendNotification);
         panel_.densitySlider().setValue(configuration.densityPercent, juce::dontSendNotification);
         panel_.gravitySlider().setValue(config_.simulation.gravitationalConstant, juce::dontSendNotification);
@@ -324,6 +373,11 @@ private:
             durationMaxs[body]->setValue(config_.voices[body].maximumDurationBeats, juce::dontSendNotification);
         }
         panel_.setSelectedVoicingPresetIndex(selectedVoicingPresetIndex_);
+        lastDensityControl_ = panel_.densitySlider().getValue() / 100.0;
+        for (std::size_t body = 0; body < bodyCount; ++body) lastMassControls_[body] = masses[body]->getValue();
+        panel_.setAdvancedConfiguration(config_);
+        captureVisibleControls();
+        requestReset();
     }
 
     void saveConfiguration() {
@@ -333,13 +387,14 @@ private:
         fileChooser_->launchAsync(juce::FileBrowserComponent::saveMode
                                       | juce::FileBrowserComponent::canSelectFiles
                                       | juce::FileBrowserComponent::warnAboutOverwriting,
-            [this](const juce::FileChooser& chooser) {
+            [safe = juce::Component::SafePointer<StandaloneContent>(this)](const juce::FileChooser& chooser) {
+                if (safe == nullptr) return;
                 auto file = chooser.getResult();
                 if (file == juce::File{})
                     return;
                 file = file.withFileExtension(".3bs");
-                const auto saved = file.replaceWithText(serializeUserConfiguration(currentConfiguration()));
-                panel_.setStatus(saved ? "SAVED / " + file.getFileName() : "SAVE FAILED");
+                const auto saved = file.replaceWithText(serializeUserConfiguration(safe->currentConfiguration()));
+                safe->panel_.setStatus(saved ? "SAVED / " + file.getFileName() : "SAVE FAILED");
             });
     }
 
@@ -349,75 +404,95 @@ private:
                 juce::File::userDocumentsDirectory), "*.3bs");
         fileChooser_->launchAsync(juce::FileBrowserComponent::openMode
                                       | juce::FileBrowserComponent::canSelectFiles,
-            [this](const juce::FileChooser& chooser) {
+            [safe = juce::Component::SafePointer<StandaloneContent>(this)](const juce::FileChooser& chooser) {
+                if (safe == nullptr) return;
                 const auto file = chooser.getResult();
                 if (file == juce::File{})
                     return;
                 UserConfiguration configuration;
                 juce::String error;
                 if (!deserializeUserConfiguration(file.loadFileAsString(), configuration, error)) {
-                    panel_.setStatus("LOAD FAILED / " + error);
+                    safe->panel_.setStatus("LOAD FAILED / " + error);
                     return;
                 }
-                applyConfiguration(configuration);
-                panel_.setStatus("LOADED / " + file.getFileName());
+                safe->applyConfiguration(configuration);
+                safe->panel_.setStatus("LOADED / " + file.getFileName());
             });
     }
 
+    VoiceConfig visibleVoice(std::size_t body) {
+        VoiceConfig result;
+        result.enabled = panel_.voiceEnableButtons()[body]->getToggleState();
+        result.scale = static_cast<ScaleId>(std::max(0, panel_.voiceScaleSelectors()[body]->getSelectedItemIndex()));
+        result.root = static_cast<std::uint8_t>(std::max(0, panel_.voiceRootSelectors()[body]->getSelectedItemIndex()));
+        result.pitchMapping = static_cast<PitchMapping>(std::max(0, panel_.voicePitchSelectors()[body]->getSelectedItemIndex()));
+        result.triggerMapping = static_cast<TriggerMapping>(std::max(0, panel_.voiceTriggerSelectors()[body]->getSelectedItemIndex()));
+        result.octave = static_cast<std::int8_t>(panel_.voiceOctaveSelectors()[body]->getSelectedItemIndex() - 4);
+        result.durationMapping = static_cast<PitchMapping>(std::max(0, panel_.voiceDurationMapSelectors()[body]->getSelectedItemIndex()));
+        result.durationGrid = static_cast<DurationGrid>(std::clamp(panel_.voiceDurationGridSelectors()[body]->getSelectedItemIndex(), 0, 1));
+        result.minimumDurationBeats = panel_.voiceDurationMinSliders()[body]->getValue();
+        result.maximumDurationBeats = panel_.voiceDurationMaxSliders()[body]->getValue();
+        return result;
+    }
+    std::array<double, 6> visibleNumbers() {
+        constexpr std::array<double, 7> bars{0.25, 0.5, 1, 2, 4, 8, 16};
+        return {panel_.gravitySlider().getValue(), panel_.softeningSlider().getValue(),
+                panel_.speedSlider().getValue(), panel_.chordStrumSlider().getValue(),
+                panel_.strumValueSlider().getValue(), bars[static_cast<std::size_t>(std::clamp(
+                    panel_.autoResetBarsSelector().getSelectedItemIndex(), 0, 6))]};
+    }
+    void captureVisibleControls() {
+        for (std::size_t body = 0; body < bodyCount; ++body) lastVoiceControls_[body] = visibleVoice(body);
+        lastNumberControls_ = visibleNumbers();
+    }
     void timerCallback() override {
-        config_.simulation.gravitationalConstant = panel_.gravitySlider().getValue();
-        config_.simulation.softening = panel_.softeningSlider().getValue();
-        config_.simulation.speed = panel_.speedSlider().getValue();
+        const auto numbers = visibleNumbers();
+        std::array<double*, 6> destinations{&config_.simulation.gravitationalConstant, &config_.simulation.softening,
+            &config_.simulation.speed, &config_.chordStrumMilliseconds, &config_.chordStrumValue, &config_.autoResetBars};
+        for (std::size_t i = 0; i < numbers.size(); ++i)
+            if (numbers[i] != lastNumberControls_[i]) *destinations[i] = numbers[i];
+        lastNumberControls_ = numbers;
         const auto density = panel_.densitySlider().getValue() / 100.0;
-        const auto enables = panel_.voiceEnableButtons();
-        const auto scales = panel_.voiceScaleSelectors();
-        const auto roots = panel_.voiceRootSelectors();
-        const auto pitches = panel_.voicePitchSelectors();
-        const auto triggers = panel_.voiceTriggerSelectors();
-        const auto octaves = panel_.voiceOctaveSelectors();
-        const auto durationMaps = panel_.voiceDurationMapSelectors();
-        const auto durationGrids = panel_.voiceDurationGridSelectors();
-        const auto durationMins = panel_.voiceDurationMinSliders();
-        const auto durationMaxs = panel_.voiceDurationMaxSliders();
         for (std::size_t body = 0; body < bodyCount; ++body) {
             auto& voice = config_.voices[body];
-            voice.probability = density;
-            voice.enabled = enables[body]->getToggleState();
-            voice.scale = static_cast<ScaleId>(std::max(0, scales[body]->getSelectedItemIndex()));
-            voice.root = static_cast<std::uint8_t>(std::max(0, roots[body]->getSelectedItemIndex()));
-            voice.pitchMapping = static_cast<PitchMapping>(std::max(0, pitches[body]->getSelectedItemIndex()));
-            voice.triggerMapping = static_cast<TriggerMapping>(std::max(0, triggers[body]->getSelectedItemIndex()));
-            voice.octave = static_cast<std::int8_t>(octaves[body]->getSelectedItemIndex() - 4);
-            voice.durationMapping = static_cast<PitchMapping>(std::max(0, durationMaps[body]->getSelectedItemIndex()));
-            voice.durationGrid = static_cast<DurationGrid>(std::clamp(
-                durationGrids[body]->getSelectedItemIndex(), 0, 1));
-            voice.minimumDurationBeats = durationMins[body]->getValue();
-            voice.maximumDurationBeats = durationMaxs[body]->getValue();
+            if (density != lastDensityControl_) voice.probability = density;
+            const auto visible = visibleVoice(body);
+            const auto& previous = lastVoiceControls_[body];
+            if (visible.enabled != previous.enabled) voice.enabled = visible.enabled;
+            if (visible.scale != previous.scale) voice.scale = visible.scale;
+            if (visible.root != previous.root) voice.root = visible.root;
+            if (visible.pitchMapping != previous.pitchMapping) voice.pitchMapping = visible.pitchMapping;
+            if (visible.triggerMapping != previous.triggerMapping) voice.triggerMapping = visible.triggerMapping;
+            if (visible.octave != previous.octave) voice.octave = visible.octave;
+            if (visible.durationMapping != previous.durationMapping) voice.durationMapping = visible.durationMapping;
+            if (visible.durationGrid != previous.durationGrid) voice.durationGrid = visible.durationGrid;
+            if (visible.minimumDurationBeats != previous.minimumDurationBeats) voice.minimumDurationBeats = visible.minimumDurationBeats;
+            if (visible.maximumDurationBeats != previous.maximumDurationBeats) voice.maximumDurationBeats = visible.maximumDurationBeats;
+            if (voice.minimumDurationBeats > voice.maximumDurationBeats) {
+                if (visible.minimumDurationBeats != previous.minimumDurationBeats)
+                    voice.maximumDurationBeats = voice.minimumDurationBeats;
+                else voice.minimumDurationBeats = voice.maximumDurationBeats;
+            }
+            lastVoiceControls_[body] = visible;
         }
+        lastDensityControl_ = density;
         config_.voicingMode = static_cast<VoicingMode>(
             std::max(0, panel_.voicingModeSelector().getSelectedItemIndex()));
-        config_.chordStrumMilliseconds = panel_.chordStrumSlider().getValue();
         config_.chordStrumUnit = static_cast<StrumUnit>(
             std::max(0, panel_.strumUnitSelector().getSelectedItemIndex()));
-        config_.chordStrumValue = panel_.strumValueSlider().getValue();
         config_.chordSystem.root = static_cast<std::uint8_t>(
             std::max(0, panel_.chordRootSelector().getSelectedItemIndex()));
         config_.chordSystem.scale = static_cast<ScaleId>(
             std::max(0, panel_.chordScaleSelector().getSelectedItemIndex()));
         config_.autoResetEnabled = panel_.autoResetButton().getToggleState();
-        {
-            constexpr std::array<double, 7> barValues{0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0};
-            const auto index = std::clamp(panel_.autoResetBarsSelector().getSelectedItemIndex(), 0,
-                                          static_cast<int>(barValues.size()) - 1);
-            config_.autoResetBars = barValues[static_cast<std::size_t>(index)];
-        }
-        engine_.setConfig(config_);
         const auto masses = panel_.massSliders();
         for (std::size_t i = 0; i < bodyCount; ++i) {
             const auto mass = masses[i]->getValue();
-            baseInitial_.bodies[i].mass = mass;
-            initial_.bodies[i].mass = mass;
-            engine_.setBodyMass(i, mass);
+            if (mass != lastMassControls_[i]) {
+                baseInitial_.bodies[i].mass = mass;
+                initial_.bodies[i].mass = mass;
+                lastMassControls_[i] = mass;
+            }
         }
         const auto currentTilts = panel_.planeTilts();
         bool tiltChanged{};
@@ -426,62 +501,22 @@ private:
         if (tiltChanged) {
             planeTilts_ = currentTilts;
             initial_ = applyInitialPlaneTilts(baseInitial_, planeTilts_);
-            engine_.reset(initial_);
-            ++trajectoryRevision_;
+            requestReset();
+            
         }
 
-        constexpr auto blockSize = static_cast<std::uint32_t>(sampleRate_ / timerRate_);
-        constexpr std::array<int, 5> denominators{1, 2, 4, 8, 16};
-        const auto denomIndex = std::clamp(panel_.timeSigDenominatorSelector().getSelectedItemIndex(), 0,
-                                           static_cast<int>(denominators.size()) - 1);
-        ProcessContext context;
-        context.sampleCount = blockSize;
-        context.sampleRate = sampleRate_;
-        context.beatAtStart = beat_;
-        context.beatsPerSample = tempo_ / (60.0 * sampleRate_);
-        context.timeSigNumerator = std::max(1, panel_.timeSigNumeratorSelector().getSelectedItemIndex() + 1);
-        context.timeSigDenominator = denominators[static_cast<std::size_t>(denomIndex)];
-        context.playing = panel_.runButton().getToggleState();
-        context.transportStarted = context.playing && !wasRunning_;
-        if (context.transportStarted)
-            ++trajectoryRevision_;
-        MusicEngine::EventBuffer events;
-        engine_.process(context, events);
-        beat_ += context.beatsPerSample * static_cast<double>(blockSize);
-        wasRunning_ = context.playing;
-
-        for (const auto& event : events) {
-            if (event.type == MidiEventType::ControlChange)
-                continue;
-            NoteVisualizationEvent visual;
-            visual.type = event.type == MidiEventType::NoteOn
-                ? NoteVisualizationType::On : NoteVisualizationType::Off;
-            visual.body = event.sourceBody;
-            visual.note = event.data1;
-            visual.velocity = event.data2;
-            visual.sequence = ++noteVisualizationSequence_;
-            (void)noteVisualizationEvents_.push(visual);
+        publishControls();
+        panel_.setAdvancedConfiguration(config_);
+        if (runtime_.timingFault() && !reportedTimingFault_) {
+            panel_.setStatus("MIDI TIMING FAULT / RESET TO RESUME");
+            reportedTimingFault_ = true;
+        } else if (!runtime_.timingFault()) {
+            reportedTimingFault_ = false;
         }
-
-        sendMidiEvents(events);
-
-        RenderSnapshot snapshot;
-        snapshot.bodies = engine_.simulation().state().bodies;
-        snapshot.escaped = engine_.simulation().state().escaped;
-        snapshot.sequence = ++sequence_;
-        const auto& respawns = engine_.simulation().state().respawnCount;
-        if (respawns != lastRespawnCounts_) {
-            lastRespawnCounts_ = respawns;
-            ++trajectoryRevision_;
+        if (runtime_.outputReady() != lastOutputReady_) {
+            lastOutputReady_ = runtime_.outputReady();
+            panel_.setStatus(lastOutputReady_ ? "MIDI OUTPUT READY" : "MIDI OUTPUT UNAVAILABLE");
         }
-        snapshot.trajectoryRevision = trajectoryRevision_;
-        snapshot.interpolationAlpha = engine_.simulation().interpolationAlpha();
-        if (!snapshots_.push(snapshot)) {
-            RenderSnapshot discarded;
-            snapshots_.pop(discarded);
-            snapshots_.push(snapshot);
-        }
-
         presentation_.visual.trailSeconds = static_cast<float>(panel_.trailSlider().getValue());
         presentation_.visual.bloom = static_cast<float>(panel_.bloomSlider().getValue() / 100.0);
         presentation_.camera.minimumDistance = static_cast<float>(panel_.minimumCameraDistanceSlider().getValue());
@@ -489,59 +524,33 @@ private:
         presentation_.camera.autoFrame = panel_.autoFrameButton().getToggleState();
         presentation_.camera = sanitizedCameraState(presentation_.camera);
         panel_.setPresentationState(presentation_);
-        if (config_.simulation.escapePolicy == EscapePolicy::Prompt) {
-            for (const auto escaped : engine_.simulation().state().escaped) {
-                if (escaped) {
-                    panel_.setStatus("BODY ESCAPED / RESET OR NEW SYSTEM");
-                    break;
-                }
-            }
-        }
     }
 
-    void sendMidiEvents(const MusicEngine::EventBuffer& events) {
-        if (midiOutput_ != nullptr && events.size() > 0) {
-            juce::MidiBuffer buffer;
-            for (const auto& event : events) {
-                juce::MidiMessage message;
-                if (event.type == MidiEventType::NoteOn)
-                    message = juce::MidiMessage::noteOn(event.channel, event.data1, event.data2);
-                else if (event.type == MidiEventType::NoteOff)
-                    message = juce::MidiMessage::noteOff(event.channel, event.data1);
-                else
-                    message = juce::MidiMessage::controllerEvent(event.channel, event.data1, event.data2);
-                buffer.addEvent(message, static_cast<int>(event.sampleOffset));
-            }
-            midiOutput_->sendBlockOfMessages(buffer, juce::Time::getMillisecondCounterHiRes() + 2.0, sampleRate_);
-        }
-    }
-
-    static constexpr double sampleRate_ = 48000.0;
-    static constexpr int timerRate_ = 100;
-    static constexpr double tempo_ = 120.0;
     SpscQueue<RenderSnapshot, 64> snapshots_;
     NoteVisualizationQueue noteVisualizationEvents_;
     ArtworkPanel panel_;
     PresetCatalog presets_;
     VoicingPresetCatalog voicingPresets_;
-    MusicEngine engine_;
-    EngineConfig config_{engine_.config()};
+    StandaloneRuntime runtime_;
+    EngineConfig config_{};
+    LoopPolicy loopPolicy_{LoopPolicy::Restart};
     SimulationState baseInitial_{};
     SimulationState initial_{};
     juce::Array<juce::MidiDeviceInfo> devices_;
-    std::unique_ptr<juce::MidiOutput> midiOutput_;
     std::unique_ptr<juce::FileChooser> fileChooser_;
     PresentationState presentation_{};
     std::uint64_t seed_{0x33425320ULL};
-    std::uint64_t sequence_{};
-    std::uint64_t noteVisualizationSequence_{};
     int selectedPresetIndex_{};
     int selectedVoicingPresetIndex_{-1};
-    std::uint64_t trajectoryRevision_{1};
-    std::array<std::uint32_t, bodyCount> lastRespawnCounts_{};
+    std::uint64_t resetRevision_{1};
+    std::uint64_t panicRevision_{};
+    std::array<double, bodyCount> lastMassControls_{};
+    std::array<VoiceConfig, bodyCount> lastVoiceControls_{};
+    std::array<double, 6> lastNumberControls_{};
+    double lastDensityControl_{-1.0};
+    bool reportedTimingFault_{};
+    bool lastOutputReady_{};
     std::array<double, bodyCount> planeTilts_{};
-    double beat_{};
-    bool wasRunning_{};
 };
 
 class MainWindow final : public juce::DocumentWindow {

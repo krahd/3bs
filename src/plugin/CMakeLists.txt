@@ -67,10 +67,14 @@ if(THREEBS_BUILD_TESTS)
         ThreeBSVST3 threebs_presentation juce::juce_audio_utils juce::juce_gui_extra)
     add_test(NAME threebs_plugin_tests COMMAND threebs_plugin_tests)
 
+    add_library(threebs_allocation_probe SHARED ../../tests/AllocationProbe.cpp)
+    target_compile_features(threebs_allocation_probe PRIVATE cxx_std_20)
+    set_target_properties(threebs_allocation_probe PROPERTIES CXX_VISIBILITY_PRESET default)
+
     add_executable(threebs_realtime_profile ../../tests/RealtimeProfile.cpp)
     target_include_directories(threebs_realtime_profile PRIVATE ..)
     target_compile_definitions(threebs_realtime_profile PRIVATE THREEBS_AU_MIDI_EFFECT=0)
     target_link_libraries(threebs_realtime_profile PRIVATE
-        ThreeBSVST3 threebs_presentation juce::juce_audio_utils juce::juce_gui_extra)
+        threebs_allocation_probe ThreeBSVST3 threebs_presentation juce::juce_audio_utils juce::juce_gui_extra)
     add_test(NAME threebs_realtime_profile COMMAND threebs_realtime_profile)
 endif()

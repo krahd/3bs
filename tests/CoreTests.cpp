@@ -163,7 +163,7 @@ std::vector<TimedEvent> renderWithBlockSize(std::uint32_t blockSize) {
         context.playing = true;
         context.transportStarted = position == 0;
         threebs::MusicEngine::EventBuffer buffer;
-        engine.process(context, buffer);
+        check(engine.process(context, buffer).complete(), "bounded test collector received every event");
         for (const auto& event : buffer)
             rendered.push_back({position + event.sampleOffset, event});
     }
@@ -196,12 +196,12 @@ void testNoteCleanup() {
     playing.beatAtStart = 0.0;
     playing.beatsPerSample = 2.0 / 48000.0;
     threebs::MusicEngine::EventBuffer output;
-    engine.process(playing, output);
+    check(engine.process(playing, output).complete(), "bounded test collector received every event");
 
     threebs::ProcessContext stopped = playing;
     stopped.playing = false;
     stopped.transportStarted = false;
-    engine.process(stopped, output);
+    check(engine.process(stopped, output).complete(), "bounded test collector received every event");
     bool foundNoteOff{};
     for (const auto& event : output)
         foundNoteOff = foundNoteOff || event.type == threebs::MidiEventType::NoteOff;
@@ -222,7 +222,7 @@ std::array<int, threebs::bodyCount> countNoteOnsPerBody(const threebs::EngineCon
         context.beatAtStart = static_cast<double>(block) * 2.0;
         context.transportStarted = block == 0;
         threebs::MusicEngine::EventBuffer buffer;
-        engine.process(context, buffer);
+        check(engine.process(context, buffer).complete(), "bounded test collector received every event");
         for (const auto& event : buffer)
             if (event.type == threebs::MidiEventType::NoteOn && event.sourceBody < threebs::bodyCount)
                 ++counts[event.sourceBody];
@@ -285,7 +285,7 @@ void testChordAndStrumModes() {
             context.beatsPerSample = 2.0 / 48000.0;
             context.transportStarted = position == 0;
             threebs::MusicEngine::EventBuffer events;
-            engine.process(context, events);
+            check(engine.process(context, events).complete(), "bounded test collector received every event");
             for (const auto& event : events) {
                 if (event.type != threebs::MidiEventType::NoteOn || event.sourceBody >= threebs::bodyCount)
                     continue;
@@ -311,7 +311,7 @@ void testChordAndStrumModes() {
         context.beatsPerSample = 2.0 / 48000.0;
         context.transportStarted = true;
         threebs::MusicEngine::EventBuffer events;
-        engine.process(context, events);
+        check(engine.process(context, events).complete(), "bounded test collector received every event");
         return static_cast<std::size_t>(std::count_if(
             events.begin(), events.end(), [](const auto& event) {
                 return event.type == threebs::MidiEventType::NoteOn;
@@ -491,7 +491,9 @@ void testTrailHistory() {
     threebs::TrailHistory<64> smoothed;
     smoothed.append({0.0, 0.0, 0.0}, 0.0, 1);
     smoothed.append({1.0, 0.0, 0.0}, 1.0, 1);
-    check(smoothed.size() > 2U, "fast trail motion is subdivided into smooth ribbon samples");
+    check(smoothed.size() == 2U, "trail history retains temporal samples independently of tessellation");
+    std::array<threebs::TrailHistory<64>::Sample, 64> ribbon{};
+    check(smoothed.tessellate(ribbon) > 2U, "fast trail motion is tessellated into a separate bounded ribbon");
     trail.append({10.0, 0.0, 0.0}, 7.0, 2);
     check(trail.size() == 1 && near(trail[0].position.x, 10.0), "trail revision clears old trajectory");
 }
@@ -526,7 +528,7 @@ void testOctaveTranspose() {
         context.playing = true;
         context.transportStarted = true;
         threebs::MusicEngine::EventBuffer buffer;
-        engine.process(context, buffer);
+        check(engine.process(context, buffer).complete(), "bounded test collector received every event");
         for (const auto& event : buffer)
             if (event.type == threebs::MidiEventType::NoteOn)
                 return static_cast<int>(event.data1);
@@ -561,7 +563,7 @@ std::vector<int> noteDurationsInSamples(double minDuration, double maxDuration,
         context.playing = true;
         context.transportStarted = block == 0;
         threebs::MusicEngine::EventBuffer buffer;
-        engine.process(context, buffer);
+        check(engine.process(context, buffer).complete(), "bounded test collector received every event");
         for (const auto& event : buffer) {
             if (event.sourceBody != 0)
                 continue;
@@ -642,7 +644,7 @@ void testGlobalChordFrame() {
         context.playing = true;
         context.transportStarted = block == 0;
         threebs::MusicEngine::EventBuffer buffer;
-        engine.process(context, buffer);
+        check(engine.process(context, buffer).complete(), "bounded test collector received every event");
         for (const auto& event : buffer) {
             if (event.type != threebs::MidiEventType::NoteOn)
                 continue;
@@ -676,16 +678,16 @@ std::array<std::uint64_t, threebs::bodyCount> strumOnsets(threebs::StrumUnit uni
     std::array<std::uint64_t, threebs::bodyCount> firstOn{
         std::numeric_limits<std::uint64_t>::max(), std::numeric_limits<std::uint64_t>::max(),
         std::numeric_limits<std::uint64_t>::max()};
-    for (std::uint64_t position = 0; position < 24000; position += 127) {
+    for (std::uint64_t position = 0; position < 24001; position += 127) {
         threebs::ProcessContext context;
-        context.sampleCount = static_cast<std::uint32_t>(std::min<std::uint64_t>(127, 24000 - position));
+        context.sampleCount = static_cast<std::uint32_t>(std::min<std::uint64_t>(127, 24001 - position));
         context.sampleRate = 48000.0;
         context.beatsPerSample = 2.0 / 48000.0;
         context.timeSigNumerator = 4;
         context.timeSigDenominator = 4;
         context.transportStarted = position == 0;
         threebs::MusicEngine::EventBuffer events;
-        engine.process(context, events);
+        check(engine.process(context, events).complete(), "bounded test collector received every event");
         for (const auto& event : events)
             if (event.type == threebs::MidiEventType::NoteOn && event.sourceBody < threebs::bodyCount)
                 firstOn[event.sourceBody] = std::min(firstOn[event.sourceBody], position + event.sampleOffset);
@@ -725,7 +727,7 @@ std::vector<std::pair<int, int>> collectOnsets(bool autoReset, std::uint64_t tot
         context.playing = true;
         context.transportStarted = globalSample == 0;
         threebs::MusicEngine::EventBuffer buffer;
-        engine.process(context, buffer);
+        check(engine.process(context, buffer).complete(), "bounded test collector received every event");
         for (const auto& event : buffer) {
             if (event.type != threebs::MidiEventType::NoteOn)
                 continue;
@@ -761,25 +763,35 @@ void testPresentationMigration() {
 } // namespace
 
 int main() {
-    testPcgSequence();
-    testDeterministicSimulation();
-    testEnergyAndSoftening();
-    testConstrainedSystems();
-    testInitialPlaneTilts();
-    testSingleBodyRespawn();
-    testScales();
-    testBlockSizeIndependentMidi();
-    testNoteCleanup();
-    testPerVoiceGeneration();
-    testChordAndStrumModes();
-    testSnapshotQueue();
-    testNoteVisualizationQueue();
-    testCameraTargetAndHitTesting();
-    testCameraMotion();
-    testCameraAutoFraming();
-    testCameraSanitization();
-    testTrailHistory();
-    testPresentationMigration();
+    const auto run = [](const char* name, void (*test)()) {
+        const auto before = failures;
+        test();
+        std::cout << (failures == before ? "PASS " : "FAIL ") << name << '\n';
+    };
+    run("testPcgSequence", testPcgSequence);
+    run("testDeterministicSimulation", testDeterministicSimulation);
+    run("testEnergyAndSoftening", testEnergyAndSoftening);
+    run("testConstrainedSystems", testConstrainedSystems);
+    run("testInitialPlaneTilts", testInitialPlaneTilts);
+    run("testSingleBodyRespawn", testSingleBodyRespawn);
+    run("testScales", testScales);
+    run("testBlockSizeIndependentMidi", testBlockSizeIndependentMidi);
+    run("testNoteCleanup", testNoteCleanup);
+    run("testPerVoiceGeneration", testPerVoiceGeneration);
+    run("testChordAndStrumModes", testChordAndStrumModes);
+    run("testSnapshotQueue", testSnapshotQueue);
+    run("testNoteVisualizationQueue", testNoteVisualizationQueue);
+    run("testCameraTargetAndHitTesting", testCameraTargetAndHitTesting);
+    run("testCameraMotion", testCameraMotion);
+    run("testCameraAutoFraming", testCameraAutoFraming);
+    run("testCameraSanitization", testCameraSanitization);
+    run("testTrailHistory", testTrailHistory);
+    run("testPresentationMigration", testPresentationMigration);
+    run("testOctaveTranspose", testOctaveTranspose);
+    run("testDurationMapping", testDurationMapping);
+    run("testGlobalChordFrame", testGlobalChordFrame);
+    run("testStrumBeatUnit", testStrumBeatUnit);
+    run("testBarAutoReset", testBarAutoReset);
     if (failures == 0)
         std::cout << "All core tests passed\n";
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;

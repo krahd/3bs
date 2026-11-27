@@ -58,8 +58,8 @@ bool noteIsInScale(std::uint8_t note, std::uint8_t root, ScaleId scale,
 }
 
 std::uint8_t quantizeNormalizedPitch(double normalizedValue, const VoiceConfig& voice) noexcept {
-    const auto low = std::min(voice.minimumNote, voice.maximumNote);
-    const auto high = std::max(voice.minimumNote, voice.maximumNote);
+    const auto low = std::min<std::uint8_t>(127, std::min(voice.minimumNote, voice.maximumNote));
+    const auto high = std::min<std::uint8_t>(127, std::max(voice.minimumNote, voice.maximumNote));
     std::array<std::uint8_t, 128> candidates{};
     std::size_t count{};
     for (std::uint16_t note = low; note <= high; ++note) {
@@ -76,8 +76,8 @@ std::uint8_t quantizeNormalizedPitch(double normalizedValue, const VoiceConfig& 
 
 std::uint8_t quantizeScaleDegree(double normalizedValue, int degreeOffset,
                                  const VoiceConfig& voice) noexcept {
-    const auto low = std::min(voice.minimumNote, voice.maximumNote);
-    const auto high = std::max(voice.minimumNote, voice.maximumNote);
+    const auto low = std::min<std::uint8_t>(127, std::min(voice.minimumNote, voice.maximumNote));
+    const auto high = std::min<std::uint8_t>(127, std::max(voice.minimumNote, voice.maximumNote));
     std::array<std::uint8_t, 128> candidates{};
     int count{};
     for (std::uint16_t note = low; note <= high; ++note) {
@@ -88,7 +88,7 @@ std::uint8_t quantizeScaleDegree(double normalizedValue, int degreeOffset,
     if (count == 0)
         return low;
     const auto base = std::min(count - 1, static_cast<int>(clamp01(normalizedValue) * count));
-    return candidates[static_cast<std::size_t>(std::clamp(base + degreeOffset, 0, count - 1))];
+    return candidates[static_cast<std::size_t>(std::clamp(base + std::clamp(degreeOffset, -127, 127), 0, count - 1))];
 }
 
 } // namespace threebs

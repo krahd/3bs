@@ -24,17 +24,44 @@ struct MidiEvent {
     std::uint8_t sourceBody{};
 };
 
+// The callback consumes each event immediately, without blocking or allocating.
+// Offsets remain relative to the supplied ProcessContext, including large blocks.
+struct EventSink {
+    void* context{};
+    void (*write)(void*, const MidiEvent&) noexcept{};
+
+    void push(const MidiEvent& event) const noexcept {
+        if (write != nullptr)
+            write(context, event);
+    }
+};
+
+struct EventDelivery {
+    std::size_t delivered{};
+    std::size_t rejected{};
+    bool complete() const noexcept { return rejected == 0U; }
+};
+
 template <std::size_t Capacity>
 class FixedEventBuffer {
 public:
     bool push(const MidiEvent& event) noexcept {
-        if (size_ >= Capacity)
+        if (size_ >= Capacity) {
+            ++rejected_;
             return false;
+        }
         events_[size_++] = event;
         return true;
     }
-    void clear() noexcept { size_ = 0; }
+    void clear() noexcept { size_ = 0; rejected_ = 0; }
     std::size_t size() const noexcept { return size_; }
+    std::size_t rejected() const noexcept { return rejected_; }
+    bool overflowed() const noexcept { return rejected_ != 0; }
+    EventSink sink() noexcept {
+        return {this, [](void* context, const MidiEvent& event) noexcept {
+            (void)static_cast<FixedEventBuffer*>(context)->push(event);
+        }};
+    }
     const MidiEvent* begin() const noexcept { return events_.data(); }
     const MidiEvent* end() const noexcept { return events_.data() + size_; }
     const MidiEvent& operator[](std::size_t index) const noexcept { return events_[index]; }
@@ -42,6 +69,7 @@ public:
 private:
     std::array<MidiEvent, Capacity> events_{};
     std::size_t size_{};
+    std::size_t rejected_{};
 };
 
 struct ProcessContext {
@@ -75,6 +103,8 @@ struct EngineConfig {
     double autoResetBars{1.0};
 };
 
+bool isValidEngineConfig(const EngineConfig& config) noexcept;
+
 struct BodyMeasurements {
     double barycentricRadius{};
     double nearestBodyDistance{};
@@ -93,17 +123,27 @@ double mappedDurationBeats(double normalizedValue, double minimumBeats, double m
 class MusicEngine {
 public:
     static constexpr std::size_t maximumEventsPerBlock = 1024;
+    // Conservative bound for callback-owned MIDI storage: per sample plus one
+    // three-voice cleanup at block entry. No output buffer is owned by the core.
+    static constexpr std::size_t maximumEventsPerSample = 24;
+    static constexpr std::size_t maximumTransitionEvents = bodyCount;
     using EventBuffer = FixedEventBuffer<maximumEventsPerBlock>;
 
     MusicEngine();
-    explicit MusicEngine(SimulationState initial, EngineConfig config = {});
+    explicit MusicEngine(SimulationState initial);
+    MusicEngine(SimulationState initial, EngineConfig config);
 
     void prepare(double sampleRate) noexcept;
-    void reset(const SimulationState& initial, EventBuffer* noteOffs = nullptr) noexcept;
-    void setConfig(const EngineConfig& config) noexcept;
+    bool reset(const SimulationState& initial, EventBuffer* noteOffs = nullptr) noexcept;
+    bool reset(const SimulationState& initial, EventSink noteOffs) noexcept;
+    bool setConfig(const EngineConfig& config) noexcept;
     void setBodyMass(std::size_t bodyIndex, double mass) noexcept;
-    void process(const ProcessContext& context, EventBuffer& output) noexcept;
+    void process(const ProcessContext& context, EventSink output) noexcept;
+    // Bounded diagnostic/convenience collector. A caller must check complete();
+    // real-time adapters use EventSink so block size cannot truncate output.
+    [[nodiscard]] EventDelivery process(const ProcessContext& context, EventBuffer& output) noexcept;
     void allNotesOff(std::uint32_t sampleOffset, EventBuffer& output) noexcept;
+    void allNotesOff(std::uint32_t sampleOffset, EventSink output) noexcept;
 
     const ThreeBodySimulation& simulation() const noexcept { return simulation_; }
     ThreeBodySimulation& simulation() noexcept { return simulation_; }
@@ -114,11 +154,14 @@ private:
     struct VoiceRuntime {
         bool noteActive{};
         std::uint8_t activeNote{};
+        std::uint8_t activeChannel{1};
+        bool cleanupRequested{};
         double noteOffBeat{};
         double lastTriggerBeat{-1.0e12};
         double lastClockIndex{-1.0};
         double lastPhaseStep{-1.0};
         double previousSpeedDelta{};
+        bool hasSpeedMeasurement{};
         BodyMeasurements previous{};
         std::array<double, 2> smoothedCc{};
         std::array<std::uint8_t, 2> lastCc{255, 255};
@@ -127,7 +170,9 @@ private:
 
     struct PendingNote {
         bool active{};
-        std::uint64_t dueSample{};
+        bool beatRelative{};
+        double dueBeat{};
+        double dueSeconds{};
         std::size_t body{};
         std::uint8_t note{};
         std::uint8_t velocity{};
@@ -139,19 +184,21 @@ private:
     bool shouldTrigger(std::size_t bodyIndex, const VoiceConfig& voice,
                        const BodyMeasurements& current, double absoluteBeat) noexcept;
     void triggerVoice(std::size_t bodyIndex, std::uint32_t sampleOffset, double beat,
-                      const BodyMeasurements& measurement, EventBuffer& output) noexcept;
+                      const BodyMeasurements& measurement, EventSink output) noexcept;
     void triggerChord(std::size_t triggerBody, std::uint32_t sampleOffset, double beat,
                       const std::array<BodyMeasurements, bodyCount>& values,
-                      EventBuffer& output) noexcept;
+                      EventSink output) noexcept;
     void startNote(std::size_t bodyIndex, std::uint8_t note, std::uint8_t velocity,
                    std::uint32_t sampleOffset, double beat, double durationBeats,
-                   EventBuffer& output) noexcept;
+                   EventSink output) noexcept;
     double durationBeatsFor(std::size_t bodyIndex,
                             const std::array<BodyMeasurements, bodyCount>& values) const noexcept;
     void emitContinuousControllers(std::size_t bodyIndex, std::uint32_t sampleOffset,
                                    const std::array<BodyMeasurements, bodyCount>& values,
-                                   EventBuffer& output) noexcept;
-    void applyTransportReset(std::uint32_t sampleOffset, EventBuffer& output) noexcept;
+                                   EventSink output) noexcept;
+    void applyTransportReset(std::uint32_t sampleOffset, EventSink output) noexcept;
+    bool canStartNote(std::size_t body) const noexcept;
+    void flushRequestedCleanup(std::uint32_t sampleOffset, EventSink output) noexcept;
 
     SimulationState initial_{};
     ThreeBodySimulation simulation_{};
@@ -164,9 +211,9 @@ private:
     bool hasTimelineBeat_{};
     double timelineBeat_{};
     std::uint64_t processedSamples_{};
+    double processedSeconds_{};
     double lastChordTriggerBeat_{-1.0e12};
     std::uint64_t chordIndex_{};
-    double currentBeatsPerSample_{2.0 / 48000.0};
     double currentBeatsPerBar_{4.0};
     bool hasAutoResetIndex_{};
     double lastAutoResetIndex_{};
