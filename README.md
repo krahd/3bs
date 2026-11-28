@@ -13,8 +13,10 @@ phases, and crossings become three interlocking musical voices.
 **[Project status](STATUS.md)**
 
 > [!WARNING]
-> The downloadable Apple silicon binaries are alpha software. They are ad-hoc
-> signed, not notarized, and have not completed Logic or Ableton host validation.
+> The downloadable alpha.3 binaries predate the reliability repairs now in
+> source. They are ad-hoc signed, not notarized, and have not completed Logic or
+> Ableton host validation. Development-candidate provenance and remaining
+> qualification are recorded in [RELIABILITY-ACCEPTANCE.md](RELIABILITY-ACCEPTANCE.md).
 
 ## Three Formats, One Engine
 

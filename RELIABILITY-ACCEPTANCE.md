@@ -7,10 +7,53 @@ The dated audit and alpha.3 release are historical records.
 
 ## Candidate status
 
-Implementation is in progress. Portable core, numerical, renderer-data and
-standalone scheduling checks have executed locally. Native compilation,
-integration, rendering and format validation are being run against the
-candidate branch. A candidate archive is not a qualified public release.
+The integrated source implementation and all required automated gates passed for
+candidate `581548314288311da805da7a7c7a3f0cdaedc536`, tested as merge
+`da925c1f3d6d043e314f78af7d4a2ba22966750d`. Both identify source tree
+`ae1530038ecfb42ced1306655075a04766b8f160`. The integration commit is
+`bdc32750b8677c06630295cb1467c29de7646ed5`; source-tree equivalence was verified remotely.
+Results and candidate archives belong to
+[run 46089189294](https://github.com/krahd/3bs/actions/runs/46089189294).
+
+| Gate | Executed result |
+| --- | --- |
+| Portable CTest on Linux and macOS | 12/12 on each platform, zero skips, CMake 3.22.6 |
+| Queue/ownership ThreadSanitizer | Passed |
+| Actual processor ThreadSanitizer | 384 publications, 768 save/restore pairs, 115,639 callbacks; zero errors, final acknowledgement; 177.14 seconds |
+| Release AU, VST3 and standalone | Built for arm64 macOS 13+ |
+| Native CTest | 18/18, zero failures or skips; real Metal drawable and native UI checks included |
+| Exact prior-executable recall/resave | Default and edited host-7/portable-3 configurations passed |
+| AU | Installed metadata, arm64 architecture, signature, bounded discovery and authoritative auval passed |
+| VST3 | pluginval 1.0.4, strictness 5, passed |
+| Virtual CoreMIDI real-duration gate | 1,800.14 measured seconds; 86,421 delivered events; zero output failures, worker overruns or unmatched notes |
+| Candidate archives | Complete, AU, VST3 and standalone ZIPs built; all four SHA-256 digests, archive integrity and embedded provenance verified |
+
+The [final native evidence record](reliability/2026-11-27/CHECKPOINT-6.md)
+retains environment, individual timing/allocation results, raw measurement
+values, artifact digests and provenance. Development candidates are ad-hoc
+signed and not notarised. They are distinct from the historical alpha.3 files.
+
+Actual Logic/Ableton, physical-device, display-scale and combined sustained
+MIDI/render sessions remain open under the
+[host qualification procedure](reliability/2026-11-27/HOST-QUALIFICATION.md).
+The complete plan is not release-qualified solely by these automated gates.
+
+The [implementation coverage amendment](reliability/2026-11-27/IMPLEMENTATION-COVERAGE.md)
+records the disposition of the audit findings without closing the outstanding
+host and device qualification. The optional separate Steinberg SDK validator
+was not configured and was explicitly skipped; the required VST3 gate was
+pluginval, which passed.
+
+The soak measured delivery lateness of 5 / 11.2 / 12.3 ms at p50 / p95 / p99,
+with a 17.422 ms maximum. Its 73,378 discarded visual snapshots were intentional
+queue saturation during stalled message dispatch, not lost MIDI. These are
+observations from a virtual CoreMIDI CI session; they do not define an accepted
+performance jitter tolerance or qualify combined interactive UI/GPU stress.
+
+## Intermediate checkpoints
+
+The following records retain the outcomes and outstanding gates at each earlier
+checkpoint. The current-candidate table above supersedes their pending status.
 
 Checkpoint `988b5fd625bd192c3b34dd8b6bb35c98d7e14340` built all Release formats
 and passed 14 of 15 native CTest entries in
