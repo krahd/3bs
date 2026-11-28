@@ -159,6 +159,14 @@ juce::Component& dialogContent(const juce::String& title) {
     return *window->getContentComponent();
 }
 
+void checkInitialNumberPresentation(juce::TextEditor& field) {
+    check(field.getCaretPosition() == 0, "numeric field initially hides its leading sign or digits");
+    const auto leadingCaret = field.getCaretRectangleForCharIndex(0);
+    check(leadingCaret.getX() >= 0 && leadingCaret.getRight() <= field.getWidth(),
+          "numeric field initially scrolls its leading text out of view");
+    check(field.getTooltip() == field.getText(), "numeric field tooltip omits its complete current value");
+}
+
 void testNumericParser() {
     const std::array<std::pair<const char*, double>, 9> valid{{
         {"+.2", .2}, {"-1e-3", -.001}, {"1.", 1.0}, {"  +2.5E+2  ", 250.0},
@@ -363,9 +371,13 @@ private:
             auto& content = dialogContent(stateTitle);
             auto fields = descendants<juce::TextEditor>(content);
             check(fields.size() == 21, "body-state dialog does not expose all 21 fields");
-            for (auto* field : fields) checkVisibleBounds(*field, content);
+            for (auto* field : fields) {
+                checkVisibleBounds(*field, content);
+                checkInitialNumberPresentation(*field);
+            }
             capture(content, "advanced-body-state");
             fields.front()->setText("1..2", false);
+            check(fields.front()->getTooltip() == "1..2", "state tooltip did not track the current edit");
             button(content, "APPLY + RESET").triggerClick();
         });
         steps_.push_back([this] {
@@ -395,7 +407,10 @@ private:
             for (int tab = 0; tab < 4; ++tab) {
                 tabs.front()->setCurrentTabIndex(tab);
                 for (auto* field : descendants<juce::TextEditor>(content))
-                    if (field->isShowing()) checkVisibleBounds(*field, *field->getParentComponent());
+                    if (field->isShowing()) {
+                        checkVisibleBounds(*field, *field->getParentComponent());
+                        checkInitialNumberPresentation(*field);
+                    }
                 for (auto* selector : descendants<juce::ComboBox>(content))
                     if (selector->isShowing()) checkVisibleBounds(*selector, *selector->getParentComponent());
                 capture(content, tab < 3 ? "advanced-planet-" + juce::String(tab + 1)
@@ -405,6 +420,7 @@ private:
             auto fields = descendants<juce::TextEditor>(content);
             check(!fields.empty(), "advanced settings have no editable fields");
             fields.front()->setText("e", false);
+            check(fields.front()->getTooltip() == "e", "advanced tooltip did not track the current edit");
             button(content, "APPLY").triggerClick();
         });
         steps_.push_back([this] {

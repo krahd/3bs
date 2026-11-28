@@ -13,6 +13,11 @@
 namespace threebs {
 namespace {
 
+class ExactNumberField final : public juce::TextEditor {
+public:
+    juce::String getTooltip() override { return getText(); }
+};
+
 class AdvancedStateEditor final : public juce::Component {
 public:
     AdvancedStateEditor(const SimulationState& state,
@@ -41,6 +46,7 @@ public:
             for (std::size_t field = 0; field < values.size(); ++field) {
                 auto& editor = fields_[body * values.size() + field];
                 editor.setText(formatExactNumber(values[field]), false);
+                editor.setCaretPosition(0);
                 editor.setInputRestrictions(0, "-+.0123456789eE");
                 editor.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff101726));
                 editor.setColour(juce::TextEditor::outlineColourId, juce::Colour(0xff2c3a52));
@@ -105,7 +111,7 @@ private:
             result.bodies[body].velocity = {values[4], values[5], values[6]};
         }
         if (!isValidSimulationState(result)) {
-            error_.setText("Position and velocity must stay within ±1000000.", juce::dontSendNotification);
+            error_.setText("Position and velocity must stay within +/-1000000.", juce::dontSendNotification);
             return;
         }
         const auto safe = juce::Component::SafePointer<AdvancedStateEditor>(this);
@@ -126,10 +132,11 @@ private:
     juce::Label title_;
     std::array<juce::Label, 7> headings_;
     std::array<juce::Label, bodyCount> bodyLabels_;
-    std::array<juce::TextEditor, bodyCount * 7> fields_;
+    std::array<ExactNumberField, bodyCount * 7> fields_;
     juce::Label error_;
     juce::TextButton apply_{"APPLY + RESET"};
     juce::TextButton cancel_{"CANCEL"};
+    juce::TooltipWindow tooltip_{this};
 };
 
 } // namespace

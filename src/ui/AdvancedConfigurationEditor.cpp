@@ -10,6 +10,11 @@
 
 namespace threebs {
 namespace {
+class ExactNumberField final : public juce::TextEditor {
+public:
+    juce::String getTooltip() override { return getText(); }
+};
+
 constexpr std::array<const char*, 12> pitchClasses{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 void styleLabel(juce::Label& label, const juce::String& text) {
     label.setText(text, juce::dontSendNotification);
@@ -18,6 +23,7 @@ void styleLabel(juce::Label& label, const juce::String& text) {
 }
 void styleField(juce::TextEditor& field, double value) {
     field.setText(formatExactNumber(value), false);
+    field.setCaretPosition(0);
     field.setInputRestrictions(0, "-+.0123456789eE");
     field.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff101726));
     field.setColour(juce::TextEditor::textColourId, juce::Colour(0xffdce7ef));
@@ -25,9 +31,9 @@ void styleField(juce::TextEditor& field, double value) {
 class VoiceFields final : public juce::Component {
 public:
     explicit VoiceFields(const VoiceConfig& voice) {
-        constexpr std::array<const char*, 9> titles{"MIDI channel (1–16)", "Lowest note (0–127)", "Highest note (0–127)",
-            "Clock interval (beats)", "Probability (0–1)", "Minimum trigger interval (beats)",
-            "Close approach distance", "Minimum velocity (1–127)", "Maximum velocity (1–127)"};
+        constexpr std::array<const char*, 9> titles{"MIDI channel (1-16)", "Lowest note (0-127)", "Highest note (0-127)",
+            "Clock interval (beats)", "Probability (0-1)", "Minimum trigger interval (beats)",
+            "Close approach distance", "Minimum velocity (1-127)", "Maximum velocity (1-127)"};
         const std::array<double, 9> values{static_cast<double>(voice.channel), static_cast<double>(voice.minimumNote),
             static_cast<double>(voice.maximumNote), voice.clockDivisionBeats, voice.probability,
             voice.minimumTriggerIntervalBeats, voice.closeApproachDistance,
@@ -50,8 +56,8 @@ public:
             source_[lane].setSelectedId(static_cast<int>(voice.ccLanes[lane].source) + 1);
             styleField(controller_[lane], voice.ccLanes[lane].controller);
             styleField(smoothing_[lane], voice.ccLanes[lane].smoothing);
-            styleLabel(controllerLabel_[lane], "Controller (0–119)");
-            styleLabel(smoothingLabel_[lane], "Smoothing (0–1)");
+            styleLabel(controllerLabel_[lane], "Controller (0-119)");
+            styleLabel(smoothingLabel_[lane], "Smoothing (0-1)");
             addAndMakeVisible(enabled_[lane]); addAndMakeVisible(source_[lane]);
             addAndMakeVisible(controller_[lane]); addAndMakeVisible(smoothing_[lane]);
             addAndMakeVisible(controllerLabel_[lane]); addAndMakeVisible(smoothingLabel_[lane]);
@@ -69,7 +75,7 @@ public:
             }
         if (values[0] < 1 || values[0] > 16 || values[1] > values[2]
             || values[7] < 1 || values[7] > values[8]) {
-            error = "Check channel (1–16), ascending note range and velocity range (1–127)."; return false;
+            error = "Check channel (1-16), ascending note range and velocity range (1-127)."; return false;
         }
         voice.channel = static_cast<std::uint8_t>(values[0]);
         voice.minimumNote = static_cast<std::uint8_t>(values[1]); voice.maximumNote = static_cast<std::uint8_t>(values[2]);
@@ -82,7 +88,7 @@ public:
             if (!parseFiniteNumber(controller_[lane].getText(), controller) || std::floor(controller) != controller
                 || controller < 0 || controller > 119 || !parseFiniteNumber(smoothing_[lane].getText(), smoothing)
                 || smoothing < 0 || smoothing > 1) {
-                error = "CC controller must be 0–119 and smoothing must be 0–1."; return false;
+                error = "CC controller must be 0-119 and smoothing must be 0-1."; return false;
             }
             voice.ccLanes[lane] = {enabled_[lane].getToggleState(),
                 static_cast<PitchMapping>(source_[lane].getSelectedItemIndex()),
@@ -119,12 +125,12 @@ public:
     }
 private:
     std::array<juce::Label, 9> labels_;
-    std::array<juce::TextEditor, 9> fields_;
+    std::array<ExactNumberField, 9> fields_;
     juce::Label scaleLabel_;
     std::array<juce::ToggleButton, 12> custom_;
     std::array<juce::ToggleButton, 2> enabled_;
     std::array<juce::ComboBox, 2> source_;
-    std::array<juce::TextEditor, 2> controller_, smoothing_;
+    std::array<ExactNumberField, 2> controller_, smoothing_;
     std::array<juce::Label, 2> controllerLabel_, smoothingLabel_;
 };
 class SystemFields final : public juce::Component {
@@ -182,7 +188,7 @@ public:
     }
 private:
     std::array<juce::Label, 4> labels_;
-    std::array<juce::TextEditor, 4> fields_;
+    std::array<ExactNumberField, 4> fields_;
     juce::Label escapeLabel_, customLabel_, note_;
     juce::ComboBox escape_;
     std::array<juce::ToggleButton, 12> custom_;
@@ -232,6 +238,7 @@ private:
     juce::TabbedComponent tabs_{juce::TabbedButtonBar::TabsAtTop};
     juce::Label error_;
     juce::TextButton save_{"APPLY"}, cancel_{"CANCEL"};
+    juce::TooltipWindow tooltip_{this};
 };
 } // namespace
 

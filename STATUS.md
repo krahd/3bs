@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-11-27 20-51 GMT-3
+Last updated: 2026-11-27 21-12 GMT-3
 
 ## Project purpose
 
@@ -47,6 +47,15 @@ concurrency, profiling and real CoreMIDI passed. The remaining editor test
 needed bounded repeated dispatch of JUCE timers instead of one 80 ms wait;
 its unchanged recall assertions will be rerun. No released binary has been
 replaced.
+
+Checkpoint `9c00dbf` completed actual-processor TSan (100,415 callbacks,
+384 publications, 768 save/restore pairs, zero errors) and the CMake 3.22.6
+all-format build. Its native suite passed 17/18; new subnormal recall cases
+exposed Apple stream underflow rejection. The strict numeric converter and
+two observed dialog presentation defects are repaired for the next run.
+Oversized files, unsafe numeric tokens and excessive JSON nesting now have
+bounded rejection before publication. See the acceptance record for exact
+intermediate evidence and still-pending validators/host sessions.
 
 ## Architecture overview
 
@@ -330,5 +339,5 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-11-27 20-51 GMT-3
+Last updated: 2026-11-27 21-12 GMT-3
 

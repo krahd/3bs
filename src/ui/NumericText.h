@@ -3,6 +3,11 @@
 #pragma once
 #include <juce_core/juce_core.h>
 #include <cmath>
+#include <cstdlib>
+#include <locale.h>
+#if JUCE_MAC || JUCE_IOS
+#include <xlocale.h>
+#endif
 #include <locale>
 #include <iomanip>
 #include <limits>
@@ -38,9 +43,21 @@ inline bool parseFiniteNumber(const juce::String& source, double& value) {
         if (start == i) return false;
     }
     if (i != length) return false;
-    std::istringstream input(text.toStdString());
-    input.imbue(std::locale::classic());
-    input >> std::noskipws >> value;
-    return !input.fail() && input.eof() && std::isfinite(value);
+    // libc++ streams set failbit on ERANGE even when strtod produced a valid
+    // finite subnormal. The explicit C locale keeps decimal syntax independent
+    // of the host locale without treating representable underflow as invalid.
+    // This locale is process-lifetime storage, initialised only by non-real-time
+    // text parsing; no processing callback invokes this function.
+    char* end{};
+#if JUCE_WINDOWS
+    static const auto numericLocale = _create_locale(LC_NUMERIC, "C");
+    if (numericLocale == nullptr) return false;
+    value = _strtod_l(bytes, &end, numericLocale);
+#else
+    static const auto numericLocale = newlocale(LC_NUMERIC_MASK, "C", nullptr);
+    if (numericLocale == nullptr) return false;
+    value = strtod_l(bytes, &end, numericLocale);
+#endif
+    return end == bytes + length && std::isfinite(value);
 }
 } // namespace threebs

@@ -40,6 +40,20 @@ processor concurrency tests passed; all 2,188 profiled callbacks reported zero
 C/C++ allocations/frees. Final validators, compatibility capture and the long
 CoreMIDI soak have not yet run.
 
+Checkpoint `9c00dbfb70d54aeef70b16c95acaa39f1c0ce1d8` built all formats with
+CMake 3.22.6 and passed both 12-entry portable suites. The actual-processor
+ThreadSanitizer gate passed in 139.28 seconds: 384 publications, 768 save/restore
+pairs, 100,415 callbacks, zero errors and final revision acknowledgement
+([run 46084843522](https://github.com/krahd/3bs/actions/runs/46084843522)).
+Native CTest again passed 17/18 entries; the only failure was the new subnormal
+recall regression. Apple's C++ stream conversion marks representable underflow
+as failure, so the shared strict decimal parser now uses explicit C-locale
+conversion, retaining finite subnormal results. Normal coordinate precision,
+bounded file loading, numeric/depth rejection and editor recall passed.
+The five advanced-dialog captures also exposed implicit non-ASCII punctuation
+and initially scrolled numeric fields; those presentation repairs are awaiting
+native re-execution. No tolerance or configuration bound was weakened.
+
 ## Implemented contracts
 
 - Core MIDI uses an allocation-free event sink; bounded diagnostic collectors
@@ -52,6 +66,10 @@ CoreMIDI soak have not yet run.
 - Host state is version 8; portable `.3bs` state is version 4, including meter.
   Legacy parameter IDs and normalisation ranges remain intact. Exact values
   survive coarse controls until the corresponding control actually changes.
+  File loading reads at most 2 MiB plus one detection byte; numeric preflight
+  rejects unsafe integer/exponent accumulation and nesting beyond 64 levels
+  before the dependency's parser runs. Scientific round-trip formatting and
+  exact duplicate host attributes preserve physical coordinates and velocities.
 - Standalone generation uses a monotonic sample timeline, 20 ms look-ahead,
   fixed event storage and a separate destination-owning MIDI worker. A 100 ms
   late deadline or saturated queue cancels the epoch, cleans delivered notes
