@@ -257,7 +257,11 @@ fragment float4 planetFragment(PlanetOut in [[stage_in]],
         terrainField(normalize(local + float3(epsilon, 0, 0)), seed, in.style0.y) - terrain,
         terrainField(normalize(local + float3(0, epsilon, 0)), seed, in.style0.y) - terrain,
         terrainField(normalize(local + float3(0, 0, epsilon)), seed, in.style0.y) - terrain) / epsilon;
-    const float3 normal = normalize(in.worldNormal - gradient * 0.11);
+    // Terrain derivatives are local-space vectors. Rotate the perturbed normal
+    // with the surface so relief and lighting remain attached to the planet.
+    const float3 localNormal = normalize(local - gradient * 0.11);
+    const float3 normal = rotatePlanet(localNormal,
+        u.viewportTime.z * in.style1.x, in.style1.z);
     const float3 lightDirection = normalize(float3(-0.58, 0.31, 0.75));
     const float3 viewDirection = normalize(u.cameraPosition.xyz - in.worldPosition);
     const float diffuse = smoothstep(-0.12, 0.58, dot(normal, lightDirection));

@@ -1,0 +1,90 @@
+{
+  "canonical_source": "src/ui/PresetCatalog.cpp",
+  "canonical_sha256": "887fad8252e1e96cd2872247a50a68c533e7813a0209c660b0b36b0635e1f1a3",
+  "transformations": [
+    "juce::String parameter type becomes scalar SourceText",
+    "validated JSON scalar views implement property/text/number",
+    "canonical voice-array access becomes inputVoices[index]"
+  ],
+  "unchanged_logic": "Five enum functions; initial-system/seed/chaos, physics/loop-policy and all factory voice assignments",
+  "defaults": "Real SimulationConfig, VoiceConfig and EngineConfig defaults from the frozen product headers",
+  "visual_camera": "Validated, retained in input digest, excluded from the core-only diagnostic",
+  "enum_mappings_derived_from_source": {
+    "initialSystem": {
+      "hierarchical": 1,
+      "stable": 2,
+      "controlledChaos": 3,
+      "unbound": 4,
+      "figureEight": 0
+    },
+    "escapePolicy": {
+      "respawn": 1,
+      "prompt": 2,
+      "leave": 0
+    },
+    "scale": {
+      "major": 0,
+      "naturalMinor": 1,
+      "dorian": 2,
+      "phrygian": 3,
+      "lydian": 4,
+      "mixolydian": 5,
+      "locrian": 6,
+      "majorPentatonic": 7,
+      "blues": 9,
+      "chromatic": 10,
+      "hungarianMinor": 11,
+      "wholeTone": 12,
+      "diminished": 13,
+      "minorPentatonic": 8
+    },
+    "pitchMapping": {
+      "nearest": 1,
+      "plane": 2,
+      "speed": 3,
+      "phase": 4,
+      "radialVelocity": 5,
+      "relativeSpeed": 6,
+      "acceleration": 7,
+      "angularMomentum": 8,
+      "radius": 0
+    },
+    "triggerMapping": {
+      "plane": 1,
+      "close": 2,
+      "turning": 3,
+      "apsis": 4,
+      "receding": 5,
+      "speedPeak": 6,
+      "phaseStep": 7,
+      "clock": 0
+    }
+  },
+  "input_schema": 2,
+  "preset_ids": [
+    "eightfold-dawn",
+    "lagrange-glass",
+    "twin-moon-relay",
+    "quiet-periapsis",
+    "cyan-transit",
+    "ember-conjunction",
+    "violet-aphelion",
+    "red-shift-study",
+    "golden-barycenter",
+    "black-sun-threads",
+    "orbital-ink",
+    "slingshot-cadence",
+    "pale-resonance",
+    "magenta-eclipse",
+    "three-cold-lights",
+    "blue-giant-clock",
+    "perihelion-dust",
+    "silent-conjunction",
+    "iron-triangle",
+    "solar-kite",
+    "gravity-well",
+    "spiral-archive",
+    "unstable-crown",
+    "white-noon"
+  ]
+}

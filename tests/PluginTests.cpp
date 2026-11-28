@@ -9,6 +9,8 @@
 #include <iostream>
 #include <vector>
 
+int runPluginRegressions();
+
 namespace {
 
 int failures{};
@@ -313,6 +315,7 @@ int main() {
     check(originalSequence == restoredSequence, "state recall must reproduce the MIDI sequence");
 
     processor.releaseResources();
+    failures += runPluginRegressions();
     if (failures == 0)
         std::cout << "All plugin tests passed\n";
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;

@@ -1,0 +1,86 @@
+InitialSystem initialSystem(const SourceText& value) {
+    if (value == "hierarchical") return InitialSystem::Hierarchical;
+    if (value == "stable") return InitialSystem::Stable;
+    if (value == "controlledChaos") return InitialSystem::ControlledChaos;
+    if (value == "unbound") return InitialSystem::Unbound;
+    return InitialSystem::FigureEight;
+}
+EscapePolicy escapePolicy(const SourceText& value) {
+    if (value == "respawn") return EscapePolicy::RespawnBody;
+    if (value == "prompt") return EscapePolicy::Prompt;
+    return EscapePolicy::Leave;
+}
+ScaleId scale(const SourceText& value) {
+    if (value == "major") return ScaleId::Major;
+    if (value == "naturalMinor") return ScaleId::NaturalMinor;
+    if (value == "dorian") return ScaleId::Dorian;
+    if (value == "phrygian") return ScaleId::Phrygian;
+    if (value == "lydian") return ScaleId::Lydian;
+    if (value == "mixolydian") return ScaleId::Mixolydian;
+    if (value == "locrian") return ScaleId::Locrian;
+    if (value == "majorPentatonic") return ScaleId::MajorPentatonic;
+    if (value == "blues") return ScaleId::Blues;
+    if (value == "chromatic") return ScaleId::Chromatic;
+    if (value == "hungarianMinor") return ScaleId::HungarianMinor;
+    if (value == "wholeTone") return ScaleId::WholeTone;
+    if (value == "diminished") return ScaleId::Diminished;
+    return ScaleId::MinorPentatonic;
+}
+PitchMapping pitchMapping(const SourceText& value) {
+    if (value == "nearest") return PitchMapping::NearestBodyDistance;
+    if (value == "plane") return PitchMapping::SignedPlaneDistance;
+    if (value == "speed") return PitchMapping::Speed;
+    if (value == "phase") return PitchMapping::OrbitalPhase;
+    if (value == "radialVelocity") return PitchMapping::RadialVelocity;
+    if (value == "relativeSpeed") return PitchMapping::RelativeSpeed;
+    if (value == "acceleration") return PitchMapping::Acceleration;
+    if (value == "angularMomentum") return PitchMapping::AngularMomentum;
+    return PitchMapping::BarycentricRadius;
+}
+TriggerMapping triggerMapping(const SourceText& value) {
+    if (value == "plane") return TriggerMapping::PlaneCrossing;
+    if (value == "close") return TriggerMapping::CloseApproach;
+    if (value == "turning") return TriggerMapping::TurningPoint;
+    if (value == "apsis") return TriggerMapping::Apsis;
+    if (value == "receding") return TriggerMapping::RecedingThreshold;
+    if (value == "speedPeak") return TriggerMapping::SpeedPeak;
+    if (value == "phaseStep") return TriggerMapping::PhaseStep;
+    return TriggerMapping::Clock;
+}
+Fixture readFixture(std::string_view id, Object item, Object physics, const std::array<Object, bodyCount>& inputVoices) {
+Fixture preset; preset.id = id;
+preset.system = initialSystem(text(item, "system"));
+        preset.seed = static_cast<std::uint64_t>(static_cast<std::int64_t>(property(item, "seed")));
+        preset.chaos = number(item, "chaos", 0.2);
+
+        preset.simulation.gravitationalConstant = number(physics, "gravity", 0.65);
+        preset.simulation.softening = number(physics, "softening", 0.04);
+        preset.simulation.speed = number(physics, "speed", 1.0);
+        preset.simulation.escapePolicy = escapePolicy(text(physics, "escapePolicy"));
+        preset.loopPolicy = text(physics, "loopPolicy") == "continue"
+                                ? LoopPolicy::Continue : LoopPolicy::Restart;
+
+        for (std::size_t index = 0; index < bodyCount; ++index) {
+            const auto& sourceVoice = inputVoices[index];
+            auto& voice = preset.voices[index];
+            voice.channel = static_cast<std::uint8_t>(number(sourceVoice, "channel", index + 1.0));
+            voice.root = static_cast<std::uint8_t>(number(sourceVoice, "root", 0.0));
+            voice.octave = static_cast<std::int8_t>(number(sourceVoice, "octave", 0.0));
+            voice.scale = scale(text(sourceVoice, "scale"));
+            voice.pitchMapping = pitchMapping(text(sourceVoice, "pitch"));
+            voice.triggerMapping = triggerMapping(text(sourceVoice, "trigger"));
+            voice.minimumNote = static_cast<std::uint8_t>(number(sourceVoice, "minimum", 36.0));
+            voice.maximumNote = static_cast<std::uint8_t>(number(sourceVoice, "maximum", 84.0));
+            voice.clockDivisionBeats = number(sourceVoice, "division", 0.25);
+            voice.probability = number(sourceVoice, "probability", 1.0);
+            // Schema 1/2 stored a single "duration"; schema 3 adds a mapped range.
+            const auto legacyDuration = number(sourceVoice, "duration", 0.2);
+            voice.minimumDurationBeats = number(sourceVoice, "durationMin", legacyDuration);
+            voice.maximumDurationBeats = number(sourceVoice, "durationMax", legacyDuration);
+            const auto durationMapText = text(sourceVoice, "durationMap");
+            if (durationMapText.isNotEmpty())
+                voice.durationMapping = pitchMapping(durationMapText);
+            voice.durationGrid = DurationGrid::ContinuousLegacy;
+        }
+return preset;
+}

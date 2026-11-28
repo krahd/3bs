@@ -13,13 +13,18 @@ SimulationState makeInitialState(InitialSystem system, std::uint64_t seed, doubl
 SimulationState applyInitialPlaneTilts(SimulationState state,
                                        const std::array<double, bodyCount>& tiltDegrees) noexcept;
 
+// Validation is deliberately separate from parsing: rejected candidates must
+// not partially replace the running configuration.
+bool isValidSimulationState(const SimulationState& state) noexcept;
+bool isValidSimulationConfig(const SimulationConfig& config) noexcept;
+
 class ThreeBodySimulation {
 public:
     ThreeBodySimulation();
     explicit ThreeBodySimulation(SimulationState initial, SimulationConfig config = {});
 
-    void reset(const SimulationState& initial) noexcept;
-    void setConfig(const SimulationConfig& config) noexcept;
+    bool reset(const SimulationState& initial) noexcept;
+    bool setConfig(const SimulationConfig& config) noexcept;
     void setBodyMass(std::size_t bodyIndex, double mass) noexcept;
     void advance(double deltaTime) noexcept;
     void step() noexcept;
@@ -29,6 +34,8 @@ public:
     const SimulationState& initialState() const noexcept { return initial_; }
     const SimulationConfig& config() const noexcept { return config_; }
     double interpolationAlpha() const noexcept;
+    bool faulted() const noexcept { return faulted_; }
+    std::uint64_t truncatedAdvances() const noexcept { return truncatedAdvances_; }
 
     Vec3 barycenter() const noexcept;
     Vec3 barycentricVelocity() const noexcept;
@@ -37,12 +44,13 @@ public:
 private:
     std::array<Vec3, bodyCount> accelerations() const noexcept;
     void detectEscapes() noexcept;
-    void sanitizeConfig() noexcept;
 
     SimulationState initial_{};
     SimulationState state_{};
     SimulationConfig config_{};
     long double accumulator_{};
+    bool faulted_{};
+    std::uint64_t truncatedAdvances_{};
 };
 
 } // namespace threebs

@@ -13,6 +13,19 @@ namespace {
 
 constexpr double pi = 3.14159265358979323846;
 
+bool inRange(double value, double minimum, double maximum) noexcept {
+    return std::isfinite(value) && value >= minimum && value <= maximum;
+}
+
+bool finiteState(const SimulationState& state) noexcept {
+    if (!std::isfinite(state.elapsed) || state.elapsed < 0.0)
+        return false;
+    for (const auto& body : state.bodies)
+        if (!inRange(body.mass, 0.05, 1000.0) || !isFinite(body.position) || !isFinite(body.velocity))
+            return false;
+    return true;
+}
+
 Vec3 randomDirection(Pcg32& random) noexcept {
     const auto z = random.symmetric();
     const auto azimuth = random.nextUnit() * 2.0 * pi;
@@ -77,12 +90,36 @@ std::array<double, bodyCount> defaultPlaneTilts(InitialSystem system) noexcept {
 
 } // namespace
 
+bool isValidSimulationState(const SimulationState& state) noexcept {
+    if (!finiteState(state))
+        return false;
+    for (const auto& body : state.bodies)
+        for (const auto value : {body.position.x, body.position.y, body.position.z,
+                                 body.velocity.x, body.velocity.y, body.velocity.z})
+            if (std::abs(value) > 1.0e6)
+                return false;
+    return true;
+}
+
+bool isValidSimulationConfig(const SimulationConfig& config) noexcept {
+    return inRange(config.gravitationalConstant, 0.000001, 1000.0)
+        && inRange(config.softening, 0.000001, 4.0)
+        && inRange(config.fixedStep, 1.0 / 96000.0, 0.25)
+        && inRange(config.speed, 0.0, 64.0)
+        && inRange(config.escapeRadius, 1.0, 100000.0)
+        && config.maxStepsPerAdvance >= 1U && config.maxStepsPerAdvance <= 1000000U
+        && static_cast<unsigned>(config.escapePolicy) <= static_cast<unsigned>(EscapePolicy::Prompt);
+}
+
 SimulationState applyInitialPlaneTilts(SimulationState state,
                                        const std::array<double, bodyCount>& tiltDegrees) noexcept {
     constexpr std::array<Vec3, bodyCount> axes{{{1.0, 0.0, 0.0},
                                                 {0.5, 0.8660254037844386, 0.0},
                                                 {-0.766044443118978, 0.6427876096865394, 0.0}}};
     constexpr auto radians = pi / 180.0;
+    for (const auto tilt : tiltDegrees)
+        if (!std::isfinite(tilt))
+            return state;
     for (std::size_t body = 0; body < bodyCount; ++body) {
         const auto angle = std::clamp(tiltDegrees[body], -75.0, 75.0) * radians;
         state.bodies[body].position = rotateAroundAxis(state.bodies[body].position, axes[body], angle);
@@ -96,7 +133,9 @@ SimulationState makeInitialState(InitialSystem system, std::uint64_t seed, doubl
     SimulationState result;
     result.seed = seed;
     Pcg32 random(seed, 0x3B5ULL);
-    chaos = std::clamp(chaos, 0.0, 1.0);
+    chaos = std::isfinite(chaos) ? std::clamp(chaos, 0.0, 1.0) : 0.35;
+    if (static_cast<unsigned>(system) > static_cast<unsigned>(InitialSystem::Unbound))
+        system = InitialSystem::FigureEight;
 
     switch (system) {
     case InitialSystem::FigureEight:
@@ -141,19 +180,26 @@ ThreeBodySimulation::ThreeBodySimulation()
     : ThreeBodySimulation(makeInitialState(InitialSystem::FigureEight, 0x334253ULL)) {}
 
 ThreeBodySimulation::ThreeBodySimulation(SimulationState initial, SimulationConfig config)
-    : initial_(initial), state_(initial), config_(config) {
-    sanitizeConfig();
-}
+    : initial_(isValidSimulationState(initial) ? initial
+          : makeInitialState(InitialSystem::FigureEight, 0x334253ULL)),
+      state_(initial_), config_(isValidSimulationConfig(config) ? config : SimulationConfig{}) {}
 
-void ThreeBodySimulation::reset(const SimulationState& initial) noexcept {
+bool ThreeBodySimulation::reset(const SimulationState& initial) noexcept {
+    if (!isValidSimulationState(initial))
+        return false;
     initial_ = initial;
     state_ = initial;
     accumulator_ = 0.0;
+    faulted_ = false;
+    truncatedAdvances_ = 0;
+    return true;
 }
 
-void ThreeBodySimulation::setConfig(const SimulationConfig& config) noexcept {
+bool ThreeBodySimulation::setConfig(const SimulationConfig& config) noexcept {
+    if (!isValidSimulationConfig(config))
+        return false;
     config_ = config;
-    sanitizeConfig();
+    return true;
 }
 
 void ThreeBodySimulation::setBodyMass(std::size_t bodyIndex, double mass) noexcept {
@@ -164,27 +210,30 @@ void ThreeBodySimulation::setBodyMass(std::size_t bodyIndex, double mass) noexce
     state_.bodies[bodyIndex].mass = validated;
 }
 
-void ThreeBodySimulation::sanitizeConfig() noexcept {
-    config_.gravitationalConstant = std::clamp(config_.gravitationalConstant, 0.000001, 1000.0);
-    config_.softening = std::clamp(config_.softening, 0.000001, 4.0);
-    config_.fixedStep = std::clamp(config_.fixedStep, 1.0 / 96000.0, 0.25);
-    config_.speed = std::clamp(config_.speed, 0.0, 64.0);
-    config_.escapeRadius = std::clamp(config_.escapeRadius, 1.0, 100000.0);
-    config_.maxStepsPerAdvance = std::clamp(config_.maxStepsPerAdvance, 1U, 1000000U);
-}
-
 void ThreeBodySimulation::advance(double deltaTime) noexcept {
-    if (!std::isfinite(deltaTime) || deltaTime <= 0.0 || config_.speed <= 0.0)
+    if (faulted_ || !std::isfinite(deltaTime) || deltaTime <= 0.0 || config_.speed <= 0.0)
         return;
 
     accumulator_ += static_cast<long double>(deltaTime) * static_cast<long double>(config_.speed);
     const auto fixedStep = static_cast<long double>(config_.fixedStep);
-    const auto available = static_cast<std::uint64_t>(
-        std::floor(accumulator_ / fixedStep + 1.0e-12L));
-    const auto steps = static_cast<std::uint32_t>(
-        std::min<std::uint64_t>(available, config_.maxStepsPerAdvance));
+    if (!std::isfinite(accumulator_)) {
+        accumulator_ = 0.0L;
+        faulted_ = true;
+        return;
+    }
+    const auto available = std::floor(accumulator_ / fixedStep + 1.0e-12L);
+    // Bound before conversion; even finite external deltaTime can exceed the
+    // range of an integer step counter.
+    const auto steps = available >= static_cast<long double>(config_.maxStepsPerAdvance)
+        ? config_.maxStepsPerAdvance : static_cast<std::uint32_t>(std::max(0.0L, available));
+    if (available > static_cast<long double>(config_.maxStepsPerAdvance))
+        ++truncatedAdvances_;
     for (std::uint32_t index = 0; index < steps; ++index) {
         step();
+        if (faulted_) {
+            accumulator_ = 0.0L;
+            return;
+        }
         accumulator_ -= fixedStep;
     }
     if (std::abs(accumulator_) < fixedStep * 1.0e-12L)
@@ -210,6 +259,9 @@ std::array<Vec3, bodyCount> ThreeBodySimulation::accelerations() const noexcept 
 }
 
 void ThreeBodySimulation::step() noexcept {
+    if (faulted_)
+        return;
+    const auto previous = state_;
     const auto before = accelerations();
     const auto dt = config_.fixedStep;
     const auto halfDtSquared = 0.5 * dt * dt;
@@ -222,7 +274,16 @@ void ThreeBodySimulation::step() noexcept {
 
     state_.elapsed += dt;
     ++state_.completedSteps;
+    if (!finiteState(state_)) {
+        state_ = previous;
+        faulted_ = true;
+        return;
+    }
     detectEscapes();
+    if (!finiteState(state_)) {
+        state_ = previous;
+        faulted_ = true;
+    }
 }
 
 Vec3 ThreeBodySimulation::barycenter() const noexcept {

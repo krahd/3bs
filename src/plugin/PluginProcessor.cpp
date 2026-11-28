@@ -2,162 +2,74 @@
 // Copyright (c) 2026 Tomas Laurenzo
 
 #include "plugin/PluginProcessor.h"
-
 #include "plugin/PluginEditor.h"
-#include "ui/PresetCatalog.h"
+#include "ui/NumericText.h"
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cmath>
+#include <cstdlib>
+#include <limits>
 
 namespace threebs {
 namespace {
-
 constexpr auto stateTreeName = "THREE_BS_STATE";
-
 constexpr std::array<double, 7> autoResetBarsValues{0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0};
+constexpr std::array<int, 5> timeSigDenominators{1, 2, 4, 8, 16};
 
 int autoResetBarsToIndex(double bars) noexcept {
     int best{2};
     double bestError{1.0e18};
     for (int i = 0; i < static_cast<int>(autoResetBarsValues.size()); ++i) {
         const auto error = std::abs(autoResetBarsValues[static_cast<std::size_t>(i)] - bars);
-        if (error < bestError) {
-            bestError = error;
-            best = i;
-        }
+        if (error < bestError) { bestError = error; best = i; }
     }
     return best;
 }
 
-constexpr std::array<int, 5> timeSigDenominators{1, 2, 4, 8, 16};
-
-float parameterValue(const juce::AudioProcessorValueTreeState& state, const juce::String& id) noexcept {
-    if (const auto* value = state.getRawParameterValue(id))
-        return value->load(std::memory_order_relaxed);
-    return 0.0F;
-}
-
-float stateParameterValue(const juce::ValueTree& state, const juce::String& id, float fallback) {
-    if (state.hasProperty(id))
-        return static_cast<float>(state.getProperty(id));
+juce::var stateParameter(const juce::ValueTree& state, const juce::String& id) {
+    if (state.hasProperty(id)) return state.getProperty(id);
     for (int index = 0; index < state.getNumChildren(); ++index) {
         const auto child = state.getChild(index);
-        if (child.getProperty("id").toString() == id)
-            return static_cast<float>(child.getProperty("value", fallback));
+        if (child.getProperty("id").toString() == id) return child.getProperty("value");
     }
-    return fallback;
+    return {};
 }
-
-void setStateParameterValue(juce::ValueTree& state, const juce::String& id, float value) {
-    if (state.hasProperty(id)) {
-        state.setProperty(id, value, nullptr);
-        return;
-    }
+void setStateParameter(juce::ValueTree& state, const juce::String& id, float value) {
+    if (state.hasProperty(id)) state.setProperty(id, value, nullptr);
     for (int index = 0; index < state.getNumChildren(); ++index) {
         auto child = state.getChild(index);
         if (child.getProperty("id").toString() == id) {
-            child.setProperty("value", value, nullptr);
-            return;
+            child.setProperty("value", value, nullptr); return;
         }
     }
+    juce::ValueTree child{"PARAM"};
+    child.setProperty("id", id, nullptr);
+    child.setProperty("value", value, nullptr);
+    state.addChild(child, -1, nullptr);
 }
 
-void ensureStateParameterValue(juce::ValueTree& state, const juce::String& id, float value) {
-    for (int index = 0; index < state.getNumChildren(); ++index)
-        if (state.getChild(index).getProperty("id").toString() == id)
-            return;
-    juce::ValueTree parameter{"PARAM"};
-    parameter.setProperty("id", id, nullptr);
-    parameter.setProperty("value", value, nullptr);
-    state.addChild(parameter, -1, nullptr);
+// ValueTree XML stores numbers as text. Require a complete finite conversion;
+// unlike JSON input, numeric strings are part of this published host format.
+bool hostNumber(const juce::var& value, double& result) {
+    if (value.isInt() || value.isInt64() || value.isDouble() || value.isBool()) {
+        result = static_cast<double>(value); return std::isfinite(result);
+    }
+    if (!value.isString()) return false;
+    const auto text = value.toString();
+    if (text.isEmpty() || text != text.trim()) return false;
+    // Host XML uses decimal syntax even when the host changes its C locale.
+    return parseFiniteNumber(text, result);
+}
+bool hostSeed(const juce::var& value, std::uint64_t& result) {
+    const auto text = value.toString().toStdString();
+    const auto converted = std::from_chars(text.data(), text.data() + text.size(), result);
+    return !text.empty() && converted.ec == std::errc{}
+        && converted.ptr == text.data() + text.size();
 }
 
 } // namespace
-
-void ThreeBSProcessor::AtomicState::store(const SimulationState& state) noexcept {
-    seed.store(state.seed, std::memory_order_relaxed);
-    for (std::size_t i = 0; i < bodyCount; ++i) {
-        mass[i].store(state.bodies[i].mass, std::memory_order_relaxed);
-        px[i].store(state.bodies[i].position.x, std::memory_order_relaxed);
-        py[i].store(state.bodies[i].position.y, std::memory_order_relaxed);
-        pz[i].store(state.bodies[i].position.z, std::memory_order_relaxed);
-        vx[i].store(state.bodies[i].velocity.x, std::memory_order_relaxed);
-        vy[i].store(state.bodies[i].velocity.y, std::memory_order_relaxed);
-        vz[i].store(state.bodies[i].velocity.z, std::memory_order_relaxed);
-    }
-}
-
-SimulationState ThreeBSProcessor::AtomicState::load() const noexcept {
-    SimulationState state;
-    state.seed = seed.load(std::memory_order_relaxed);
-    for (std::size_t i = 0; i < bodyCount; ++i) {
-        state.bodies[i].mass = mass[i].load(std::memory_order_relaxed);
-        state.bodies[i].position = {px[i].load(std::memory_order_relaxed), py[i].load(std::memory_order_relaxed),
-                                    pz[i].load(std::memory_order_relaxed)};
-        state.bodies[i].velocity = {vx[i].load(std::memory_order_relaxed), vy[i].load(std::memory_order_relaxed),
-                                    vz[i].load(std::memory_order_relaxed)};
-    }
-    return state;
-}
-
-void ThreeBSProcessor::AtomicPlaneTilts::store(const std::array<double, bodyCount>& values) noexcept {
-    for (std::size_t body = 0; body < bodyCount; ++body)
-        degrees[body].store(std::clamp(values[body], -75.0, 75.0), std::memory_order_relaxed);
-}
-
-std::array<double, bodyCount> ThreeBSProcessor::AtomicPlaneTilts::load() const noexcept {
-    std::array<double, bodyCount> values{};
-    for (std::size_t body = 0; body < bodyCount; ++body)
-        values[body] = degrees[body].load(std::memory_order_relaxed);
-    return values;
-}
-
-void ThreeBSProcessor::AtomicPresentationState::store(const PresentationState& state) noexcept {
-    const auto camera = sanitizedCameraState(state.camera);
-    trailSeconds.store(state.visual.trailSeconds, std::memory_order_relaxed);
-    trailWidth.store(state.visual.trailWidth, std::memory_order_relaxed);
-    extrusion.store(state.visual.extrusion, std::memory_order_relaxed);
-    bloom.store(state.visual.bloom, std::memory_order_relaxed);
-    starDensity.store(state.visual.starDensity, std::memory_order_relaxed);
-    palette.store(static_cast<int>(state.visual.palette), std::memory_order_relaxed);
-    quality.store(static_cast<int>(state.visual.quality), std::memory_order_relaxed);
-    yaw.store(camera.yaw, std::memory_order_relaxed);
-    pitch.store(camera.pitch, std::memory_order_relaxed);
-    distance.store(camera.distance, std::memory_order_relaxed);
-    minimumDistance.store(camera.minimumDistance, std::memory_order_relaxed);
-    maximumDistance.store(camera.maximumDistance, std::memory_order_relaxed);
-    autoOrbit.store(camera.autoOrbit, std::memory_order_relaxed);
-    focusBody.store(camera.focusBody, std::memory_order_relaxed);
-    autoFrame.store(camera.autoFrame, std::memory_order_relaxed);
-    visualSeed.store(state.visualSeed, std::memory_order_relaxed);
-    notePaneMinimized.store(state.notePaneMinimized, std::memory_order_relaxed);
-    notePaneStyle.store(static_cast<int>(state.notePaneStyle), std::memory_order_relaxed);
-}
-
-PresentationState ThreeBSProcessor::AtomicPresentationState::load() const noexcept {
-    PresentationState state;
-    state.visual.trailSeconds = trailSeconds.load(std::memory_order_relaxed);
-    state.visual.trailWidth = trailWidth.load(std::memory_order_relaxed);
-    state.visual.extrusion = extrusion.load(std::memory_order_relaxed);
-    state.visual.bloom = bloom.load(std::memory_order_relaxed);
-    state.visual.starDensity = starDensity.load(std::memory_order_relaxed);
-    state.visual.palette = static_cast<PaletteId>(palette.load(std::memory_order_relaxed));
-    state.visual.quality = static_cast<GraphicsQuality>(quality.load(std::memory_order_relaxed));
-    state.camera.yaw = yaw.load(std::memory_order_relaxed);
-    state.camera.pitch = pitch.load(std::memory_order_relaxed);
-    state.camera.distance = distance.load(std::memory_order_relaxed);
-    state.camera.minimumDistance = minimumDistance.load(std::memory_order_relaxed);
-    state.camera.maximumDistance = maximumDistance.load(std::memory_order_relaxed);
-    state.camera.autoOrbit = autoOrbit.load(std::memory_order_relaxed);
-    state.camera.focusBody = focusBody.load(std::memory_order_relaxed);
-    state.camera.autoFrame = autoFrame.load(std::memory_order_relaxed);
-    state.visualSeed = visualSeed.load(std::memory_order_relaxed);
-    state.notePaneMinimized = notePaneMinimized.load(std::memory_order_relaxed);
-    state.notePaneStyle = static_cast<NotePaneStyle>(notePaneStyle.load(std::memory_order_relaxed));
-    state.camera = sanitizedCameraState(state.camera);
-    return state;
-}
 
 juce::AudioProcessorValueTreeState::ParameterLayout ThreeBSProcessor::createParameterLayout() {
     using Parameter = std::unique_ptr<juce::RangedAudioParameter>;
@@ -254,326 +166,597 @@ juce::AudioProcessorValueTreeState::ParameterLayout ThreeBSProcessor::createPara
     return {values.begin(), values.end()};
 }
 
+const std::array<const char*, ThreeBSProcessor::ParameterCount> ThreeBSProcessor::parameterIds_{
+    "run", "sync", "speed", "gravity", "softening", "chaos", "density", "trail", "bloom",
+    "mass1", "mass2", "mass3",
+    "voiceEnabled1", "voiceScale1", "voiceRoot1", "voicePitch1", "voiceTrigger1", "voiceOctave1",
+    "voiceDurMap1", "voiceDurGrid1", "voiceDurMin1", "voiceDurMax1",
+    "voiceEnabled2", "voiceScale2", "voiceRoot2", "voicePitch2", "voiceTrigger2", "voiceOctave2",
+    "voiceDurMap2", "voiceDurGrid2", "voiceDurMin2", "voiceDurMax2",
+    "voiceEnabled3", "voiceScale3", "voiceRoot3", "voicePitch3", "voiceTrigger3", "voiceOctave3",
+    "voiceDurMap3", "voiceDurGrid3", "voiceDurMin3", "voiceDurMax3",
+    "voicingMode", "chordStrum", "chordRoot", "chordScale", "strumUnit", "strumValue",
+    "timeSigSource", "timeSigNum", "timeSigDenom", "autoReset", "autoResetBars", "inputMode", "preset"
+};
+
 ThreeBSProcessor::ThreeBSProcessor()
 #if THREEBS_AU_MIDI_EFFECT
     : AudioProcessor(BusesProperties()),
 #else
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
 #endif
-      parameters_(*this, nullptr, stateTreeName, createParameterLayout()), engine_() {
-    parameterRefs_.run = parameters_.getRawParameterValue("run");
-    parameterRefs_.sync = parameters_.getRawParameterValue("sync");
-    parameterRefs_.speed = parameters_.getRawParameterValue("speed");
-    parameterRefs_.gravity = parameters_.getRawParameterValue("gravity");
-    parameterRefs_.softening = parameters_.getRawParameterValue("softening");
-    parameterRefs_.chaos = parameters_.getRawParameterValue("chaos");
-    parameterRefs_.density = parameters_.getRawParameterValue("density");
-    parameterRefs_.trail = parameters_.getRawParameterValue("trail");
-    parameterRefs_.bloom = parameters_.getRawParameterValue("bloom");
-    for (std::size_t body = 0; body < bodyCount; ++body) {
-        const auto suffix = juce::String(body + 1);
-        parameterRefs_.masses[body] = parameters_.getRawParameterValue("mass" + suffix);
-        parameterRefs_.voiceEnabled[body] = parameters_.getRawParameterValue("voiceEnabled" + suffix);
-        parameterRefs_.voiceScale[body] = parameters_.getRawParameterValue("voiceScale" + suffix);
-        parameterRefs_.voiceRoot[body] = parameters_.getRawParameterValue("voiceRoot" + suffix);
-        parameterRefs_.voicePitch[body] = parameters_.getRawParameterValue("voicePitch" + suffix);
-        parameterRefs_.voiceTrigger[body] = parameters_.getRawParameterValue("voiceTrigger" + suffix);
-        parameterRefs_.voiceOctave[body] = parameters_.getRawParameterValue("voiceOctave" + suffix);
-        parameterRefs_.voiceDurMap[body] = parameters_.getRawParameterValue("voiceDurMap" + suffix);
-        parameterRefs_.voiceDurGrid[body] = parameters_.getRawParameterValue("voiceDurGrid" + suffix);
-        parameterRefs_.voiceDurMin[body] = parameters_.getRawParameterValue("voiceDurMin" + suffix);
-        parameterRefs_.voiceDurMax[body] = parameters_.getRawParameterValue("voiceDurMax" + suffix);
+      parameters_(*this, nullptr, stateTreeName, createParameterLayout()) {
+    for (std::size_t index = 0; index < ParameterCount; ++index) {
+        parameterRefs_[index] = parameters_.getRawParameterValue(parameterIds_[index]);
+        const auto* parameter = parameters_.getParameter(parameterIds_[index]);
+        const auto& range = parameter->getNormalisableRange();
+        parameterMinimums_[index] = range.start;
+        parameterMaximums_[index] = range.end;
+        parameterDefaults_[index] = parameter->convertFrom0to1(parameter->getDefaultValue());
     }
-    parameterRefs_.voicingMode = parameters_.getRawParameterValue("voicingMode");
-    parameterRefs_.chordStrum = parameters_.getRawParameterValue("chordStrum");
-    parameterRefs_.strumUnit = parameters_.getRawParameterValue("strumUnit");
-    parameterRefs_.strumValue = parameters_.getRawParameterValue("strumValue");
-    parameterRefs_.chordRoot = parameters_.getRawParameterValue("chordRoot");
-    parameterRefs_.chordScale = parameters_.getRawParameterValue("chordScale");
-    parameterRefs_.timeSigSource = parameters_.getRawParameterValue("timeSigSource");
-    parameterRefs_.timeSigNum = parameters_.getRawParameterValue("timeSigNum");
-    parameterRefs_.timeSigDenom = parameters_.getRawParameterValue("timeSigDenom");
-    parameterRefs_.autoReset = parameters_.getRawParameterValue("autoReset");
-    parameterRefs_.autoResetBars = parameters_.getRawParameterValue("autoResetBars");
-    parameterRefs_.inputMode = parameters_.getRawParameterValue("inputMode");
-    parameterRefs_.preset = parameters_.getRawParameterValue("preset");
-    engineConfig_ = engine_.config();
+    desired_.initial = desired_.baseInitial = engine_.simulation().initialState();
+    desired_.engine = engine_.config();
     PresetCatalog catalog;
     if (catalog.valid()) {
         const auto& preset = catalog[0];
-        const auto initial = makeInitialState(preset.system, preset.seed, preset.chaos);
-        engineConfig_.simulation = preset.simulation;
-        engineConfig_.voices = preset.voices;
-        storedConfigurationTemplate_ = engineConfig_;
-        engine_.setConfig(engineConfig_);
-        engine_.reset(initial);
-        loopPolicy_.store(static_cast<int>(preset.loopPolicy), std::memory_order_relaxed);
-        storedBaseInitial_.store(initial);
-        storedInitial_.store(initial);
-        storedPlaneTilts_.store({});
-        storedPresentation_.store(preset.presentation);
-        setParameterValue("trail", preset.presentation.visual.trailSeconds);
-        setParameterValue("bloom", preset.presentation.visual.bloom * 100.0F);
-        setParameterValue("gravity", static_cast<float>(preset.simulation.gravitationalConstant));
-        setParameterValue("softening", static_cast<float>(preset.simulation.softening));
-        setParameterValue("speed", static_cast<float>(preset.simulation.speed));
-        for (std::size_t body = 0; body < bodyCount; ++body)
-            setParameterValue("mass" + juce::String(body + 1), static_cast<float>(initial.bodies[body].mass));
-        applyVoiceParameters(preset.voices);
-    } else {
-        storedConfigurationTemplate_ = engineConfig_;
-        storedInitial_.store(engine_.simulation().initialState());
-        storedBaseInitial_.store(engine_.simulation().initialState());
-        storedPlaneTilts_.store({});
-        storedPresentation_.store(PresentationState{});
+        desired_.initial = desired_.baseInitial = makeInitialState(preset.system, preset.seed, preset.chaos);
+        desired_.engine.simulation = preset.simulation;
+        desired_.engine.voices = preset.voices;
+        desired_.presentation = preset.presentation;
+        desired_.loopPolicy = preset.loopPolicy;
+        desired_.densityPercent = 0.0;
+        for (const auto& voice : preset.voices) desired_.densityPercent += voice.probability * (100.0 / 3.0);
     }
+    (void)publishConfigurationLocked(desired_, true);
+}
+
+ThreeBSProcessor::ParameterValues ThreeBSProcessor::readParameters() const noexcept {
+    ParameterValues values;
+    for (std::size_t i = 0; i < ParameterCount; ++i) {
+        const auto value = parameterRefs_[i]->load(std::memory_order_relaxed);
+        values[i] = std::isfinite(value) ? std::clamp(value, parameterMinimums_[i], parameterMaximums_[i])
+                                       : parameterDefaults_[i];
+    }
+    return values;
+}
+
+ThreeBSProcessor::ParameterValues ThreeBSProcessor::plainParameterValues(const UserConfiguration& c) noexcept {
+    ParameterValues p{};
+    p[Run] = c.run ? 1.0F : 0.0F; p[Sync] = c.sync ? 1.0F : 0.0F;
+    p[Speed] = static_cast<float>(c.engine.simulation.speed);
+    p[Gravity] = static_cast<float>(c.engine.simulation.gravitationalConstant);
+    p[Softening] = static_cast<float>(c.engine.simulation.softening);
+    p[Chaos] = static_cast<float>(c.chaosPercent); p[Density] = static_cast<float>(c.densityPercent);
+    p[Trail] = c.presentation.visual.trailSeconds; p[Bloom] = c.presentation.visual.bloom * 100.0F;
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        p[Mass1 + body] = static_cast<float>(c.initial.bodies[body].mass);
+        const auto base = Voice1 + body * 10;
+        const auto& v = c.engine.voices[body];
+        p[base + Enabled] = v.enabled ? 1.0F : 0.0F;
+        p[base + Scale] = static_cast<float>(v.scale); p[base + Root] = static_cast<float>(v.root);
+        p[base + Pitch] = static_cast<float>(v.pitchMapping); p[base + Trigger] = static_cast<float>(v.triggerMapping);
+        p[base + Octave] = static_cast<float>(v.octave); p[base + DurationMap] = static_cast<float>(v.durationMapping);
+        p[base + DurationGridValue] = static_cast<float>(v.durationGrid);
+        p[base + DurationMinimum] = static_cast<float>(v.minimumDurationBeats);
+        p[base + DurationMaximum] = static_cast<float>(v.maximumDurationBeats);
+    }
+    p[Voicing] = static_cast<float>(c.engine.voicingMode);
+    p[StrumMilliseconds] = static_cast<float>(c.engine.chordStrumMilliseconds);
+    p[ChordRoot] = static_cast<float>(c.engine.chordSystem.root);
+    p[ChordScale] = static_cast<float>(c.engine.chordSystem.scale);
+    p[StrumUnits] = static_cast<float>(c.engine.chordStrumUnit);
+    p[StrumAmount] = static_cast<float>(c.engine.chordStrumValue);
+    p[MeterSource] = static_cast<float>(c.timeSignatureSource);
+    p[MeterNumerator] = static_cast<float>(c.timeSignatureNumerator - 1);
+    const auto denominator = std::find(timeSigDenominators.begin(), timeSigDenominators.end(), c.timeSignatureDenominator);
+    p[MeterDenominator] = static_cast<float>(std::distance(timeSigDenominators.begin(), denominator));
+    p[AutoReset] = c.engine.autoResetEnabled ? 1.0F : 0.0F;
+    p[AutoResetBars] = static_cast<float>(autoResetBarsToIndex(c.engine.autoResetBars));
+    p[InputMode] = c.engine.inputTransposeEnabled ? 1.0F : c.engine.inputGateEnabled ? 2.0F : 0.0F;
+    p[Preset] = static_cast<float>(c.presetIndex);
+    return p;
+}
+
+ThreeBSProcessor::ParameterValues ThreeBSProcessor::legalParameterValues(const UserConfiguration& configuration) const {
+    auto result = plainParameterValues(configuration);
+    for (std::size_t i = 0; i < ParameterCount; ++i) {
+        const auto* parameter = parameters_.getParameter(parameterIds_[i]);
+        const auto& range = parameter->getNormalisableRange();
+        const auto value = range.snapToLegalValue(std::clamp(result[i], range.start, range.end));
+        result[i] = parameter->convertFrom0to1(parameter->convertTo0to1(value));
+    }
+    return result;
+}
+
+void ThreeBSProcessor::applyParameters(UserConfiguration& c, const ParameterValues& p,
+                                      std::uint64_t mask) noexcept {
+    const auto changed = [mask](std::size_t i) { return (mask & (std::uint64_t{1} << i)) != 0; };
+    const auto integer = [&p](std::size_t i) { return static_cast<int>(std::lround(p[i])); };
+    if (changed(Run)) c.run = p[Run] >= 0.5F;
+    if (changed(Sync)) c.sync = p[Sync] >= 0.5F;
+    if (changed(Speed)) c.engine.simulation.speed = p[Speed];
+    if (changed(Gravity)) c.engine.simulation.gravitationalConstant = p[Gravity];
+    if (changed(Softening)) c.engine.simulation.softening = p[Softening];
+    if (changed(Chaos)) c.chaosPercent = p[Chaos];
+    if (changed(Density)) c.densityPercent = p[Density];
+    if (changed(Trail)) c.presentation.visual.trailSeconds = p[Trail];
+    if (changed(Bloom)) c.presentation.visual.bloom = p[Bloom] / 100.0F;
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        if (changed(Mass1 + body)) {
+            c.initial.bodies[body].mass = p[Mass1 + body];
+            c.baseInitial.bodies[body].mass = p[Mass1 + body];
+        }
+        const auto b = Voice1 + body * 10;
+        auto& v = c.engine.voices[body];
+        if (changed(b + Enabled)) v.enabled = p[b + Enabled] >= 0.5F;
+        if (changed(b + Scale)) v.scale = static_cast<ScaleId>(integer(b + Scale));
+        if (changed(b + Root)) v.root = static_cast<std::uint8_t>(integer(b + Root));
+        if (changed(b + Pitch)) v.pitchMapping = static_cast<PitchMapping>(integer(b + Pitch));
+        if (changed(b + Trigger)) v.triggerMapping = static_cast<TriggerMapping>(integer(b + Trigger));
+        if (changed(b + Octave)) v.octave = static_cast<std::int8_t>(integer(b + Octave));
+        if (changed(b + DurationMap)) v.durationMapping = static_cast<PitchMapping>(integer(b + DurationMap));
+        if (changed(b + DurationGridValue)) v.durationGrid = static_cast<DurationGrid>(integer(b + DurationGridValue));
+        if (changed(b + DurationMinimum)) v.minimumDurationBeats = p[b + DurationMinimum];
+        if (changed(b + DurationMaximum)) v.maximumDurationBeats = p[b + DurationMaximum];
+        v.maximumDurationBeats = std::max(v.minimumDurationBeats, v.maximumDurationBeats);
+        if (changed(Density)) v.probability = c.densityPercent / 100.0;
+    }
+    if (changed(Voicing)) c.engine.voicingMode = static_cast<VoicingMode>(integer(Voicing));
+    if (changed(StrumMilliseconds)) c.engine.chordStrumMilliseconds = p[StrumMilliseconds];
+    if (changed(ChordRoot)) c.engine.chordSystem.root = static_cast<std::uint8_t>(integer(ChordRoot));
+    if (changed(ChordScale)) c.engine.chordSystem.scale = static_cast<ScaleId>(integer(ChordScale));
+    if (changed(StrumUnits)) c.engine.chordStrumUnit = static_cast<StrumUnit>(integer(StrumUnits));
+    if (changed(StrumAmount)) c.engine.chordStrumValue = p[StrumAmount];
+    if (changed(MeterSource)) c.timeSignatureSource = static_cast<TimeSignatureSource>(integer(MeterSource));
+    if (changed(MeterNumerator)) c.timeSignatureNumerator = integer(MeterNumerator) + 1;
+    if (changed(MeterDenominator)) c.timeSignatureDenominator = timeSigDenominators[static_cast<std::size_t>(integer(MeterDenominator))];
+    if (changed(AutoReset)) c.engine.autoResetEnabled = p[AutoReset] >= 0.5F;
+    if (changed(AutoResetBars)) c.engine.autoResetBars = autoResetBarsValues[static_cast<std::size_t>(integer(AutoResetBars))];
+    if (changed(InputMode)) {
+        c.engine.inputTransposeEnabled = integer(InputMode) == 1;
+        c.engine.inputGateEnabled = integer(InputMode) == 2;
+    }
+    if (changed(Preset)) c.presetIndex = integer(Preset);
+}
+
+UserConfiguration ThreeBSProcessor::currentConfigurationLocked() const {
+    auto result = desired_;
+    if ((parameterTransaction_.load(std::memory_order_acquire) & 1U) != 0U) return result;
+    const auto values = readParameters();
+    auto changed = appliedRevision_.load(std::memory_order_acquire) == publishedRevision_.load(std::memory_order_relaxed)
+        ? appliedChangedMask_.load(std::memory_order_acquire) : std::uint64_t{};
+    for (std::size_t i = 0; i < ParameterCount; ++i)
+        if (values[i] != parameterBaseline_[i]) changed |= std::uint64_t{1} << i;
+    applyParameters(result, values, changed);
+    return result;
+}
+
+UserConfiguration ThreeBSProcessor::currentUserConfiguration() const {
+    std::lock_guard lock(configurationMutex_);
+    return currentConfigurationLocked();
+}
+SimulationState ThreeBSProcessor::currentInitialState() const { return currentUserConfiguration().initial; }
+std::array<double, bodyCount> ThreeBSProcessor::initialPlaneTilts() const {
+    std::lock_guard lock(configurationMutex_); return desired_.planeTilts;
+}
+PresentationState ThreeBSProcessor::presentationState() const { return currentUserConfiguration().presentation; }
+juce::String ThreeBSProcessor::lastStateError() const {
+    std::lock_guard lock(configurationMutex_); return stateError_;
+}
+bool ThreeBSProcessor::setPresentationState(const PresentationState& presentation, std::uint64_t expectedRevision) {
+    std::lock_guard lock(configurationMutex_);
+    if (expectedRevision != 0 && expectedRevision != publishedRevision_.load(std::memory_order_relaxed)) return false;
+    auto candidate = currentConfigurationLocked();
+    candidate.presentation = presentation;
+    if (!validateUserConfiguration(candidate, stateError_)) return false;
+    desired_.presentation = presentation;
+    return true;
+}
+void ThreeBSProcessor::setSelectedVoicingPresetIndex(int index) {
+    std::lock_guard lock(configurationMutex_);
+    desired_.voicingPresetIndex = std::clamp(index, -1, 11);
+}
+
+void ThreeBSProcessor::setParameterValue(const juce::String& id, float plainValue) {
+    if (auto* parameter = parameters_.getParameter(id)) {
+        const auto& range = parameter->getNormalisableRange();
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(
+            range.snapToLegalValue(std::clamp(plainValue, range.start, range.end))));
+    }
+}
+void ThreeBSProcessor::applyVoiceParameters(const std::array<VoiceConfig, bodyCount>& voices) {
+    auto configuration = desired_;
+    configuration.engine.voices = voices;
+    const auto values = plainParameterValues(configuration);
+    for (std::size_t index = Voice1; index < Voicing; ++index)
+        setParameterValue(parameterIds_[index], values[index]);
+}
+void ThreeBSProcessor::installParameterValues(const UserConfiguration& configuration) {
+    const auto values = plainParameterValues(configuration);
+    for (std::size_t index = 0; index < ParameterCount; ++index)
+        setParameterValue(parameterIds_[index], values[index]);
+}
+bool ThreeBSProcessor::publishConfigurationLocked(const UserConfiguration& candidate, bool reset) {
+    if (!validateUserConfiguration(candidate, stateError_)) return false;
+    // Writer serialisation is entirely outside processBlock. The sequence guards
+    // parameter snapshots against our multi-parameter transactions.
+    parameterTransaction_.fetch_add(1, std::memory_order_acq_rel);
+    installParameterValues(candidate);
+    desired_ = candidate;
+    // Keep the projection of this accepted configuration as the baseline. A
+    // simultaneous host automation write must remain observable on the next
+    // callback, rather than being mistaken for part of this transaction.
+    parameterBaseline_ = legalParameterValues(candidate);
+    const auto revision = publishedRevision_.load(std::memory_order_relaxed) + 1;
+    if (reset) resetRevision_ = revision;
+    commands_.publish({candidate, parameterBaseline_, revision, resetRevision_});
+    publishedRevision_.store(revision, std::memory_order_release);
+    parameterTransaction_.fetch_add(1, std::memory_order_release);
+    stateError_.clear();
+    return true;
+}
+bool ThreeBSProcessor::applyUserConfiguration(const UserConfiguration& configuration) {
+    std::lock_guard lock(configurationMutex_);
+    return publishConfigurationLocked(configuration, true);
+}
+
+bool ThreeBSProcessor::applyAdvancedConfiguration(const EngineConfig& configuration) {
+    std::lock_guard lock(configurationMutex_);
+    auto candidate = currentConfigurationLocked();
+    // Advanced controls own non-automated fields. Keep currently automated
+    // controls rather than restoring the dialog's potentially old copy.
+    candidate.engine.simulation.fixedStep = configuration.simulation.fixedStep;
+    candidate.engine.simulation.escapeRadius = configuration.simulation.escapeRadius;
+    candidate.engine.simulation.escapePolicy = configuration.simulation.escapePolicy;
+    candidate.engine.simulation.maxStepsPerAdvance = configuration.simulation.maxStepsPerAdvance;
+    candidate.engine.minimumChordIntervalBeats = configuration.minimumChordIntervalBeats;
+    candidate.engine.chordSystem.customScale = configuration.chordSystem.customScale;
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        const auto& from = configuration.voices[body];
+        auto& to = candidate.engine.voices[body];
+        to.channel = from.channel;
+        to.minimumNote = from.minimumNote; to.maximumNote = from.maximumNote;
+        to.customScale = from.customScale;
+        to.clockDivisionBeats = from.clockDivisionBeats; to.probability = from.probability;
+        to.minimumTriggerIntervalBeats = from.minimumTriggerIntervalBeats;
+        to.closeApproachDistance = from.closeApproachDistance;
+        to.minimumVelocity = from.minimumVelocity; to.maximumVelocity = from.maximumVelocity;
+        to.ccLanes = from.ccLanes;
+    }
+    candidate.voicingPresetIndex = -1;
+    return publishConfigurationLocked(candidate, false);
+}
+
+void ThreeBSProcessor::requestPreset(const ArtworkPreset& preset, int index) {
+    std::lock_guard lock(configurationMutex_);
+    auto candidate = currentConfigurationLocked();
+    candidate.initial = candidate.baseInitial = makeInitialState(preset.system, preset.seed, preset.chaos);
+    candidate.planeTilts = {};
+    candidate.engine.simulation = preset.simulation;
+    candidate.engine.voices = preset.voices;
+    candidate.presentation = preset.presentation;
+    candidate.loopPolicy = preset.loopPolicy;
+    candidate.presetIndex = std::clamp(index, 0, 23);
+    candidate.voicingPresetIndex = -1;
+    candidate.densityPercent = 0.0;
+    for (const auto& voice : preset.voices) candidate.densityPercent += voice.probability * (100.0 / 3.0);
+    (void)publishConfigurationLocked(candidate, true);
+}
+void ThreeBSProcessor::requestVoicingPreset(const VoicingPreset& preset, int index) {
+    std::lock_guard lock(configurationMutex_);
+    auto candidate = currentConfigurationLocked();
+    candidate.engine.voices = preset.voices;
+    candidate.engine.voicingMode = preset.mode;
+    candidate.engine.chordStrumMilliseconds = preset.chordStrumMilliseconds;
+    candidate.engine.chordStrumUnit = preset.chordStrumUnit;
+    candidate.engine.chordStrumValue = preset.chordStrumValue;
+    candidate.engine.chordSystem = preset.chordSystem;
+    candidate.densityPercent = preset.densityPercent;
+    candidate.voicingPresetIndex = std::clamp(index, 0, 11);
+    (void)publishConfigurationLocked(candidate, false);
+}
+void ThreeBSProcessor::requestRandomize(double chaos) {
+    if (!std::isfinite(chaos)) return;
+    std::lock_guard lock(configurationMutex_);
+    auto candidate = currentConfigurationLocked();
+    candidate.baseInitial = makeInitialState(InitialSystem::ControlledChaos,
+        nextSeed_.fetch_add(1, std::memory_order_relaxed), std::clamp(chaos, 0.0, 1.0));
+    candidate.initial = applyInitialPlaneTilts(candidate.baseInitial, candidate.planeTilts);
+    candidate.presentation.visualSeed = candidate.initial.seed;
+    (void)publishConfigurationLocked(candidate, true);
+}
+void ThreeBSProcessor::requestReset() {
+    std::lock_guard lock(configurationMutex_);
+    (void)publishConfigurationLocked(currentConfigurationLocked(), true);
+}
+void ThreeBSProcessor::requestExactState(const SimulationState& state) {
+    std::lock_guard lock(configurationMutex_);
+    auto candidate = currentConfigurationLocked();
+    candidate.initial = candidate.baseInitial = state;
+    candidate.planeTilts = {};
+    candidate.presentation.visualSeed = state.seed;
+    (void)publishConfigurationLocked(candidate, true);
+}
+void ThreeBSProcessor::requestPlaneTilts(const std::array<double, bodyCount>& tiltDegrees) {
+    std::lock_guard lock(configurationMutex_);
+    for (const auto tilt : tiltDegrees)
+        if (!std::isfinite(tilt) || tilt < -75.0 || tilt > 75.0) {
+            stateError_ = "Invalid orbital plane tilt."; return;
+        }
+    auto candidate = currentConfigurationLocked();
+    candidate.planeTilts = tiltDegrees;
+    candidate.initial = applyInitialPlaneTilts(candidate.baseInitial, tiltDegrees);
+    (void)publishConfigurationLocked(candidate, true);
 }
 
 void ThreeBSProcessor::prepareToPlay(double sampleRate, int maximumBlockSize) {
     juce::ignoreUnused(maximumBlockSize);
-    sampleRate_ = sampleRate;
-    engine_.prepare(sampleRate);
-    freeBeat_ = 0.0;
+    sampleRate_ = std::isfinite(sampleRate) ? std::clamp(sampleRate, 8000.0, 768000.0) : 48000.0;
+    engine_.prepare(sampleRate_);
+    // Preserve elapsed processing time across sample-rate changes. Outstanding
+    // notes are flushed on the next legal processing callback.
+    panicRequested_.store(true, std::memory_order_release);
     haveHostPosition_ = false;
+    hostWasPlaying_ = false;
+    clearInputKeys();
 }
-
-void ThreeBSProcessor::releaseResources() {}
+void ThreeBSProcessor::releaseResources() {
+    // JUCE provides no output buffer here. Defer cleanup to the next callback;
+    // host teardown must also honour its own MIDI note-termination contract.
+    panicRequested_.store(true, std::memory_order_release);
+    clearInputKeys();
+    haveHostPosition_ = false;
+    hostWasPlaying_ = false;
+}
 
 bool ThreeBSProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {
 #if THREEBS_AU_MIDI_EFFECT
     return layouts.getMainInputChannelSet().isDisabled() && layouts.getMainOutputChannelSet().isDisabled();
 #else
     return layouts.getMainInputChannelSet().isDisabled()
-           && layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo();
+        && layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo();
 #endif
 }
 
-void ThreeBSProcessor::consumeCommands(MusicEngine::EventBuffer& eventBuffer) noexcept {
+bool ThreeBSProcessor::consumeCommand(EventSink sink) noexcept {
     EngineCommand command;
-    while (commands_.pop(command)) {
-        if (command.type == CommandType::Reconfigure) {
-            engine_.allNotesOff(0, eventBuffer);
-            engineConfig_ = command.config;
-            engine_.setConfig(engineConfig_);
-            continue;
-        }
-        if (command.type == CommandType::Replace) {
-            engineConfig_ = command.config;
-            engine_.setConfig(engineConfig_);
-            loopPolicy_.store(static_cast<int>(command.loopPolicy), std::memory_order_relaxed);
-        }
-        engine_.reset(command.state, &eventBuffer);
-        storedInitial_.store(command.state);
+    if (!commands_.consume(command)) return false;
+    activeConfiguration_ = command.configuration;
+    activeParameters_ = command.parameters;
+    activeChangedMask_ = 0;
+    activeRevision_ = command.revision;
+    // Core reconfiguration cleans only affected voices. Install the current
+    // input gate/transpose as well, avoiding a transient global reconfiguration.
+    updateEngineConfigFromParameters();
+    if (command.resetRevision > activeResetRevision_) {
+        (void)engine_.reset(activeConfiguration_.initial, sink);
+        activeResetRevision_ = command.resetRevision;
         freeBeat_ = 0.0;
         hostWasPlaying_ = false;
         haveHostPosition_ = false;
+        clearInputKeys();
         ++trajectoryRevision_;
     }
-}
-
-void ThreeBSProcessor::applyVoiceParameters(const std::array<VoiceConfig, bodyCount>& voices) {
-    for (std::size_t body = 0; body < bodyCount; ++body) {
-        const auto suffix = juce::String(body + 1);
-        setParameterValue("voiceEnabled" + suffix, voices[body].enabled ? 1.0F : 0.0F);
-        setParameterValue("voiceScale" + suffix, static_cast<float>(voices[body].scale));
-        setParameterValue("voiceRoot" + suffix, static_cast<float>(voices[body].root));
-        setParameterValue("voicePitch" + suffix, static_cast<float>(voices[body].pitchMapping));
-        setParameterValue("voiceTrigger" + suffix, static_cast<float>(voices[body].triggerMapping));
-        setParameterValue("voiceOctave" + suffix, static_cast<float>(voices[body].octave));
-        setParameterValue("voiceDurMap" + suffix, static_cast<float>(voices[body].durationMapping));
-        setParameterValue("voiceDurGrid" + suffix, static_cast<float>(voices[body].durationGrid));
-        setParameterValue("voiceDurMin" + suffix, static_cast<float>(voices[body].minimumDurationBeats));
-        setParameterValue("voiceDurMax" + suffix, static_cast<float>(voices[body].maximumDurationBeats));
-    }
+    appliedChangedMask_.store(0, std::memory_order_release);
+    appliedRevision_.store(activeRevision_, std::memory_order_release);
+    return true;
 }
 
 void ThreeBSProcessor::updateEngineConfigFromParameters() noexcept {
-    engineConfig_.simulation.gravitationalConstant = parameterRefs_.gravity->load(std::memory_order_relaxed);
-    engineConfig_.simulation.softening = parameterRefs_.softening->load(std::memory_order_relaxed);
-    engineConfig_.simulation.speed = parameterRefs_.speed->load(std::memory_order_relaxed);
-    const auto density = static_cast<double>(parameterRefs_.density->load(std::memory_order_relaxed) / 100.0F);
-    engineConfig_.voicingMode = static_cast<VoicingMode>(std::clamp(
-        static_cast<int>(std::lround(parameterRefs_.voicingMode->load(std::memory_order_relaxed))), 0, 2));
-    engineConfig_.chordStrumMilliseconds = parameterRefs_.chordStrum->load(std::memory_order_relaxed);
-    engineConfig_.chordStrumUnit = static_cast<StrumUnit>(std::clamp(
-        static_cast<int>(std::lround(parameterRefs_.strumUnit->load(std::memory_order_relaxed))), 0, 2));
-    engineConfig_.chordStrumValue = parameterRefs_.strumValue->load(std::memory_order_relaxed);
-    engineConfig_.chordSystem.root = static_cast<std::uint8_t>(std::clamp(
-        static_cast<int>(std::lround(parameterRefs_.chordRoot->load(std::memory_order_relaxed))), 0, 11));
-    engineConfig_.chordSystem.scale = static_cast<ScaleId>(std::lround(
-        parameterRefs_.chordScale->load(std::memory_order_relaxed)));
-    engineConfig_.autoResetEnabled = parameterRefs_.autoReset->load(std::memory_order_relaxed) >= 0.5F;
-    {
-        const auto index = std::clamp(static_cast<int>(std::lround(
-            parameterRefs_.autoResetBars->load(std::memory_order_relaxed))), 0,
-            static_cast<int>(autoResetBarsValues.size()) - 1);
-        engineConfig_.autoResetBars = autoResetBarsValues[static_cast<std::size_t>(index)];
+    auto current = activeConfiguration_;
+    applyParameters(current, activeParameters_, activeChangedMask_);
+    current.engine.inputTranspose = current.engine.inputTransposeEnabled ? inputKeys_.transpose() : 0;
+    current.engine.inputGateOpen = !current.engine.inputGateEnabled || inputKeys_.heldNotes() > 0;
+    if (!engine_.setConfig(current.engine)) {
+        realtimeFaults_.fetch_or(1U, std::memory_order_relaxed);
+        return;
     }
-    for (std::size_t body = 0; body < bodyCount; ++body) {
-        auto& voice = engineConfig_.voices[body];
-        voice.probability = density;
-        voice.enabled = parameterRefs_.voiceEnabled[body]->load(std::memory_order_relaxed) >= 0.5F;
-        voice.scale = static_cast<ScaleId>(std::lround(
-            parameterRefs_.voiceScale[body]->load(std::memory_order_relaxed)));
-        voice.root = static_cast<std::uint8_t>(std::clamp(
-            static_cast<int>(std::lround(parameterRefs_.voiceRoot[body]->load(std::memory_order_relaxed))), 0, 11));
-        voice.pitchMapping = static_cast<PitchMapping>(std::lround(
-            parameterRefs_.voicePitch[body]->load(std::memory_order_relaxed)));
-        voice.triggerMapping = static_cast<TriggerMapping>(std::lround(
-            parameterRefs_.voiceTrigger[body]->load(std::memory_order_relaxed)));
-        voice.octave = static_cast<std::int8_t>(std::clamp(
-            static_cast<int>(std::lround(parameterRefs_.voiceOctave[body]->load(std::memory_order_relaxed))), -4, 4));
-        voice.durationMapping = static_cast<PitchMapping>(std::lround(
-            parameterRefs_.voiceDurMap[body]->load(std::memory_order_relaxed)));
-        voice.durationGrid = static_cast<DurationGrid>(std::clamp(static_cast<int>(std::lround(
-            parameterRefs_.voiceDurGrid[body]->load(std::memory_order_relaxed))), 0, 1));
-        voice.minimumDurationBeats = parameterRefs_.voiceDurMin[body]->load(std::memory_order_relaxed);
-        voice.maximumDurationBeats = parameterRefs_.voiceDurMax[body]->load(std::memory_order_relaxed);
-    }
-    const auto inputMode = static_cast<int>(parameterRefs_.inputMode->load(std::memory_order_relaxed));
-    engineConfig_.inputTransposeEnabled = inputMode == 1;
-    engineConfig_.inputGateEnabled = inputMode == 2;
-    engineConfig_.inputTranspose = engineConfig_.inputTransposeEnabled ? inputTranspose_ : 0;
-    engineConfig_.inputGateOpen = !engineConfig_.inputGateEnabled || heldNotes_ > 0;
-    engine_.setConfig(engineConfig_);
     for (std::size_t body = 0; body < bodyCount; ++body)
-        engine_.setBodyMass(body, parameterRefs_.masses[body]->load(std::memory_order_relaxed));
-    storedInitial_.store(engine_.simulation().initialState());
+        engine_.setBodyMass(body, current.initial.bodies[body].mass);
 }
 
-void ThreeBSProcessor::addEvents(const MusicEngine::EventBuffer& events, juce::MidiBuffer& midi) {
-    for (const auto& event : events) {
-        juce::MidiMessage message;
-        switch (event.type) {
-        case MidiEventType::NoteOn:
-            message = juce::MidiMessage::noteOn(event.channel, event.data1, event.data2);
-            break;
-        case MidiEventType::NoteOff:
-            message = juce::MidiMessage::noteOff(event.channel, event.data1);
-            break;
-        case MidiEventType::ControlChange:
-            message = juce::MidiMessage::controllerEvent(event.channel, event.data1, event.data2);
-            break;
-        }
-        midi.addEvent(message, static_cast<int>(event.sampleOffset));
-    }
+void ThreeBSProcessor::clearInputKeys() noexcept { inputKeys_.clear(); }
+
+void ThreeBSProcessor::applyInputEvent(const InputEvent& event) noexcept {
+    const auto channel = static_cast<std::uint8_t>(event.status & 0x0FU);
+    const auto kind = event.status & 0xF0U;
+    if (kind == 0x90U && event.data2 != 0U)
+        inputKeys_.noteOn(channel, event.data1);
+    else if (kind == 0x80U || (kind == 0x90U && event.data2 == 0U))
+        inputKeys_.noteOff(channel, event.data1);
+    else if (kind == 0xB0U && (event.data1 == 120U || event.data1 == 123U))
+        inputKeys_.allNotesOff(channel);
 }
 
-void ThreeBSProcessor::publishNoteVisualization(const MusicEngine::EventBuffer& events) noexcept {
-    for (const auto& event : events) {
-        if (event.type == MidiEventType::ControlChange)
-            continue;
-        NoteVisualizationEvent visual;
-        visual.type = event.type == MidiEventType::NoteOn
-            ? NoteVisualizationType::On : NoteVisualizationType::Off;
-        visual.body = event.sourceBody;
-        visual.note = event.data1;
-        visual.velocity = event.data2;
-        visual.sequence = ++noteVisualizationSequence_;
-        (void)noteVisualizationEvents_.push(visual);
-    }
+void ThreeBSProcessor::writeEvent(void* context, const MidiEvent& event) noexcept {
+    static_cast<ThreeBSProcessor*>(context)->emitEvent(event);
+}
+void ThreeBSProcessor::emitEvent(const MidiEvent& event) noexcept {
+    const auto absoluteOffset = outputOffset_ + event.sampleOffset;
+    std::array<juce::uint8, 3> bytes{};
+    const auto kind = event.type == MidiEventType::NoteOn ? 0x90U
+        : event.type == MidiEventType::NoteOff ? 0x80U : 0xB0U;
+    bytes[0] = static_cast<juce::uint8>(kind | ((event.channel - 1U) & 0x0FU));
+    bytes[1] = event.data1; bytes[2] = event.data2;
+    // The MIDI buffer is host-owned. Its capacity must be provided/reused by the
+    // host; the engine and adapter own no growing storage on this path.
+    if (outputMidi_ != nullptr)
+        (void)outputMidi_->addEvent(bytes.data(), static_cast<int>(bytes.size()), static_cast<int>(absoluteOffset));
+    if (event.type == MidiEventType::ControlChange) return;
+    NoteVisualizationEvent visual;
+    visual.type = event.type == MidiEventType::NoteOn ? NoteVisualizationType::On : NoteVisualizationType::Off;
+    visual.body = event.sourceBody; visual.note = event.data1; visual.velocity = event.data2;
+    visual.sequence = ++noteVisualizationSequence_;
+    visual.timelineSeconds = processingSeconds_ + static_cast<double>(absoluteOffset) / sampleRate_;
+    visual.trajectoryRevision = trajectoryRevision_ + engine_.trajectoryRevision();
+    (void)noteVisualizationEvents_.push(visual);
 }
 
 void ThreeBSProcessor::processBlock(juce::AudioBuffer<float>& audio, juce::MidiBuffer& midi) {
     juce::ScopedNoDenormals noDenormals;
     audio.clear();
-
+    const auto sampleCount = static_cast<std::uint32_t>(audio.getNumSamples());
+    std::size_t inputCount{};
+    bool inputOverflow{};
     for (const auto metadata : midi) {
-        const auto message = metadata.getMessage();
-        if (message.isNoteOn()) {
-            ++heldNotes_;
-            inputTranspose_ = static_cast<std::int8_t>(message.getNoteNumber() % 12);
-        } else if (message.isNoteOff()) {
-            heldNotes_ = std::max(0, heldNotes_ - 1);
+        // Inspect the non-owning view. Long SysEx/meta messages are intentionally
+        // ignored without allocating an owning MidiMessage.
+        if (metadata.numBytes != 3 || metadata.data == nullptr) continue;
+        const auto kind = metadata.data[0] & 0xF0U;
+        if (!(kind == 0x80U || kind == 0x90U
+            || (kind == 0xB0U && (metadata.data[1] == 120U || metadata.data[1] == 123U)))) continue;
+        if (metadata.data[1] >= 128U || metadata.data[2] >= 128U
+            || metadata.samplePosition < 0
+            || static_cast<std::uint32_t>(metadata.samplePosition) >= sampleCount) {
+            realtimeFaults_.fetch_or(2U, std::memory_order_relaxed); continue;
         }
+        if (inputCount == inputEvents_.size()) { inputOverflow = true; break; }
+        inputEvents_[inputCount++] = {static_cast<std::uint32_t>(metadata.samplePosition),
+            metadata.data[0], metadata.data[1], metadata.data[2]};
     }
     midi.clear();
+    outputMidi_ = &midi;
+    outputOffset_ = 0;
+    const EventSink sink{this, &ThreeBSProcessor::writeEvent};
+    const bool replaced = consumeCommand(sink);
+    if (!replaced) {
+        const auto before = parameterTransaction_.load(std::memory_order_acquire);
+        if ((before & 1U) == 0 && publishedRevision_.load(std::memory_order_acquire) == activeRevision_) {
+            const auto values = readParameters();
+            if (parameterTransaction_.load(std::memory_order_acquire) == before
+                && publishedRevision_.load(std::memory_order_acquire) == activeRevision_) {
+                for (std::size_t i = 0; i < ParameterCount; ++i)
+                    if (values[i] != activeParameters_[i]) activeChangedMask_ |= std::uint64_t{1} << i;
+                activeParameters_ = values;
+                appliedChangedMask_.store(activeChangedMask_, std::memory_order_release);
+            }
+        }
+    }
+    auto current = activeConfiguration_;
+    applyParameters(current, activeParameters_, activeChangedMask_);
+    if (panicRequested_.exchange(false, std::memory_order_acq_rel) || inputOverflow) {
+        engine_.allNotesOff(0, sink);
+        clearInputKeys();
+    }
+    if (inputOverflow) {
+        realtimeFaults_.fetch_or(4U, std::memory_order_relaxed);
+        processingSeconds_ += static_cast<double>(sampleCount) / sampleRate_;
+        freeBeat_ += 2.0 * static_cast<double>(sampleCount) / sampleRate_;
+        hostWasPlaying_ = false;
+        haveHostPosition_ = false;
+        publishSnapshot();
+        outputMidi_ = nullptr;
+        return;
+    }
 
-    MusicEngine::EventBuffer generated;
-    consumeCommands(generated);
-    publishNoteVisualization(generated);
-    addEvents(generated, midi);
-    updateEngineConfigFromParameters();
-
-    const auto sampleCount = static_cast<std::uint32_t>(audio.getNumSamples());
-    auto bpm = 120.0;
-    auto ppq = freeBeat_;
-    auto hostPlaying = true;
-    bool loopWrapped{};
-    bool seeked{};
-    const auto manualSource = static_cast<int>(std::lround(
-        parameterRefs_.timeSigSource->load(std::memory_order_relaxed))) == 1;
-    const auto manualNum = std::clamp(static_cast<int>(std::lround(
-        parameterRefs_.timeSigNum->load(std::memory_order_relaxed))) + 1, 1, 16);
-    const auto denomIndex = std::clamp(static_cast<int>(std::lround(
-        parameterRefs_.timeSigDenom->load(std::memory_order_relaxed))), 0,
-        static_cast<int>(timeSigDenominators.size()) - 1);
-    int timeSigNumerator = manualNum;
-    int timeSigDenominator = timeSigDenominators[static_cast<std::size_t>(denomIndex)];
+    double bpm = 120.0;
+    double ppq = freeBeat_;
+    bool hostPlaying = true, loopWrapped = false, seeked = false;
+    int numerator = current.timeSignatureNumerator;
+    int denominator = current.timeSignatureDenominator;
+    bool timingValid = true;
     if (auto* playHead = getPlayHead()) {
         if (const auto position = playHead->getPosition()) {
             bpm = position->getBpm().orFallback(120.0);
             ppq = position->getPpqPosition().orFallback(freeBeat_);
             hostPlaying = position->getIsPlaying();
-            if (!manualSource) {
-                if (const auto sig = position->getTimeSignature()) {
-                    timeSigNumerator = std::clamp(sig->numerator, 1, 64);
-                    timeSigDenominator = std::clamp(sig->denominator, 1, 64);
+            timingValid = std::isfinite(bpm) && bpm > 0.0 && bpm <= 1000.0
+                && std::isfinite(ppq) && std::abs(ppq) <= 1.0e12;
+            if (current.timeSignatureSource == TimeSignatureSource::Host)
+                if (const auto signature = position->getTimeSignature()) {
+                    timingValid = timingValid && signature->numerator >= 1 && signature->numerator <= 64
+                        && signature->denominator >= 1 && signature->denominator <= 64;
+                    numerator = signature->numerator; denominator = signature->denominator;
                 }
-            }
-            if (haveHostPosition_) {
-                loopWrapped = ppq < lastPpq_ - 0.25;
+            if (haveHostPosition_ && timingValid && hostWasPlaying_ && hostPlaying) {
                 const auto expected = lastPpq_ + lastBeatsPerSample_ * static_cast<double>(lastBlockSize_);
-                seeked = !loopWrapped && std::abs(ppq - expected) > 0.125;
+                const auto tolerance = std::max(1.0e-7, 2.0 * std::abs(lastBeatsPerSample_));
+                if (position->getIsLooping())
+                    if (const auto loop = position->getLoopPoints()) {
+                        const auto length = loop->ppqEnd - loop->ppqStart;
+                        if (std::isfinite(length) && length > 0.0 && expected >= loop->ppqEnd - tolerance) {
+                            const auto wrapped = loop->ppqStart + std::fmod(expected - loop->ppqStart, length);
+                            loopWrapped = std::abs(ppq - wrapped) <= tolerance;
+                        }
+                    }
+                seeked = !loopWrapped && std::abs(ppq - expected) > tolerance;
             }
-            haveHostPosition_ = true;
+            haveHostPosition_ = timingValid;
         }
     }
-
+    if (!timingValid) {
+        realtimeFaults_.fetch_or(8U, std::memory_order_relaxed);
+        engine_.allNotesOff(0, sink);
+        clearInputKeys();
+        processingSeconds_ += static_cast<double>(sampleCount) / sampleRate_;
+        hostWasPlaying_ = false;
+        haveHostPosition_ = false;
+        publishSnapshot();
+        outputMidi_ = nullptr;
+        return;
+    }
     const auto beatsPerSample = bpm / (60.0 * sampleRate_);
-    const auto sync = parameterRefs_.sync->load(std::memory_order_relaxed) >= 0.5F;
-    const auto run = parameterRefs_.run->load(std::memory_order_relaxed) >= 0.5F;
     ProcessContext context;
-    context.sampleCount = sampleCount;
     context.sampleRate = sampleRate_;
-    context.beatAtStart = sync ? ppq : freeBeat_;
+    context.beatAtStart = current.sync ? ppq : freeBeat_;
     context.beatsPerSample = beatsPerSample;
-    context.timeSigNumerator = timeSigNumerator;
-    context.timeSigDenominator = timeSigDenominator;
-    context.playing = run && (sync ? hostPlaying : true);
+    context.timeSigNumerator = numerator; context.timeSigDenominator = denominator;
+    context.playing = current.run && (!current.sync || hostPlaying);
     context.transportStarted = context.playing && !hostWasPlaying_;
-    context.seeked = sync && seeked;
-    context.loopWrapped = sync && loopWrapped;
-    context.loopPolicy = static_cast<LoopPolicy>(loopPolicy_.load(std::memory_order_relaxed));
-
-    if (context.transportStarted || context.seeked
-        || (context.loopWrapped && context.loopPolicy == LoopPolicy::Restart))
+    context.seeked = current.sync && seeked;
+    context.loopWrapped = current.sync && loopWrapped;
+    context.loopPolicy = current.loopPolicy;
+    const bool resetTimeline = context.transportStarted || context.seeked
+        || (context.loopWrapped && context.loopPolicy == LoopPolicy::Restart);
+    if (resetTimeline || (!context.playing && hostWasPlaying_)) {
+        clearInputKeys();
         ++trajectoryRevision_;
-
-    engine_.process(context, generated);
-    publishNoteVisualization(generated);
-    addEvents(generated, midi);
+    }
+    updateEngineConfigFromParameters();
+    std::uint32_t offset{};
+    std::size_t index{};
+    bool first = true;
+    const auto processSpan = [&](std::uint32_t end) {
+        if (end == offset && !first) return;
+        auto segment = context;
+        segment.sampleCount = end - offset;
+        segment.beatAtStart += beatsPerSample * static_cast<double>(offset);
+        segment.transportStarted = first && context.transportStarted;
+        segment.seeked = first && context.seeked;
+        segment.loopWrapped = first && context.loopWrapped;
+        outputOffset_ = offset;
+        engine_.process(segment, sink);
+        first = false;
+        offset = end;
+    };
+    while (index < inputCount) {
+        const auto eventOffset = inputEvents_[index].offset;
+        if (eventOffset > offset) processSpan(eventOffset);
+        do { applyInputEvent(inputEvents_[index++]); }
+        while (index < inputCount && inputEvents_[index].offset == eventOffset);
+        updateEngineConfigFromParameters();
+    }
+    processSpan(sampleCount);
     freeBeat_ += beatsPerSample * static_cast<double>(sampleCount);
+    processingSeconds_ += static_cast<double>(sampleCount) / sampleRate_;
     hostWasPlaying_ = context.playing;
     lastPpq_ = ppq;
     lastBeatsPerSample_ = beatsPerSample;
     lastBlockSize_ = static_cast<int>(sampleCount);
-    const auto& respawns = engine_.simulation().state().respawnCount;
-    if (respawns != lastRespawnCounts_) {
-        lastRespawnCounts_ = respawns;
-        ++trajectoryRevision_;
-    }
     publishSnapshot();
+    outputMidi_ = nullptr;
 }
 
 void ThreeBSProcessor::processBlockBypassed(juce::AudioBuffer<float>& audio, juce::MidiBuffer& midi) {
-    audio.clear();
-    midi.clear();
-    MusicEngine::EventBuffer events;
-    engine_.allNotesOff(0, events);
-    publishNoteVisualization(events);
-    addEvents(events, midi);
+    audio.clear(); midi.clear();
+    outputMidi_ = &midi; outputOffset_ = 0;
+    engine_.allNotesOff(0, EventSink{this, &ThreeBSProcessor::writeEvent});
+    clearInputKeys();
     hostWasPlaying_ = false;
+    haveHostPosition_ = false;
+    processingSeconds_ += static_cast<double>(audio.getNumSamples()) / sampleRate_;
+    publishSnapshot();
+    outputMidi_ = nullptr;
 }
 
 void ThreeBSProcessor::publishSnapshot() noexcept {
@@ -581,264 +764,30 @@ void ThreeBSProcessor::publishSnapshot() noexcept {
     snapshot.bodies = engine_.simulation().state().bodies;
     snapshot.escaped = engine_.simulation().state().escaped;
     snapshot.sequence = ++snapshotSequence_;
-    snapshot.trajectoryRevision = trajectoryRevision_;
+    snapshot.trajectoryRevision = trajectoryRevision_ + engine_.trajectoryRevision();
     snapshot.interpolationAlpha = engine_.simulation().interpolationAlpha();
-    std::uint32_t escapeMask{};
-    if (engineConfig_.simulation.escapePolicy == EscapePolicy::Prompt) {
-        for (std::size_t body = 0; body < bodyCount; ++body) {
-            if (snapshot.escaped[body])
-                escapeMask |= (1U << body);
-        }
-    }
-    escapePromptMask_.store(escapeMask, std::memory_order_relaxed);
-    if (!snapshots_.push(snapshot)) {
-        RenderSnapshot discarded;
-        snapshots_.pop(discarded);
-        snapshots_.push(snapshot);
-    }
+    snapshot.timelineSeconds = processingSeconds_;
+    std::uint32_t escaped{};
+    if (engine_.config().simulation.escapePolicy == EscapePolicy::Prompt)
+        for (std::size_t body = 0; body < bodyCount; ++body)
+            if (snapshot.escaped[body]) escaped |= 1U << body;
+    escapePromptMask_.store(escaped, std::memory_order_relaxed);
+    // The renderer exclusively owns the read index. Dropping a visual frame
+    // never modifies its slot while the renderer is reading it.
+    if (!snapshots_.push(snapshot)) droppedSnapshots_.fetch_add(1, std::memory_order_relaxed);
 }
 
-juce::AudioProcessorEditor* ThreeBSProcessor::createEditor() {
-    return new ThreeBSEditor(*this);
-}
-
-void ThreeBSProcessor::setParameterValue(const juce::String& id, float plainValue) {
-    if (auto* parameter = parameters_.getParameter(id))
-        parameter->setValueNotifyingHost(parameter->convertTo0to1(plainValue));
-}
-
-void ThreeBSProcessor::requestPreset(const ArtworkPreset& preset, int presetIndex) {
-    EngineCommand command;
-    command.type = CommandType::Replace;
-    command.state = makeInitialState(preset.system, preset.seed, preset.chaos);
-    command.config.simulation = preset.simulation;
-    command.config.voices = preset.voices;
-    storedConfigurationTemplate_ = command.config;
-    command.loopPolicy = preset.loopPolicy;
-    commands_.push(command);
-    storedBaseInitial_.store(command.state);
-    storedPlaneTilts_.store({});
-    storedPresentation_.store(preset.presentation);
-    selectedVoicingPreset_.store(-1, std::memory_order_relaxed);
-    setParameterValue("preset", static_cast<float>(presetIndex));
-    setParameterValue("gravity", static_cast<float>(preset.simulation.gravitationalConstant));
-    setParameterValue("softening", static_cast<float>(preset.simulation.softening));
-    setParameterValue("speed", static_cast<float>(preset.simulation.speed));
-    setParameterValue("trail", preset.presentation.visual.trailSeconds);
-    setParameterValue("bloom", preset.presentation.visual.bloom * 100.0F);
-    float averageProbability{};
-    for (std::size_t i = 0; i < bodyCount; ++i) {
-        setParameterValue("mass" + juce::String(i + 1), static_cast<float>(command.state.bodies[i].mass));
-        averageProbability += static_cast<float>(preset.voices[i].probability);
-    }
-    setParameterValue("density", averageProbability * 100.0F / static_cast<float>(bodyCount));
-    applyVoiceParameters(preset.voices);
-}
-
-void ThreeBSProcessor::requestVoicingPreset(const VoicingPreset& preset, int presetIndex) {
-    auto configuration = currentUserConfiguration().engine;
-    configuration.voices = preset.voices;
-    configuration.voicingMode = preset.mode;
-    configuration.chordStrumMilliseconds = preset.chordStrumMilliseconds;
-    configuration.chordStrumUnit = preset.chordStrumUnit;
-    configuration.chordStrumValue = preset.chordStrumValue;
-    configuration.chordSystem = preset.chordSystem;
-    storedConfigurationTemplate_ = configuration;
-    selectedVoicingPreset_.store(std::clamp(presetIndex, 0, 11), std::memory_order_relaxed);
-
-    setParameterValue("density", static_cast<float>(preset.densityPercent));
-    setParameterValue("voicingMode", static_cast<float>(preset.mode));
-    setParameterValue("chordStrum", static_cast<float>(preset.chordStrumMilliseconds));
-    setParameterValue("strumUnit", static_cast<float>(preset.chordStrumUnit));
-    setParameterValue("strumValue", static_cast<float>(preset.chordStrumValue));
-    setParameterValue("chordRoot", static_cast<float>(preset.chordSystem.root));
-    setParameterValue("chordScale", static_cast<float>(preset.chordSystem.scale));
-    applyVoiceParameters(preset.voices);
-
-    EngineCommand command;
-    command.type = CommandType::Reconfigure;
-    command.config = configuration;
-    commands_.push(command);
-}
-
-void ThreeBSProcessor::requestRandomize(double chaos) {
-    EngineCommand command;
-    command.type = CommandType::Replace;
-    const auto seed = nextSeed_.fetch_add(1, std::memory_order_relaxed);
-    auto base = makeInitialState(InitialSystem::ControlledChaos, seed, chaos);
-    command.state = applyInitialPlaneTilts(base, storedPlaneTilts_.load());
-    storedBaseInitial_.store(base);
-    auto presentation = storedPresentation_.load();
-    presentation.visualSeed = seed;
-    storedPresentation_.store(presentation);
-    PresetCatalog catalog;
-    const auto selected = static_cast<int>(parameterValue(parameters_, "preset"));
-    if (catalog.valid() && selected >= 0 && static_cast<std::size_t>(selected) < catalog.size()) {
-        command.config.simulation = catalog[static_cast<std::size_t>(selected)].simulation;
-        command.config.voices = catalog[static_cast<std::size_t>(selected)].voices;
-        command.loopPolicy = catalog[static_cast<std::size_t>(selected)].loopPolicy;
-    }
-    commands_.push(command);
-}
-
-void ThreeBSProcessor::requestReset() {
-    EngineCommand command;
-    command.type = CommandType::Reset;
-    command.state = storedInitial_.load();
-    command.config = engineConfig_;
-    commands_.push(command);
-}
-
-void ThreeBSProcessor::requestExactState(const SimulationState& state) {
-    EngineCommand command;
-    command.type = CommandType::Replace;
-    command.state = state;
-    storedBaseInitial_.store(state);
-    storedPlaneTilts_.store({});
-    PresetCatalog catalog;
-    const auto selected = static_cast<int>(parameterValue(parameters_, "preset"));
-    if (catalog.valid() && selected >= 0 && static_cast<std::size_t>(selected) < catalog.size()) {
-        command.config.simulation = catalog[static_cast<std::size_t>(selected)].simulation;
-        command.config.voices = catalog[static_cast<std::size_t>(selected)].voices;
-        command.loopPolicy = catalog[static_cast<std::size_t>(selected)].loopPolicy;
-    }
-    commands_.push(command);
-    auto presentation = storedPresentation_.load();
-    presentation.visualSeed = state.seed;
-    storedPresentation_.store(presentation);
-    for (std::size_t body = 0; body < bodyCount; ++body)
-        setParameterValue("mass" + juce::String(body + 1), static_cast<float>(state.bodies[body].mass));
-}
-
-void ThreeBSProcessor::requestPlaneTilts(const std::array<double, bodyCount>& tiltDegrees) {
-    auto base = storedBaseInitial_.load();
-    const auto current = storedInitial_.load();
-    for (std::size_t body = 0; body < bodyCount; ++body)
-        base.bodies[body].mass = current.bodies[body].mass;
-    const auto tilted = applyInitialPlaneTilts(base, tiltDegrees);
-    EngineCommand command;
-    command.type = CommandType::Reset;
-    command.state = tilted;
-    storedBaseInitial_.store(base);
-    storedInitial_.store(tilted);
-    storedPlaneTilts_.store(tiltDegrees);
-    commands_.push(command);
-}
-
-UserConfiguration ThreeBSProcessor::currentUserConfiguration() const {
-    UserConfiguration result;
-    result.initial = storedInitial_.load();
-    result.baseInitial = storedBaseInitial_.load();
-    result.planeTilts = storedPlaneTilts_.load();
-    result.presentation = storedPresentation_.load();
-    result.loopPolicy = static_cast<LoopPolicy>(loopPolicy_.load(std::memory_order_relaxed));
-    result.chaosPercent = parameterRefs_.chaos->load(std::memory_order_relaxed);
-    result.densityPercent = parameterRefs_.density->load(std::memory_order_relaxed);
-    result.presetIndex = std::clamp(static_cast<int>(std::lround(
-        parameterRefs_.preset->load(std::memory_order_relaxed))), 0, 23);
-    result.voicingPresetIndex = selectedVoicingPreset_.load(std::memory_order_relaxed);
-    result.run = parameterRefs_.run->load(std::memory_order_relaxed) >= 0.5F;
-    result.sync = parameterRefs_.sync->load(std::memory_order_relaxed) >= 0.5F;
-    result.engine = storedConfigurationTemplate_;
-    result.engine.simulation.gravitationalConstant = parameterRefs_.gravity->load(std::memory_order_relaxed);
-    result.engine.simulation.softening = parameterRefs_.softening->load(std::memory_order_relaxed);
-    result.engine.simulation.speed = parameterRefs_.speed->load(std::memory_order_relaxed);
-    result.engine.voicingMode = static_cast<VoicingMode>(std::clamp(static_cast<int>(std::lround(
-        parameterRefs_.voicingMode->load(std::memory_order_relaxed))), 0, 2));
-    result.engine.chordStrumMilliseconds = parameterRefs_.chordStrum->load(std::memory_order_relaxed);
-    result.engine.chordStrumUnit = static_cast<StrumUnit>(std::clamp(static_cast<int>(std::lround(
-        parameterRefs_.strumUnit->load(std::memory_order_relaxed))), 0, 2));
-    result.engine.chordStrumValue = parameterRefs_.strumValue->load(std::memory_order_relaxed);
-    result.engine.chordSystem.root = static_cast<std::uint8_t>(std::clamp(static_cast<int>(std::lround(
-        parameterRefs_.chordRoot->load(std::memory_order_relaxed))), 0, 11));
-    result.engine.chordSystem.scale = static_cast<ScaleId>(std::clamp(static_cast<int>(std::lround(
-        parameterRefs_.chordScale->load(std::memory_order_relaxed))), 0, 14));
-    result.engine.autoResetEnabled = parameterRefs_.autoReset->load(std::memory_order_relaxed) >= 0.5F;
-    {
-        const auto index = std::clamp(static_cast<int>(std::lround(
-            parameterRefs_.autoResetBars->load(std::memory_order_relaxed))), 0,
-            static_cast<int>(autoResetBarsValues.size()) - 1);
-        result.engine.autoResetBars = autoResetBarsValues[static_cast<std::size_t>(index)];
-    }
-    const auto inputMode = static_cast<int>(std::lround(parameterRefs_.inputMode->load(std::memory_order_relaxed)));
-    result.engine.inputTransposeEnabled = inputMode == 1;
-    result.engine.inputGateEnabled = inputMode == 2;
-    for (std::size_t body = 0; body < bodyCount; ++body) {
-        auto& voice = result.engine.voices[body];
-        voice.enabled = parameterRefs_.voiceEnabled[body]->load(std::memory_order_relaxed) >= 0.5F;
-        voice.root = static_cast<std::uint8_t>(std::clamp(static_cast<int>(std::lround(
-            parameterRefs_.voiceRoot[body]->load(std::memory_order_relaxed))), 0, 11));
-        voice.scale = static_cast<ScaleId>(std::clamp(static_cast<int>(std::lround(
-            parameterRefs_.voiceScale[body]->load(std::memory_order_relaxed))), 0, 14));
-        voice.pitchMapping = static_cast<PitchMapping>(std::clamp(static_cast<int>(std::lround(
-            parameterRefs_.voicePitch[body]->load(std::memory_order_relaxed))), 0, 8));
-        voice.triggerMapping = static_cast<TriggerMapping>(std::clamp(static_cast<int>(std::lround(
-            parameterRefs_.voiceTrigger[body]->load(std::memory_order_relaxed))), 0, 7));
-        voice.octave = static_cast<std::int8_t>(std::clamp(static_cast<int>(std::lround(
-            parameterRefs_.voiceOctave[body]->load(std::memory_order_relaxed))), -4, 4));
-        voice.durationMapping = static_cast<PitchMapping>(std::clamp(static_cast<int>(std::lround(
-            parameterRefs_.voiceDurMap[body]->load(std::memory_order_relaxed))), 0, 8));
-        voice.durationGrid = static_cast<DurationGrid>(std::clamp(static_cast<int>(std::lround(
-            parameterRefs_.voiceDurGrid[body]->load(std::memory_order_relaxed))), 0, 1));
-        voice.minimumDurationBeats = parameterRefs_.voiceDurMin[body]->load(std::memory_order_relaxed);
-        voice.maximumDurationBeats = parameterRefs_.voiceDurMax[body]->load(std::memory_order_relaxed);
-        voice.probability = result.densityPercent / 100.0;
-    }
-    return result;
-}
-
-void ThreeBSProcessor::applyUserConfiguration(const UserConfiguration& configuration) {
-    EngineCommand command;
-    command.type = CommandType::Replace;
-    command.state = configuration.initial;
-    command.config = configuration.engine;
-    command.loopPolicy = configuration.loopPolicy;
-    storedInitial_.store(configuration.initial);
-    storedBaseInitial_.store(configuration.baseInitial);
-    storedPlaneTilts_.store(configuration.planeTilts);
-    storedPresentation_.store(configuration.presentation);
-    storedConfigurationTemplate_ = configuration.engine;
-    selectedVoicingPreset_.store(configuration.voicingPresetIndex, std::memory_order_relaxed);
-    loopPolicy_.store(static_cast<int>(configuration.loopPolicy), std::memory_order_relaxed);
-    commands_.push(command);
-
-    setParameterValue("run", configuration.run ? 1.0F : 0.0F);
-    setParameterValue("sync", configuration.sync ? 1.0F : 0.0F);
-    setParameterValue("preset", static_cast<float>(configuration.presetIndex));
-    setParameterValue("chaos", static_cast<float>(configuration.chaosPercent));
-    setParameterValue("density", static_cast<float>(configuration.densityPercent));
-    setParameterValue("gravity", static_cast<float>(configuration.engine.simulation.gravitationalConstant));
-    setParameterValue("softening", static_cast<float>(configuration.engine.simulation.softening));
-    setParameterValue("speed", static_cast<float>(configuration.engine.simulation.speed));
-    setParameterValue("trail", configuration.presentation.visual.trailSeconds);
-    setParameterValue("bloom", configuration.presentation.visual.bloom * 100.0F);
-    setParameterValue("voicingMode", static_cast<float>(configuration.engine.voicingMode));
-    setParameterValue("chordStrum", static_cast<float>(configuration.engine.chordStrumMilliseconds));
-    setParameterValue("strumUnit", static_cast<float>(configuration.engine.chordStrumUnit));
-    setParameterValue("strumValue", static_cast<float>(configuration.engine.chordStrumValue));
-    setParameterValue("chordRoot", static_cast<float>(configuration.engine.chordSystem.root));
-    setParameterValue("chordScale", static_cast<float>(configuration.engine.chordSystem.scale));
-    setParameterValue("autoReset", configuration.engine.autoResetEnabled ? 1.0F : 0.0F);
-    setParameterValue("autoResetBars",
-                      static_cast<float>(autoResetBarsToIndex(configuration.engine.autoResetBars)));
-    setParameterValue("inputMode", configuration.engine.inputTransposeEnabled ? 1.0F
-        : configuration.engine.inputGateEnabled ? 2.0F : 0.0F);
-    applyVoiceParameters(configuration.engine.voices);
-    for (std::size_t body = 0; body < bodyCount; ++body)
-        setParameterValue("mass" + juce::String(body + 1),
-                          static_cast<float>(configuration.initial.bodies[body].mass));
-}
-
-std::array<double, bodyCount> ThreeBSProcessor::initialPlaneTilts() const noexcept {
-    return storedPlaneTilts_.load();
-}
+juce::AudioProcessorEditor* ThreeBSProcessor::createEditor() { return new ThreeBSEditor(*this); }
 
 void ThreeBSProcessor::getStateInformation(juce::MemoryBlock& destination) {
+    std::lock_guard lock(configurationMutex_);
+    const auto configuration = currentConfigurationLocked();
     auto state = parameters_.copyState();
+    const auto values = legalParameterValues(configuration);
+    for (std::size_t i = 0; i < ParameterCount; ++i) setStateParameter(state, parameterIds_[i], values[i]);
     state.setProperty("schemaVersion", static_cast<int>(stateSchemaVersion), nullptr);
-    state.setProperty("configurationTemplateJson",
-                      serializeUserConfiguration(currentUserConfiguration()), nullptr);
-    const auto presentation = storedPresentation_.load();
+    state.setProperty("configurationTemplateJson", serializeUserConfiguration(configuration), nullptr);
+    const auto& presentation = configuration.presentation;
     state.setProperty("visualTrailSeconds", presentation.visual.trailSeconds, nullptr);
     state.setProperty("visualTrailWidth", presentation.visual.trailWidth, nullptr);
     state.setProperty("visualExtrusion", presentation.visual.extrusion, nullptr);
@@ -857,191 +806,193 @@ void ThreeBSProcessor::getStateInformation(juce::MemoryBlock& destination) {
     state.setProperty("notePaneMinimized", presentation.notePaneMinimized, nullptr);
     state.setProperty("notePaneStyle", static_cast<int>(presentation.notePaneStyle), nullptr);
     state.setProperty("visualSeed", juce::String(presentation.visualSeed), nullptr);
-    const auto initial = storedInitial_.load();
-    const auto baseInitial = storedBaseInitial_.load();
-    const auto planeTilts = storedPlaneTilts_.load();
-    state.setProperty("seed", juce::String(initial.seed), nullptr);
-    state.setProperty("loopPolicy", loopPolicy_.load(std::memory_order_relaxed), nullptr);
-    for (std::size_t i = 0; i < bodyCount; ++i) {
-        const auto prefix = "body" + juce::String(i) + "_";
-        const auto basePrefix = "baseBody" + juce::String(i) + "_";
-        state.setProperty("initialTiltBody" + juce::String(i), planeTilts[i], nullptr);
-        state.setProperty(prefix + "mass", initial.bodies[i].mass, nullptr);
-        state.setProperty(prefix + "px", initial.bodies[i].position.x, nullptr);
-        state.setProperty(prefix + "py", initial.bodies[i].position.y, nullptr);
-        state.setProperty(prefix + "pz", initial.bodies[i].position.z, nullptr);
-        state.setProperty(prefix + "vx", initial.bodies[i].velocity.x, nullptr);
-        state.setProperty(prefix + "vy", initial.bodies[i].velocity.y, nullptr);
-        state.setProperty(prefix + "vz", initial.bodies[i].velocity.z, nullptr);
-        state.setProperty(basePrefix + "mass", baseInitial.bodies[i].mass, nullptr);
-        state.setProperty(basePrefix + "px", baseInitial.bodies[i].position.x, nullptr);
-        state.setProperty(basePrefix + "py", baseInitial.bodies[i].position.y, nullptr);
-        state.setProperty(basePrefix + "pz", baseInitial.bodies[i].position.z, nullptr);
-        state.setProperty(basePrefix + "vx", baseInitial.bodies[i].velocity.x, nullptr);
-        state.setProperty(basePrefix + "vy", baseInitial.bodies[i].velocity.y, nullptr);
-        state.setProperty(basePrefix + "vz", baseInitial.bodies[i].velocity.z, nullptr);
+    state.setProperty("seed", juce::String(configuration.initial.seed), nullptr);
+    state.setProperty("loopPolicy", static_cast<int>(configuration.loopPolicy), nullptr);
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        state.setProperty("initialTiltBody" + juce::String(body), formatExactNumber(configuration.planeTilts[body]), nullptr);
+        for (int base = 0; base < 2; ++base) {
+            const auto prefix = juce::String(base == 0 ? "body" : "baseBody") + juce::String(body) + "_";
+            const auto& value = (base == 0 ? configuration.initial : configuration.baseInitial).bodies[body];
+            state.setProperty(prefix + "mass", formatExactNumber(value.mass), nullptr);
+            state.setProperty(prefix + "px", formatExactNumber(value.position.x), nullptr);
+            state.setProperty(prefix + "py", formatExactNumber(value.position.y), nullptr);
+            state.setProperty(prefix + "pz", formatExactNumber(value.position.z), nullptr);
+            state.setProperty(prefix + "vx", formatExactNumber(value.velocity.x), nullptr);
+            state.setProperty(prefix + "vy", formatExactNumber(value.velocity.y), nullptr);
+            state.setProperty(prefix + "vz", formatExactNumber(value.velocity.z), nullptr);
+        }
     }
-    if (auto xml = state.createXml())
-        copyXmlToBinary(*xml, destination);
+    if (auto xml = state.createXml()) copyXmlToBinary(*xml, destination);
 }
 
 void ThreeBSProcessor::setStateInformation(const void* data, int size) {
-    auto xml = getXmlFromBinary(data, size);
-    if (xml == nullptr || !xml->hasTagName(parameters_.state.getType().toString()))
-        return;
-    auto state = juce::ValueTree::fromXml(*xml);
-    if (!state.isValid())
-        return;
-    const auto schema = static_cast<int>(state.getProperty("schemaVersion", 1));
-    if (schema < 2) {
-        const auto oldTrail = stateParameterValue(state, "trail", 82.0F);
-        const auto normalized = oldTrail <= 1.0F ? oldTrail : oldTrail / 100.0F;
-        setStateParameterValue(state, "trail", migrateV1TrailLength(normalized));
+    std::lock_guard lock(configurationMutex_);
+    const auto reject = [this](const juce::String& reason) { stateError_ = reason; };
+    if (data == nullptr || size <= 0 || size > 2 * 1024 * 1024) {
+        reject("Invalid or oversized host state."); return;
+    }
+    const auto xml = getXmlFromBinary(data, size);
+    if (xml == nullptr || !xml->hasTagName(stateTreeName)) { reject("Invalid host-state document."); return; }
+    const auto state = juce::ValueTree::fromXml(*xml);
+    if (!state.isValid()) { reject("Invalid host-state tree."); return; }
+    bool valid = true;
+    const auto numeric = [&](const juce::var& value, double minimum, double maximum,
+                             bool integral, double fallback) {
+        double result{};
+        if (!hostNumber(value, result) || result < minimum || result > maximum
+            || (integral && std::trunc(result) != result)) {
+            valid = false; return fallback;
+        }
+        return result;
+    };
+    const auto property = [&](const juce::String& name, double fallback, double minimum,
+                              double maximum, bool integral = false) {
+        return state.hasProperty(name) ? numeric(state.getProperty(name), minimum, maximum, integral, fallback)
+                                       : fallback;
+    };
+    const auto schema = static_cast<int>(property("schemaVersion", 1, 1, stateSchemaVersion, true));
+    if (!valid) { reject("Unsupported or malformed host-state schema."); return; }
+    int selected{};
+    if (const auto value = stateParameter(state, "preset"); !value.isVoid())
+        selected = static_cast<int>(numeric(value, 0, 23, true, 0));
+    if (!valid) { reject("Invalid host preset index."); return; }
+    UserConfiguration candidate;
+    MusicEngine defaultEngine;
+    candidate.engine = defaultEngine.config();
+    candidate.initial = candidate.baseInitial = defaultEngine.simulation().initialState();
+    PresetCatalog catalog;
+    if (catalog.valid() && static_cast<std::size_t>(selected) < catalog.size()) {
+        const auto& preset = catalog[static_cast<std::size_t>(selected)];
+        candidate.initial = candidate.baseInitial = makeInitialState(preset.system, preset.seed, preset.chaos);
+        candidate.engine.simulation = preset.simulation;
+        candidate.engine.voices = preset.voices;
+        candidate.presentation = preset.presentation;
+        candidate.loopPolicy = preset.loopPolicy;
+        candidate.presetIndex = selected;
+    }
+    const bool hasTemplate = state.hasProperty("configurationTemplateJson");
+    if (hasTemplate) {
+        const auto json = state.getProperty("configurationTemplateJson");
+        if (!json.isString()) { reject("Invalid complete host configuration."); return; }
+        if (!deserializeUserConfiguration(json.toString(), candidate, stateError_)) return;
+    } else if (schema >= 8) { reject("Host state is missing its complete configuration."); return; }
+
+    const auto initialSeed = state.getProperty("seed", juce::String(candidate.initial.seed));
+    if (!hostSeed(initialSeed, candidate.initial.seed)) { reject("Invalid host-state seed."); return; }
+    if (!hasTemplate) candidate.baseInitial.seed = candidate.initial.seed;
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        for (int base = 0; base < 2; ++base) {
+            auto& value = (base == 0 ? candidate.initial : candidate.baseInitial).bodies[body];
+            if (base == 1 && !hasTemplate && !state.hasProperty("baseBody" + juce::String(body) + "_px"))
+                value = candidate.initial.bodies[body];
+            const auto prefix = juce::String(base == 0 ? "body" : "baseBody") + juce::String(body) + "_";
+            value.mass = property(prefix + "mass", value.mass, 0.05, 1000.0);
+            value.position.x = property(prefix + "px", value.position.x, -1.0e6, 1.0e6);
+            value.position.y = property(prefix + "py", value.position.y, -1.0e6, 1.0e6);
+            value.position.z = property(prefix + "pz", value.position.z, -1.0e6, 1.0e6);
+            value.velocity.x = property(prefix + "vx", value.velocity.x, -1.0e6, 1.0e6);
+            value.velocity.y = property(prefix + "vy", value.velocity.y, -1.0e6, 1.0e6);
+            value.velocity.z = property(prefix + "vz", value.velocity.z, -1.0e6, 1.0e6);
+        }
+        candidate.planeTilts[body] = property("initialTiltBody" + juce::String(body), candidate.planeTilts[body], -75.0, 75.0);
+    }
+    candidate.loopPolicy = static_cast<LoopPolicy>(static_cast<int>(property(
+        "loopPolicy", static_cast<int>(candidate.loopPolicy), 0, 1, true)));
+    auto& visual = candidate.presentation.visual;
+    auto& camera = candidate.presentation.camera;
+    visual.trailSeconds = static_cast<float>(property("visualTrailSeconds", visual.trailSeconds, 5, 60));
+    visual.trailWidth = static_cast<float>(property("visualTrailWidth", visual.trailWidth, 0.1, 10));
+    visual.extrusion = static_cast<float>(property("visualExtrusion", visual.extrusion, 0, 2));
+    visual.bloom = static_cast<float>(property("visualBloom", visual.bloom, 0, 1));
+    visual.starDensity = static_cast<float>(property("visualStarDensity", visual.starDensity, 0, 1));
+    visual.palette = static_cast<PaletteId>(static_cast<int>(property("visualPalette", static_cast<int>(visual.palette), 0, 5, true)));
+    visual.quality = static_cast<GraphicsQuality>(static_cast<int>(property("visualQuality", static_cast<int>(visual.quality), 0, 2, true)));
+    camera.yaw = static_cast<float>(property("cameraYaw", camera.yaw, -1000, 1000));
+    camera.pitch = static_cast<float>(property("cameraPitch", camera.pitch, static_cast<double>(-1.49F), static_cast<double>(1.49F)));
+    camera.distance = static_cast<float>(property("cameraDistance", camera.distance, 1, 80));
+    camera.minimumDistance = static_cast<float>(property("cameraMinimumDistance", schema < 4 ? 2.5 : camera.minimumDistance, 1, 20));
+    camera.maximumDistance = static_cast<float>(property("cameraMaximumDistance", schema < 4 ? 40.0 : camera.maximumDistance, 5, 80));
+    camera.autoOrbit = static_cast<float>(property("cameraAutoOrbit", camera.autoOrbit, -2, 2));
+    camera.focusBody = static_cast<int>(property("cameraFocusBody", camera.focusBody, -1, 2, true));
+    camera.autoFrame = property("cameraAutoFrame", schema < 4 ? 1 : static_cast<int>(camera.autoFrame), 0, 1, true) != 0;
+    candidate.presentation.notePaneMinimized = property("notePaneMinimized", schema < 4 ? 0 : static_cast<int>(candidate.presentation.notePaneMinimized), 0, 1, true) != 0;
+    candidate.presentation.notePaneStyle = static_cast<NotePaneStyle>(static_cast<int>(property("notePaneStyle", static_cast<int>(candidate.presentation.notePaneStyle), 0, 1, true)));
+    if (!hostSeed(state.getProperty("visualSeed", juce::String(candidate.presentation.visualSeed)), candidate.presentation.visualSeed))
+        valid = false;
+    if (!valid) { reject("Host state contains an invalid numeric value."); return; }
+
+    auto expected = legalParameterValues(candidate);
+    auto incoming = expected;
+    for (std::size_t i = 0; i < ParameterCount; ++i) {
+        int occurrences = state.hasProperty(parameterIds_[i]) ? 1 : 0;
+        for (int child = 0; child < state.getNumChildren(); ++child)
+            if (state.getChild(child).getProperty("id").toString() == parameterIds_[i]) ++occurrences;
+        if (occurrences > 1) { reject("Host state contains duplicate parameter values."); return; }
+        const auto value = stateParameter(state, parameterIds_[i]);
+        if (occurrences == 0) continue;
+        if (schema < 2 && i == Trail) {
+            const auto old = numeric(value, 0.0, 100.0, false, 82.0);
+            incoming[i] = migrateV1TrailLength(static_cast<float>(old <= 1.0 ? old : old / 100.0));
+        } else {
+            const bool integral = i == Run || i == Sync || i == Voicing || i == ChordRoot
+                || i == ChordScale || i == StrumUnits || i >= MeterSource
+                || (i >= Voice1 && i < Voicing && (i - Voice1) % 10 < 8);
+            incoming[i] = static_cast<float>(numeric(value, parameterMinimums_[i], parameterMaximums_[i], integral, expected[i]));
+        }
     }
     if (schema < 5) {
-        PresetCatalog catalog;
-        const auto selected = static_cast<int>(stateParameterValue(state, "preset", 0.0F));
-        for (std::size_t body = 0; body < bodyCount; ++body) {
-            const auto root = catalog.valid() && selected >= 0
-                    && static_cast<std::size_t>(selected) < catalog.size()
-                ? catalog[static_cast<std::size_t>(selected)].voices[body].root : 0U;
-            ensureStateParameterValue(state, "voiceRoot" + juce::String(body + 1),
-                                      static_cast<float>(root));
-        }
-        ensureStateParameterValue(state, "voicingMode", 0.0F);
-        ensureStateParameterValue(state, "chordStrum", 24.0F);
+        incoming[Voicing] = 0.0F; incoming[StrumMilliseconds] = 24.0F;
+        for (std::size_t body = 0; body < bodyCount; ++body)
+            if (stateParameter(state, parameterIds_[Voice1 + body * 10 + Root]).isVoid())
+                incoming[Voice1 + body * 10 + Root] = catalog.valid()
+                    ? static_cast<float>(catalog[static_cast<std::size_t>(selected)].voices[body].root) : 0.0F;
     }
     if (schema < 6) {
         for (std::size_t body = 0; body < bodyCount; ++body) {
-            const auto suffix = juce::String(body + 1);
-            const auto duration = stateParameterValue(state, "voiceDuration" + suffix, 0.2F);
-            ensureStateParameterValue(state, "voiceOctave" + suffix, 0.0F);
-            ensureStateParameterValue(state, "voiceDurMap" + suffix,
-                                      static_cast<float>(PitchMapping::Speed));
-            ensureStateParameterValue(state, "voiceDurMin" + suffix, duration);
-            ensureStateParameterValue(state, "voiceDurMax" + suffix, duration);
+            const auto base = Voice1 + body * 10;
+            const auto value = stateParameter(state, "voiceDuration" + juce::String(body + 1));
+            const auto duration = value.isVoid() ? 0.2 : numeric(value, 1.0 / 1024.0, 64.0, false, 0.2);
+            candidate.engine.voices[body].minimumDurationBeats = duration;
+            candidate.engine.voices[body].maximumDurationBeats = duration;
+            incoming[base + Octave] = 0.0F;
+            incoming[base + DurationMap] = static_cast<float>(PitchMapping::Speed);
+            // A pre-v6 duration is an exact musical value, not an instruction to
+            // truncate it to the later coarse host slider's range.
+            const auto updated = legalParameterValues(candidate);
+            incoming[base + DurationMinimum] = updated[base + DurationMinimum];
+            incoming[base + DurationMaximum] = updated[base + DurationMaximum];
         }
-        // Seed the global chord frame from the first voice so existing chord
-        // presets keep their tonal center.
-        ensureStateParameterValue(state, "chordRoot", stateParameterValue(state, "voiceRoot1", 0.0F));
-        ensureStateParameterValue(state, "chordScale",
-                                  stateParameterValue(state, "voiceScale1",
-                                                      static_cast<float>(ScaleId::MinorPentatonic)));
-        ensureStateParameterValue(state, "strumUnit", 0.0F);
-        ensureStateParameterValue(state, "strumValue", 0.0625F);
-        ensureStateParameterValue(state, "timeSigSource", 0.0F);
-        ensureStateParameterValue(state, "timeSigNum", 3.0F);
-        ensureStateParameterValue(state, "timeSigDenom", 2.0F);
-        ensureStateParameterValue(state, "autoReset", 0.0F);
-        ensureStateParameterValue(state, "autoResetBars", 2.0F);
+        incoming[ChordRoot] = incoming[Voice1 + Root]; incoming[ChordScale] = incoming[Voice1 + Scale];
+        incoming[StrumUnits] = 0; incoming[StrumAmount] = 0.0625F;
+        incoming[MeterSource] = 0; incoming[MeterNumerator] = 3; incoming[MeterDenominator] = 2;
+        incoming[AutoReset] = 0; incoming[AutoResetBars] = 2;
     }
-    if (schema < 7) {
+    if (schema < 7)
         for (std::size_t body = 0; body < bodyCount; ++body)
-            ensureStateParameterValue(state, "voiceDurGrid" + juce::String(body + 1),
-                                      static_cast<float>(DurationGrid::ContinuousLegacy));
+            incoming[Voice1 + body * 10 + DurationGridValue] = static_cast<float>(DurationGrid::ContinuousLegacy);
+    if (!valid) { reject("Host state contains an invalid parameter value."); return; }
+    expected = legalParameterValues(candidate);
+    std::uint64_t changed{};
+    for (std::size_t i = 0; i < ParameterCount; ++i)
+        if (std::abs(incoming[i] - expected[i]) > 1.0e-6F)
+            changed |= std::uint64_t{1} << i;
+    for (std::size_t body = 0; body < bodyCount; ++body) {
+        const auto minimumIndex = Voice1 + body * 10 + DurationMinimum;
+        const auto maximumIndex = Voice1 + body * 10 + DurationMaximum;
+        const auto minimum = (changed & (std::uint64_t{1} << minimumIndex)) != 0
+            ? incoming[minimumIndex] : candidate.engine.voices[body].minimumDurationBeats;
+        const auto maximum = (changed & (std::uint64_t{1} << maximumIndex)) != 0
+            ? incoming[maximumIndex] : candidate.engine.voices[body].maximumDurationBeats;
+        if (minimum > maximum) { reject("Host state contains inverted duration bounds."); return; }
     }
-    parameters_.replaceState(state);
-    auto initial = storedInitial_.load();
-    initial.seed = static_cast<std::uint64_t>(
-        state.getProperty("seed", juce::String(initial.seed)).toString().getLargeIntValue());
-    auto baseInitial = initial;
-    std::array<double, bodyCount> planeTilts{};
-    for (std::size_t i = 0; i < bodyCount; ++i) {
-        const auto prefix = "body" + juce::String(i) + "_";
-        const auto basePrefix = "baseBody" + juce::String(i) + "_";
-        initial.bodies[i].mass = static_cast<double>(state.getProperty(prefix + "mass", initial.bodies[i].mass));
-        initial.bodies[i].position = {
-            static_cast<double>(state.getProperty(prefix + "px", initial.bodies[i].position.x)),
-            static_cast<double>(state.getProperty(prefix + "py", initial.bodies[i].position.y)),
-            static_cast<double>(state.getProperty(prefix + "pz", initial.bodies[i].position.z))};
-        initial.bodies[i].velocity = {
-            static_cast<double>(state.getProperty(prefix + "vx", initial.bodies[i].velocity.x)),
-            static_cast<double>(state.getProperty(prefix + "vy", initial.bodies[i].velocity.y)),
-            static_cast<double>(state.getProperty(prefix + "vz", initial.bodies[i].velocity.z))};
-        baseInitial.bodies[i].mass = static_cast<double>(
-            state.getProperty(basePrefix + "mass", initial.bodies[i].mass));
-        baseInitial.bodies[i].position = {
-            static_cast<double>(state.getProperty(basePrefix + "px", initial.bodies[i].position.x)),
-            static_cast<double>(state.getProperty(basePrefix + "py", initial.bodies[i].position.y)),
-            static_cast<double>(state.getProperty(basePrefix + "pz", initial.bodies[i].position.z))};
-        baseInitial.bodies[i].velocity = {
-            static_cast<double>(state.getProperty(basePrefix + "vx", initial.bodies[i].velocity.x)),
-            static_cast<double>(state.getProperty(basePrefix + "vy", initial.bodies[i].velocity.y)),
-            static_cast<double>(state.getProperty(basePrefix + "vz", initial.bodies[i].velocity.z))};
-        planeTilts[i] = static_cast<double>(state.getProperty("initialTiltBody" + juce::String(i), 0.0));
-    }
-    baseInitial.seed = initial.seed;
-    storedBaseInitial_.store(baseInitial);
-    storedPlaneTilts_.store(planeTilts);
-    EngineCommand command;
-    command.type = CommandType::Replace;
-    command.state = initial;
-    PresetCatalog catalog;
-    const auto selected = static_cast<int>(parameterValue(parameters_, "preset"));
-    if (catalog.valid() && selected >= 0 && static_cast<std::size_t>(selected) < catalog.size()) {
-        command.config.simulation = catalog[static_cast<std::size_t>(selected)].simulation;
-        command.config.voices = catalog[static_cast<std::size_t>(selected)].voices;
-        command.loopPolicy = catalog[static_cast<std::size_t>(selected)].loopPolicy;
-    }
-    UserConfiguration configurationTemplate;
-    juce::String configurationError;
-    const auto configurationJson = state.getProperty("configurationTemplateJson").toString();
-    if (configurationJson.isNotEmpty()
-        && deserializeUserConfiguration(configurationJson, configurationTemplate, configurationError)) {
-        command.config = configurationTemplate.engine;
-        selectedVoicingPreset_.store(configurationTemplate.voicingPresetIndex,
-                                     std::memory_order_relaxed);
-    } else {
-        selectedVoicingPreset_.store(-1, std::memory_order_relaxed);
-    }
-    command.loopPolicy = static_cast<LoopPolicy>(static_cast<int>(
-        state.getProperty("loopPolicy", static_cast<int>(command.loopPolicy))));
-    storedConfigurationTemplate_ = command.config;
-    auto presentation = catalog.valid() && selected >= 0
-            && static_cast<std::size_t>(selected) < catalog.size()
-        ? catalog[static_cast<std::size_t>(selected)].presentation
-        : PresentationState{};
-    presentation.visual.trailSeconds = static_cast<float>(
-        state.getProperty("visualTrailSeconds", parameterValue(parameters_, "trail")));
-    presentation.visual.trailWidth = static_cast<float>(
-        state.getProperty("visualTrailWidth", presentation.visual.trailWidth));
-    presentation.visual.extrusion = static_cast<float>(
-        state.getProperty("visualExtrusion", presentation.visual.extrusion));
-    presentation.visual.bloom = static_cast<float>(
-        state.getProperty("visualBloom", parameterValue(parameters_, "bloom") / 100.0F));
-    presentation.visual.starDensity = static_cast<float>(
-        state.getProperty("visualStarDensity", presentation.visual.starDensity));
-    presentation.visual.palette = static_cast<PaletteId>(static_cast<int>(
-        state.getProperty("visualPalette", static_cast<int>(presentation.visual.palette))));
-    presentation.visual.quality = static_cast<GraphicsQuality>(static_cast<int>(
-        state.getProperty("visualQuality", static_cast<int>(presentation.visual.quality))));
-    presentation.camera.yaw = static_cast<float>(state.getProperty("cameraYaw", presentation.camera.yaw));
-    presentation.camera.pitch = static_cast<float>(state.getProperty("cameraPitch", presentation.camera.pitch));
-    presentation.camera.distance = static_cast<float>(
-        state.getProperty("cameraDistance", presentation.camera.distance));
-    presentation.camera.minimumDistance = static_cast<float>(
-        state.getProperty("cameraMinimumDistance", presentation.camera.minimumDistance));
-    presentation.camera.maximumDistance = static_cast<float>(
-        state.getProperty("cameraMaximumDistance", presentation.camera.maximumDistance));
-    presentation.camera.autoOrbit = static_cast<float>(
-        state.getProperty("cameraAutoOrbit", presentation.camera.autoOrbit));
-    presentation.camera.focusBody = static_cast<int>(
-        state.getProperty("cameraFocusBody", presentation.camera.focusBody));
-    presentation.camera.autoFrame = static_cast<bool>(
-        state.getProperty("cameraAutoFrame", presentation.camera.autoFrame));
-    presentation.notePaneMinimized = static_cast<bool>(
-        state.getProperty("notePaneMinimized", presentation.notePaneMinimized));
-    presentation.notePaneStyle = static_cast<NotePaneStyle>(static_cast<int>(
-        state.getProperty("notePaneStyle", static_cast<int>(presentation.notePaneStyle))));
-    presentation.camera = sanitizedCameraState(presentation.camera);
-    presentation.visualSeed = static_cast<std::uint64_t>(state.getProperty(
-        "visualSeed", juce::String(initial.seed)).toString().getLargeIntValue());
-    storedPresentation_.store(presentation);
-    commands_.push(command);
+    applyParameters(candidate, incoming, changed);
+    // Published schemas <=3 did not contain camera limits; their established
+    // defaults are applied above. Reject contradictory present limits in newer states.
+    if (schema < 4) candidate.presentation.camera = sanitizedCameraState(candidate.presentation.camera);
+    if (!validateUserConfiguration(candidate, stateError_)) return;
+    (void)publishConfigurationLocked(candidate, true);
 }
 
 } // namespace threebs
 
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() {
-    return new threebs::ThreeBSProcessor();
-}
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new threebs::ThreeBSProcessor(); }

@@ -19,6 +19,8 @@ struct RenderSnapshot {
     std::uint64_t sequence{};
     std::uint64_t trajectoryRevision{};
     double interpolationAlpha{};
+    // Monotonic processing time at the first sample after the block, not PPQ.
+    double timelineSeconds{};
 };
 
 enum class NoteVisualizationType : std::uint8_t { On, Off };
@@ -29,6 +31,9 @@ struct NoteVisualizationEvent {
     std::uint8_t note{};
     std::uint8_t velocity{};
     std::uint64_t sequence{};
+    // Same clock as RenderSnapshot; includes the event's exact sample offset.
+    double timelineSeconds{};
+    std::uint64_t trajectoryRevision{};
 };
 
 template <typename Value, std::size_t Capacity>

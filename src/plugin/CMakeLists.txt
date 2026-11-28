@@ -60,17 +60,42 @@ if(THREEBS_ADHOC_SIGN)
 endif()
 
 if(THREEBS_BUILD_TESTS)
-    add_executable(threebs_plugin_tests ../../tests/PluginTests.cpp)
+    add_executable(threebs_legacy_state_tests ../../tests/LegacyStateTests.cpp)
+    target_include_directories(threebs_legacy_state_tests PRIVATE ..)
+    target_compile_definitions(threebs_legacy_state_tests PRIVATE THREEBS_AU_MIDI_EFFECT=0)
+    target_link_libraries(threebs_legacy_state_tests PRIVATE
+        ThreeBSVST3 threebs_presentation juce::juce_audio_utils juce::juce_gui_extra)
+    add_executable(threebs_plugin_tests ../../tests/PluginTests.cpp ../../tests/PluginRegressionTests.cpp)
     target_include_directories(threebs_plugin_tests PRIVATE ..)
     target_compile_definitions(threebs_plugin_tests PRIVATE THREEBS_AU_MIDI_EFFECT=0)
     target_link_libraries(threebs_plugin_tests PRIVATE
         ThreeBSVST3 threebs_presentation juce::juce_audio_utils juce::juce_gui_extra)
     add_test(NAME threebs_plugin_tests COMMAND threebs_plugin_tests)
 
+    set(THREEBS_PROCESSOR_TEST_TIMEOUT_SECONDS 20 CACHE STRING
+        "Processor concurrency test deadline; instrumented builds may need a larger bound")
+    if(NOT THREEBS_PROCESSOR_TEST_TIMEOUT_SECONDS MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR "THREEBS_PROCESSOR_TEST_TIMEOUT_SECONDS must be a positive integer")
+    endif()
+    add_executable(threebs_processor_concurrency_tests ../../tests/ProcessorConcurrencyTests.cpp)
+    target_include_directories(threebs_processor_concurrency_tests PRIVATE ..)
+    target_compile_definitions(threebs_processor_concurrency_tests PRIVATE
+        THREEBS_AU_MIDI_EFFECT=0
+        THREEBS_PROCESSOR_TEST_TIMEOUT_SECONDS=${THREEBS_PROCESSOR_TEST_TIMEOUT_SECONDS})
+    target_link_libraries(threebs_processor_concurrency_tests PRIVATE
+        ThreeBSVST3 threebs_presentation juce::juce_audio_utils juce::juce_gui_extra)
+    add_test(NAME threebs_processor_concurrency_tests COMMAND threebs_processor_concurrency_tests)
+    math(EXPR threebs_processor_ctest_timeout "${THREEBS_PROCESSOR_TEST_TIMEOUT_SECONDS} + 10")
+    set_tests_properties(threebs_processor_concurrency_tests PROPERTIES TIMEOUT ${threebs_processor_ctest_timeout})
+
+    add_library(threebs_allocation_probe SHARED ../../tests/AllocationProbe.cpp)
+    target_compile_features(threebs_allocation_probe PRIVATE cxx_std_20)
+    set_target_properties(threebs_allocation_probe PROPERTIES CXX_VISIBILITY_PRESET default)
+
     add_executable(threebs_realtime_profile ../../tests/RealtimeProfile.cpp)
     target_include_directories(threebs_realtime_profile PRIVATE ..)
     target_compile_definitions(threebs_realtime_profile PRIVATE THREEBS_AU_MIDI_EFFECT=0)
     target_link_libraries(threebs_realtime_profile PRIVATE
-        ThreeBSVST3 threebs_presentation juce::juce_audio_utils juce::juce_gui_extra)
+        threebs_allocation_probe ThreeBSVST3 threebs_presentation juce::juce_audio_utils juce::juce_gui_extra)
     add_test(NAME threebs_realtime_profile COMMAND threebs_realtime_profile)
 endif()

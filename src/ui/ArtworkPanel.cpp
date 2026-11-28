@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Tomas Laurenzo
 
 #include "ui/ArtworkPanel.h"
+#include "ui/AdvancedConfigurationEditor.h"
 
 #include <cmath>
 #include <initializer_list>
@@ -115,6 +116,12 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     status_.setJustificationType(juce::Justification::centredRight);
     status_.setColour(juce::Label::textColourId, juce::Colour(0xff63778d));
     addAndMakeVisible(status_);
+    notification_.setColour(juce::Label::textColourId, juce::Colour(0xffa9c2d4));
+    notification_.setFont(juce::Font(juce::FontOptions(11.0F)));
+    addAndMakeVisible(notification_);
+    configurationState_.setColour(juce::Label::textColourId, juce::Colour(0xffa9c2d4));
+    configurationState_.setText("CURRENT CONFIGURATION", juce::dontSendNotification);
+    addAndMakeVisible(configurationState_);
     startTimerHz(2);
     pageHelp_.setFont(juce::Font(juce::FontOptions(10.5F)));
     pageHelp_.setColour(juce::Label::textColourId, juce::Colour(0xff7f93a8));
@@ -132,6 +139,8 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     configureKnob(softening_);
     configureKnob(chaos_, "%");
     configureKnob(density_, "%");
+    density_.setSliderStyle(juce::Slider::LinearHorizontal);
+    density_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 18);
     configureKnob(trail_, " s");
     configureKnob(bloom_, "%");
     configureKnob(massOne_);
@@ -143,17 +152,17 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     configureKnob(minimumCameraDistance_);
     configureKnob(maximumCameraDistance_);
 
-    speed_.setRange(0.0, 8.0, 0.001); speed_.setValue(1.0);
-    gravity_.setRange(0.01, 3.0, 0.001); gravity_.setValue(0.65);
-    softening_.setRange(0.001, 0.25, 0.001); softening_.setValue(0.04);
-    chaos_.setRange(0.0, 100.0, 0.1); chaos_.setValue(20.0);
-    density_.setRange(0.0, 100.0, 0.1); density_.setValue(80.0);
-    trail_.setRange(5.0, 60.0, 0.1); trail_.setValue(30.0);
-    bloom_.setRange(0.0, 100.0, 0.1); bloom_.setValue(34.0);
-    for (auto* mass : massSliders()) { mass->setRange(0.05, 8.0, 0.001); mass->setValue(1.0); }
-    for (auto* tilt : planeTiltSliders()) { tilt->setRange(-75.0, 75.0, 0.1); tilt->setValue(0.0); }
-    minimumCameraDistance_.setRange(1.0, 20.0, 0.1); minimumCameraDistance_.setValue(2.5);
-    maximumCameraDistance_.setRange(5.0, 80.0, 0.1); maximumCameraDistance_.setValue(40.0);
+    speed_.setRange(0.0, 8.0, 0.001); speed_.setValue(1.0, juce::dontSendNotification);
+    gravity_.setRange(0.01, 3.0, 0.001); gravity_.setValue(0.65, juce::dontSendNotification);
+    softening_.setRange(0.001, 0.25, 0.001); softening_.setValue(0.04, juce::dontSendNotification);
+    chaos_.setRange(0.0, 100.0, 0.1); chaos_.setValue(20.0, juce::dontSendNotification);
+    density_.setRange(0.0, 100.0, 0.1); density_.setValue(80.0, juce::dontSendNotification);
+    trail_.setRange(5.0, 60.0, 0.1); trail_.setValue(30.0, juce::dontSendNotification);
+    bloom_.setRange(0.0, 100.0, 0.1); bloom_.setValue(34.0, juce::dontSendNotification);
+    for (auto* mass : massSliders()) { mass->setRange(0.05, 8.0, 0.001); mass->setValue(1.0, juce::dontSendNotification); }
+    for (auto* tilt : planeTiltSliders()) { tilt->setRange(-75.0, 75.0, 0.1); tilt->setValue(0.0, juce::dontSendNotification); }
+    minimumCameraDistance_.setRange(1.0, 20.0, 0.1); minimumCameraDistance_.setValue(2.5, juce::dontSendNotification);
+    maximumCameraDistance_.setRange(5.0, 80.0, 0.1); maximumCameraDistance_.setValue(40.0, juce::dontSendNotification);
     autoFrame_.setToggleState(true, juce::dontSendNotification);
     addAndMakeVisible(autoFrame_);
 
@@ -208,7 +217,7 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
             duration->setSliderStyle(juce::Slider::LinearHorizontal);
             duration->setTextBoxStyle(juce::Slider::TextBoxRight, false, 46, 18);
             duration->setRange(0.02, 8.0, 0.001);
-            duration->setValue(0.2);
+            duration->setValue(0.2, juce::dontSendNotification);
             duration->setStraightGrid(true);
             addAndMakeVisible(*duration);
         }
@@ -246,7 +255,7 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     chordStrum_.setSliderStyle(juce::Slider::LinearHorizontal);
     chordStrum_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 58, 20);
     chordStrum_.setRange(0.0, 120.0, 1.0);
-    chordStrum_.setValue(24.0);
+    chordStrum_.setValue(24.0, juce::dontSendNotification);
     chordStrum_.setTextValueSuffix(" ms");
     chordStrum_.setTooltip("Delay between planets in STRUM mode when the unit is milliseconds.");
     addAndMakeVisible(chordStrum_);
@@ -258,7 +267,7 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     strumValue_.setSliderStyle(juce::Slider::LinearHorizontal);
     strumValue_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 58, 20);
     strumValue_.setRange(0.0, 4.0, 0.001);
-    strumValue_.setValue(0.0625);
+    strumValue_.setValue(0.0625, juce::dontSendNotification);
     strumValue_.setTextValueSuffix(" b");
     strumValue_.setTooltip("Musical STRUM spacing used when the unit is BEATS or BAR FRACTION.");
     addAndMakeVisible(strumValue_);
@@ -354,6 +363,44 @@ ArtworkPanel::ArtworkPanel(SpscQueue<RenderSnapshot, 64>& snapshots,
     saveConfiguration_.onClick = [this] { if (onSaveConfiguration) onSaveConfiguration(); };
     loadConfiguration_.onClick = [this] { if (onLoadConfiguration) onLoadConfiguration(); };
     present_.onClick = [this] { togglePresentation(); };
+    addAndMakeVisible(advancedConfigurationButton_);
+    addAndMakeVisible(panic_);
+    panic_.setTooltip("Release generated notes and cancel pending strums without replacing the system.");
+    panic_.onClick = [this] { if (onPanic) onPanic(); setStatus("ALL NOTES OFF REQUESTED"); };
+    advancedConfigurationButton_.onClick = [this] {
+        showAdvancedConfigurationEditor(advancedConfiguration_, *this,
+            [safe = juce::Component::SafePointer<ArtworkPanel>(this)](const EngineConfig& source) {
+                if (safe == nullptr) return;
+                auto candidate = safe->advancedConfiguration_;
+                copyAdvancedConfigurationFields(source, candidate);
+                if (!isValidEngineConfig(candidate)) { safe->setStatus("SETTINGS INVALID"); return; }
+                const auto callback = safe->onAdvancedConfiguration;
+                const auto accepted = !callback || callback(candidate);
+                if (safe == nullptr || !accepted) return;
+                safe->advancedConfiguration_ = candidate;
+                safe->markVoicingCustom();
+                safe->setStatus("VOICE AND SYSTEM SETTINGS APPLIED");
+            });
+    };
+    for (auto* slider : {&speed_, &gravity_, &softening_, &chaos_, &massOne_, &massTwo_, &massThree_,
+                         &tiltOne_, &tiltTwo_, &tiltThree_, &trail_, &bloom_})
+        slider->onValueChange = [this] { configurationState_.setText("MODIFIED CONFIGURATION", juce::dontSendNotification); };
+    addAndMakeVisible(userPresets_); addAndMakeVisible(userPresetName_);
+    addAndMakeVisible(saveUserPreset_); addAndMakeVisible(loadUserPreset_);
+    addAndMakeVisible(refreshUserPresets_); addAndMakeVisible(userPresetFolder_);
+    userPresets_.setTextWhenNothingSelected("Authored .3bs files");
+    userPresetName_.setTextToShowWhenEmpty("Configuration name", juce::Colour(0xff71889d));
+    userPresetName_.setInputRestrictions(80);
+    saveUserPreset_.onClick = [this] { saveUserPreset(); };
+    loadUserPreset_.onClick = [this] { loadUserPreset(); };
+    refreshUserPresets_.onClick = [this] { refreshUserPresets(); };
+    userPresetFolder_.onClick = [this] {
+        const auto folder = userPresetDirectory();
+        const auto result = folder.createDirectory();
+        if (result.failed()) setStatus("PRESET FOLDER UNAVAILABLE / " + result.getErrorMessage());
+        else folder.revealToUser();
+    };
+    refreshUserPresets();
 
     for (std::size_t i = 0; i < tabs_.size(); ++i) {
         addAndMakeVisible(tabs_[i]);
@@ -397,10 +444,11 @@ void ArtworkPanel::resized() {
         return;
     }
     auto header = bounds.removeFromTop(54).reduced(18, 7);
-    title_.setBounds(header.removeFromLeft(340));
-    subtitle_.setBounds(header.removeFromLeft(230));
+    title_.setBounds(header.removeFromLeft(300));
+    subtitle_.setBounds(header.removeFromLeft(190));
     present_.setBounds(header.removeFromRight(86).reduced(2, 5));
-    status_.setBounds(header.removeFromRight(140));
+    status_.setBounds(header.removeFromRight(260));
+    notification_.setBounds(bounds.removeFromTop(22).reduced(18, 0));
     auto deck = bounds.removeFromBottom(deckHeight());
     scene_.setBounds(bounds);
 
@@ -411,9 +459,11 @@ void ArtworkPanel::resized() {
 
     auto content = deck.reduced(18, 8);
     auto left = content.removeFromLeft(262);
-    pageHelp_.setBounds(left.removeFromTop(50));
+    pageHelp_.setBounds(left.removeFromTop(38));
     left.removeFromTop(6);
-    reset_.setBounds(left.removeFromBottom(28).removeFromLeft(124));
+    auto actions = left.removeFromBottom(28);
+    reset_.setBounds(actions.removeFromLeft(124));
+    panic_.setBounds(actions.reduced(4, 0));
 
     const auto layoutKnobs = [this](std::initializer_list<std::pair<std::size_t, juce::Slider*>> knobs,
                                     juce::Rectangle<int> area) {
@@ -429,9 +479,9 @@ void ArtworkPanel::resized() {
 
     switch (deckPage_) {
     case DeckPage::System: {
-        randomize_.setBounds(left.removeFromTop(26).removeFromLeft(124));
-        left.removeFromTop(5);
-        advanced_.setBounds(left.removeFromTop(26).removeFromLeft(124));
+        auto stateActions = left.removeFromTop(26);
+        randomize_.setBounds(stateActions.removeFromLeft(124));
+        advanced_.setBounds(stateActions.reduced(4, 0));
         left.removeFromTop(8);
         autoReset_.setBounds(left.removeFromTop(24).removeFromLeft(124));
         autoResetLabel_.setBounds(left.removeFromTop(12));
@@ -461,7 +511,8 @@ void ArtworkPanel::resized() {
         chordScaleLabel_.setBounds(scaleCell.removeFromTop(12));
         chordScale_.setBounds(scaleCell.removeFromTop(24));
         left.removeFromTop(3);
-        layoutKnobs({{4U, &density_}}, left.removeFromTop(58));
+        layoutKnobs({{4U, &density_}}, left.removeFromTop(46));
+        advancedConfigurationButton_.setBounds(left.removeFromTop(26).reduced(0, 2));
         auto grid = content;
         auto gutter = grid.removeFromLeft(70);
         const auto columnWidth = grid.getWidth() / static_cast<int>(bodyCount);
@@ -531,20 +582,36 @@ void ArtworkPanel::resized() {
             presetCategories_[category].setBounds(cell.removeFromTop(30));
         }
         randomize_.setBounds(left.removeFromTop(28).removeFromLeft(124));
+        configurationState_.setBounds(left.removeFromTop(42));
         break;
         }
-    case DeckPage::Settings:
-        saveConfiguration_.setBounds(left.removeFromTop(28).removeFromLeft(124));
-        left.removeFromTop(5);
-        loadConfiguration_.setBounds(left.removeFromTop(28).removeFromLeft(124));
+    case DeckPage::Settings: {
+        auto fileActions = left.removeFromTop(28);
+        saveConfiguration_.setBounds(fileActions.removeFromLeft(124));
+        loadConfiguration_.setBounds(fileActions.reduced(4, 0));
         left.removeFromTop(8);
         if (midiOutputAvailable_)
             midiOutput_.setBounds(left.removeFromTop(30));
+        left.removeFromTop(8);
+        advancedConfigurationButton_.setBounds(left.removeFromTop(28));
+        configurationState_.setBounds(content.removeFromTop(28));
+        userPresets_.setBounds(content.removeFromTop(30).reduced(0, 2));
+        auto names = content.removeFromTop(36);
+        saveUserPreset_.setBounds(names.removeFromRight(110).reduced(3));
+        userPresetName_.setBounds(names.reduced(0, 3));
+        auto buttons = content.removeFromTop(34);
+        loadUserPreset_.setBounds(buttons.removeFromLeft(100).reduced(3));
+        refreshUserPresets_.setBounds(buttons.removeFromLeft(100).reduced(3));
+        userPresetFolder_.setBounds(buttons.removeFromLeft(100).reduced(3));
         break;
+    }
     }
 }
 
 bool ArtworkPanel::keyPressed(const juce::KeyPress& key) {
+    const auto* focused = juce::Component::getCurrentlyFocusedComponent();
+    if (focused != nullptr && (dynamic_cast<const juce::TextEditor*>(focused) != nullptr
+        || focused->findParentComponentOfClass<juce::TextEditor>() != nullptr)) return false;
     if (key == juce::KeyPress::escapeKey && presentationMode_) {
         togglePresentation();
         return true;
@@ -579,6 +646,8 @@ void ArtworkPanel::updateDeckVisibility() {
     title_.setVisible(showBase);
     subtitle_.setVisible(showBase);
     status_.setVisible(showBase);
+    notification_.setVisible(showBase);
+    panic_.setVisible(showBase);
     pageHelp_.setVisible(showBase);
     run_.setVisible(showBase);
     sync_.setVisible(showBase);
@@ -610,6 +679,11 @@ void ArtworkPanel::updateDeckVisibility() {
     advanced_.setVisible(false);
     saveConfiguration_.setVisible(false);
     loadConfiguration_.setVisible(false);
+    advancedConfigurationButton_.setVisible(false);
+    configurationState_.setVisible(false);
+    userPresets_.setVisible(false); userPresetName_.setVisible(false);
+    saveUserPreset_.setVisible(false); loadUserPreset_.setVisible(false);
+    refreshUserPresets_.setVisible(false); userPresetFolder_.setVisible(false);
     for (auto& label : knobLabels_)
         label.setVisible(false);
     for (std::size_t body = 0; body < bodyCount; ++body) {
@@ -693,6 +767,7 @@ void ArtworkPanel::updateDeckVisibility() {
             chordScaleLabel_.setVisible(chordMode);
         }
         voiceModeContext_.setVisible(true);
+        advancedConfigurationButton_.setVisible(true);
         for (std::size_t body = 0; body < bodyCount; ++body) {
             voiceHeaders_[body].setVisible(true);
             voiceEnable_[body].setVisible(true);
@@ -725,6 +800,7 @@ void ArtworkPanel::updateDeckVisibility() {
     case DeckPage::Presets:
         pageHelp_.setText("Choose a deterministic authored system, randomize from the current chaos amount, or reset.",
                           juce::dontSendNotification);
+        configurationState_.setVisible(true);
         for (auto& selector : presetCategories_) selector.setVisible(true);
         for (auto& label : presetCategoryLabels_) label.setVisible(true);
         randomize_.setVisible(true);
@@ -736,6 +812,11 @@ void ArtworkPanel::updateDeckVisibility() {
         saveConfiguration_.setVisible(true);
         loadConfiguration_.setVisible(true);
         midiOutput_.setVisible(midiOutputAvailable_);
+        advancedConfigurationButton_.setVisible(true);
+        configurationState_.setVisible(true);
+        userPresets_.setVisible(true); userPresetName_.setVisible(true);
+        saveUserPreset_.setVisible(true); loadUserPreset_.setVisible(true);
+        refreshUserPresets_.setVisible(true); userPresetFolder_.setVisible(true);
         break;
     }
 }
@@ -801,6 +882,7 @@ void ArtworkPanel::markVoicingCustom() {
     if (suppressVoicingEdit_)
         return;
     voicingPreset_.setSelectedId(1, juce::dontSendNotification);
+    configurationState_.setText("MODIFIED CONFIGURATION", juce::dontSendNotification);
     if (onVoicingEdited)
         onVoicingEdited();
 }
@@ -829,6 +911,7 @@ void ArtworkPanel::updateVoiceModeControls() {
 }
 
 void ArtworkPanel::setSelectedPresetIndex(int index) {
+    configurationState_.setText(index >= 0 ? "FACTORY CONFIGURATION" : "CUSTOM CONFIGURATION", juce::dontSendNotification);
     const auto id = index + 1;
     for (auto& selector : presetCategories_) {
         bool contains{};
@@ -855,8 +938,10 @@ void ArtworkPanel::setSelectedVoicingPresetIndex(int index) {
 }
 
 void ArtworkPanel::timerCallback() {
-    if (!scene_.rendererAvailable() || !status_.getText().startsWith("METAL"))
+    if (!scene_.rendererAvailable()) {
+        status_.setText("METAL UNAVAILABLE / MIDI CONTINUES", juce::dontSendNotification);
         return;
+    }
     const auto metrics = scene_.performanceMetrics();
     if (metrics.frameCount == 0)
         return;
@@ -867,12 +952,15 @@ void ArtworkPanel::timerCallback() {
 }
 
 void ArtworkPanel::setStatus(const juce::String& status) {
-    status_.setText(status, juce::dontSendNotification);
+    notification_.setText(status, juce::dontSendNotification);
+    notification_.setTooltip(status);
 }
 
 void ArtworkPanel::setMidiOutputAvailable(bool available) {
     midiOutputAvailable_ = available;
     updateDeckVisibility();
+    resized();
+    repaint();
 }
 
 void ArtworkPanel::setPlaneTilts(const std::array<double, bodyCount>& tiltDegrees) {
@@ -883,6 +971,49 @@ void ArtworkPanel::setPlaneTilts(const std::array<double, bodyCount>& tiltDegree
 
 std::array<double, bodyCount> ArtworkPanel::planeTilts() const noexcept {
     return {tiltOne_.getValue(), tiltTwo_.getValue(), tiltThree_.getValue()};
+}
+
+juce::File ArtworkPanel::userPresetDirectory() {
+    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getChildFile("Three Body Solution").getChildFile("Presets");
+}
+void ArtworkPanel::refreshUserPresets() {
+    userPresetFiles_ = userPresetDirectory().findChildFiles(juce::File::findFiles, false, "*.3bs");
+    struct FileNameOrder { int compareElements(const juce::File& a, const juce::File& b) const {
+        return a.getFileName().compareIgnoreCase(b.getFileName());
+    }} order;
+    userPresetFiles_.sort(order);
+    userPresets_.clear(juce::dontSendNotification);
+    for (int i = 0; i < userPresetFiles_.size(); ++i)
+        userPresets_.addItem(userPresetFiles_[i].getFileNameWithoutExtension(), i + 1);
+}
+void ArtworkPanel::saveUserPreset() {
+    if (!onCaptureConfiguration) return;
+    const auto name = juce::File::createLegalFileName(userPresetName_.getText().trim());
+    if (name.isEmpty()) { setStatus("ENTER A CONFIGURATION NAME"); userPresetName_.grabKeyboardFocus(); return; }
+    auto configuration = onCaptureConfiguration(); juce::String error;
+    if (!validateUserConfiguration(configuration, error)) { setStatus("SAVE FAILED / " + error); return; }
+    const auto folder = userPresetDirectory();
+    if (folder.createDirectory().failed()) { setStatus("PRESET FOLDER UNAVAILABLE"); return; }
+    // Save Copy never overwrites an authored file. Rename/delete use the folder.
+    const auto file = folder.getNonexistentChildFile(name, ".3bs");
+    if (!file.replaceWithText(serializeUserConfiguration(configuration))) { setStatus("SAVE FAILED"); return; }
+    refreshUserPresets(); userPresets_.setSelectedId(userPresetFiles_.indexOf(file) + 1, juce::dontSendNotification);
+    configurationState_.setText("SAVED / " + file.getFileNameWithoutExtension(), juce::dontSendNotification);
+    setStatus("SAVED / " + file.getFileName());
+}
+void ArtworkPanel::loadUserPreset() {
+    const auto index = userPresets_.getSelectedId() - 1;
+    if (index < 0 || index >= userPresetFiles_.size() || !onApplyUserConfiguration) return;
+    const auto file = userPresetFiles_[index];
+    UserConfiguration configuration; juce::String error;
+    if (!loadUserConfiguration(file, configuration, error)) { setStatus("LOAD FAILED / " + error); return; }
+    const auto safe = juce::Component::SafePointer<ArtworkPanel>(this);
+    const auto callback = onApplyUserConfiguration;
+    if (!callback(configuration) || safe == nullptr) return;
+    userPresetName_.setText(file.getFileNameWithoutExtension());
+    configurationState_.setText("LOADED / " + file.getFileNameWithoutExtension(), juce::dontSendNotification);
+    setStatus("LOADED / " + file.getFileName());
 }
 
 } // namespace threebs

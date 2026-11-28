@@ -1,0 +1,25 @@
+PASS testPcgSequence
+PASS testDeterministicSimulation
+PASS testEnergyAndSoftening
+PASS testConstrainedSystems
+PASS testInitialPlaneTilts
+PASS testSingleBodyRespawn
+PASS testScales
+PASS testBlockSizeIndependentMidi
+PASS testNoteCleanup
+PASS testPerVoiceGeneration
+PASS testChordAndStrumModes
+PASS testSnapshotQueue
+PASS testNoteVisualizationQueue
+PASS testCameraTargetAndHitTesting
+PASS testCameraMotion
+PASS testCameraAutoFraming
+PASS testCameraSanitization
+PASS testTrailHistory
+PASS testPresentationMigration
+PASS testOctaveTranspose
+PASS testDurationMapping
+PASS testGlobalChordFrame
+PASS testStrumBeatUnit
+PASS testBarAutoReset
+All core tests passed

@@ -1,6 +1,6 @@
 # The Three Body Solution - Project Status
 
-Last updated: 2026-11-27 18-58 GMT-3
+Last updated: 2026-11-27 21-38 GMT-3
 
 ## Project purpose
 
@@ -12,27 +12,35 @@ standalone artwork driven by a normalized three-body gravitational simulation.
 The repository builds a deterministic core library, Logic AU MIDI effect,
 Ableton-oriented VST3 instrument, and standalone CoreMIDI application. It has a
 native interactive HDR Metal presentation layer, shared control deck, 24
-schema-v2 factory presets, 12 schema-v1 voicing presets, schema-v7 host state
+schema-v2 factory presets, 12 schema-v1 voicing presets, schema-v8 host state
 serialization, automatic camera framing, live note-stream visualization,
 automated tests, and macOS CI.
-Portable schema-v3 `.3bs` JSON files save and restore complete musical,
+Portable schema-v4 `.3bs` JSON files save and restore complete musical,
 simulation, and presentation configurations across plugin and standalone.
 
 ## Active focus
 
-Execute the [27 November code audit and improvement plan](AUDIT-AND-IMPROVEMENT-PLAN.md)
-within the existing gravitational MIDI/artwork concept. The audit of
-`06066967b243e250d97da37ea0195b31f5c9521c` found concrete MIDI lifecycle,
-input-timing, queue/state ownership, recall and Metal data-contract defects.
-Prioritise the regression baseline, note integrity and state ownership before
-finishing alpha.3-derived host and interaction qualification.
+The [27 November audit plan](AUDIT-AND-IMPROVEMENT-PLAN.md) has been implemented
+across core MIDI, complete state ownership and recall, monotonic standalone
+scheduling, completion-owned GPU resources and the existing control deck.
+The gravitational model, Verlet solver, factory systems, mapping vocabulary,
+three formats and existing parameter identities/ranges are retained.
 
-The existing core test entry point passes in a portable Linux build, but five
-additional tests are defined without being called; targeted diagnostic probes
-reproduce defects outside that entry point. Native JUCE/Metal/CoreMIDI and
-Logic/Ableton validation were not repeated in this audit. Historical October
-results below remain dated evidence. Production code and released binaries
-have not been changed by this documentation checkpoint.
+Implementation is on [PR #2](https://github.com/krahd/3bs/pull/2), awaiting
+final automated acceptance and integration. Candidate `449f126` passed 18/18
+native tests without skips and actual prior-executable state recall/resave in
+[run 46086793103](https://github.com/krahd/3bs/actions/runs/46086793103).
+The AU validator subsequently failed to discover the installed component,
+before opening it. CI now checks the installed metadata/signature, refreshes
+only the isolated runner's registrar and waits a bounded time for the exact
+identifiers before validation. One error-only notification also receives the
+final ASCII punctuation correction. Remaining validator/soak/package results
+must be observed on that next candidate.
+
+Both portable suites passed with CMake 3.22.6. Queue/ownership and actual
+processor ThreadSanitizer gates passed. The source audit and historical
+alpha.3 release remain unchanged. The exact acceptance record and remaining
+host/device sessions are in [RELIABILITY-ACCEPTANCE.md](RELIABILITY-ACCEPTANCE.md).
 
 ## Architecture overview
 
@@ -59,7 +67,7 @@ The same engine is shared by all three runtime surfaces.
     <text x="135" y="85" font-size="17">Logic AU MIDI FX</text><text x="135" y="106" font-size="12" fill="#7f9bb4">host adapter</text>
     <text x="135" y="185" font-size="17">VST3 Instrument</text><text x="135" y="206" font-size="12" fill="#7f9bb4">silent audio + MIDI out</text>
     <text x="135" y="285" font-size="17">Standalone</text><text x="135" y="306" font-size="12" fill="#7f9bb4">CoreMIDI adapter</text>
-    <text x="455" y="150" font-size="19">Deterministic Engine</text><text x="455" y="182" font-size="13" fill="#9cb4c8">Verlet physics · measurements</text><text x="455" y="204" font-size="13" fill="#9cb4c8">pitch/trigger mapping · state</text><text x="455" y="226" font-size="13" fill="#9cb4c8">fixed MIDI event buffers</text>
+    <text x="455" y="150" font-size="19">Deterministic Engine</text><text x="455" y="182" font-size="13" fill="#9cb4c8">Verlet physics · measurements</text><text x="455" y="204" font-size="13" fill="#9cb4c8">pitch/trigger mapping · state</text><text x="455" y="226" font-size="13" fill="#9cb4c8">streaming MIDI event delivery</text>
     <text x="795" y="82" font-size="18">MIDI Destination</text><text x="795" y="106" font-size="12" fill="#7f9bb4">host events or CoreMIDI</text>
     <text x="795" y="238" font-size="18">Presentation</text><text x="795" y="264" font-size="13" fill="#9cb4c8">JUCE control deck</text><text x="795" y="286" font-size="13" fill="#9cb4c8">Metal scene + note streams</text>
   </g>
@@ -70,8 +78,9 @@ The same engine is shared by all three runtime surfaces.
 
 ### Data-flow diagram
 
-Commands and render snapshots use fixed-capacity queues; MIDI stays on the
-processing path.
+Complete control revisions use bounded mailboxes; expendable visual snapshots
+use SPSC queues. MIDI stays on the processing path, with a monotonic worker and
+a destination-owned delivery ledger in standalone.
 
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="330" viewBox="0 0 960 330" role="img" aria-labelledby="flow-title flow-desc">
   <title id="flow-title">Real-time data flow</title><desc id="flow-desc">Host transport and parameters enter processing, simulation produces mappings and MIDI, while snapshots and bounded note events go independently to Metal.</desc>
@@ -93,7 +102,7 @@ processing path.
 
 ## Setup and run instructions
 
-Requirements are Apple Silicon macOS 13+, Xcode, CMake 3.22+, and recursive Git
+Requirements are Apple Silicon macOS 13+, Xcode, CMake 3.22+, Python 3, and recursive Git
 submodules. Use `cmake --preset dev` for core tests or
 `cmake --preset plugin-debug` for all formats, then the matching build and test
 presets. Detailed commands and artifact paths are in `README.md`. VS Code tasks
@@ -129,6 +138,11 @@ repository.
 
 ## Recent changes
 
+- 2026-11-27: implemented reliability repairs across core MIDI, coherent state
+  publication, standalone timing/destination ownership, GPU frame ownership,
+  complete controls and exact-state/preset workflows. Added numerical,
+  allocation, concurrency, native UI/Metal/CoreMIDI, prior-executable recall and
+  distribution gates; candidate acceptance is recorded separately below.
 - 2026-11-27: completed a source audit and targeted portable diagnostics; added
   the detailed improvement plan and reproducible evidence without modifying
   production source, presets, dependencies or released binaries.
@@ -227,24 +241,43 @@ repository.
 
 ## Tests and verification status
 
-- 2026-11-27: directly compiled the unchanged core and presentation model with
-  GCC 14/C++20 on Linux; the existing core test entry point passed. CMake was
-  unavailable, so CMake/CTest presets and catalogue validators were not run.
-- Invoking five omitted core tests revealed four failed assertions across
-  three functions. Octave/duration failures expose constructor replacement of
-  explicit configuration; the bar-fraction strum failure includes a test-horizon
-  error and is not evidence of an independent strum-engine defect.
-- Targeted probes reproduced lost/wrong-channel note cleanup, delayed strums
-  after disable/gate closure, block-dependent input processing, event-buffer
-  loss, false SpeedPeak triggers, torn snapshots under the producer-pop policy,
-  and an undefined conversion from malformed non-finite state. A trail helper
-  also reproduced duration loss under subdivision pressure.
-- All 24 factory initial systems remained finite in a 60-beat diagnostic with
-  escape handling set to Leave. This does not establish convergence or native
-  runtime readiness. Full commands/results are in `audit/2026-11-27/EVIDENCE.md`.
-- Metal buffer ownership/inline upload limits, state-recall paths and incoming
-  SysEx allocation were source-audited; native manifestations and fixes still
-  require the plan's Mac/DAW acceptance checks.
+### Current reliability candidate
+
+Checkpoint `449f126` / tested merge `16a16372` passed all 12 portable entries
+on Linux and macOS, queue/ownership TSan, all 18 native entries, and recall/
+immediate resave of states generated by the actual audited executable.
+Actual-processor TSan completed 384 publications and 768 save/restore pairs,
+63,919 callbacks, zero errors and final acknowledgement. Real Metal rendering
+completed 27 frames with 13,824 glyph bytes, 21 handled allocation failures
+and zero GPU errors. All 20 UI captures were produced; corrected advanced
+fields/range labels were visually inspected.
+
+The actual processor profile observed zero C/C++ allocations or frees across
+2,188 callbacks with preallocated host MIDI storage. Separate core profiling
+recorded two deadline overruns in its 48 kHz / 512-sample Chord transition
+scenario on the shared runner; no universal timing or host-capacity guarantee
+is claimed. The short CoreMIDI test passed with balanced receiver ledgers and
+zero output failures/worker overruns. AU discovery failed; VST3 validation and
+the 30-minute soak were not reached at that checkpoint.
+
+The [factory musical-refinement diagnostic](reliability/2026-11-27/refinement/REPORT.md)
+ran all 24 actual systems at the published and halved steps for 60 beats each.
+All 48 runs had finite state, bounded work, valid events and empty final ledgers.
+21 of 24 full traces differed. This is descriptive sensitivity evidence, not a
+new tolerance or a change to the solver/defaults.
+
+The acceptance record separates portable, native automated, prior-executable
+compatibility and actual host/device evidence. CMake 3.22.6 is executed in
+portable and Release native CI; the JUCE submodule remains pinned to 8.0.13.
+
+### Original audit evidence — 27 November 2026
+
+The immutable [audit evidence](audit/2026-11-27/EVIDENCE.md) records the original
+portable reproduction of lost/wrong-channel note cleanup, delayed strums after
+disable/gate closure, block-dependent input, fixed-buffer event loss, false
+SpeedPeak triggers, torn snapshots and non-finite-state conversion. It also
+records five omitted tests and the trail-duration loss. Those are baseline
+observations; current regression and native outcomes are recorded separately.
 
 Historical native evidence:
 
@@ -263,28 +296,31 @@ Historical native evidence:
 - Fresh hands-on host/interaction validation is still required for Ableton and
   renderer behavior; Logic is not installed on this Mac.
 
-## Pending tasks
+## Pending acceptance
 
-- Execute W0-W2 of `AUDIT-AND-IMPROVEMENT-PLAN.md`: complete the regression
-  baseline, repair note lifecycle/event capacity, and establish queue/state
-  ownership with explicit command acceptance.
-- Execute W3-W4: sample-accurate MIDI input, independent standalone timing,
-  allocation checks, validated complete configurations and reliable recall.
-- Execute W5-W7: GPU resource ownership and actual-frame validation, remaining
-  existing voice controls, native interaction inspection, per-preset numerical
-  checks and representative performance measurements.
-- Complete W8 with fresh Logic AU, Ableton VST3 and standalone routing/recall
-  acceptance, plus `auval`, `pluginval` and release provenance where available.
-- Preserve the existing optional Max for Live question as a separate future
-  scope decision; it is outside this audit's three-format improvement plan.
+- Complete the corrected AU discovery/validation gate, VST3 validation, the
+  actual 30-minute virtual CoreMIDI soak and candidate provenance packaging.
+- Record Logic AU and Ableton VST3 sessions for actual routing, save/reopen,
+  editor-open recall, loop/seek/bypass, multiple instances, offline processing
+  and final teardown note termination.
+- Record physical CoreMIDI destination loss/reconnection, destination changes
+  and quit cleanup. Combine sustained MIDI measurement with actual UI/render
+  load, rather than treating a message-thread-stall soak as that session.
+- Inspect native interaction at representative display scales, matched scene
+  captures, camera controls, fullscreen and editor recreation; perform the
+  complete authored-file and preset-to-record-to-reopen workflow in each format.
+- Qualify a public release separately, including any Developer ID signing and
+  notarisation. Candidate archives and alpha.3 are distinct manifestations.
+- Preserve the optional Max for Live question as a separate future scope
+  decision, outside this audit's existing three-format plan.
 
 ## Next steps
 
-1. Make the regression suite exercise its intended tests and captured failures.
-2. Repair MIDI note integrity and queue/state ownership in focused changes.
-3. Follow the plan's dependencies through timing, recall, rendering and controls.
-4. Qualify the exact repaired build in all three existing formats before
-   reporting release readiness.
+Use the exact candidate and versioned acceptance checklist for the remaining
+host/device/display sessions. Record observed versions, destination, build SHA,
+results and any failure before making a release-readiness claim. Project
+administration is derived from the canonical owner and reconciled in
+`krahd/tom-work-admin`; technical evidence remains here.
 
 ## Longer-term steps
 
@@ -310,5 +346,5 @@ material and may contain placeholders or superseded spelling.
 
 ---
 
-Last updated: 2026-11-27 18-58 GMT-3
+Last updated: 2026-11-27 21-38 GMT-3
 

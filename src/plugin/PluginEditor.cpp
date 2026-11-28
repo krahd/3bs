@@ -110,71 +110,97 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
     panel_.onVoicingEdited = [this] { processor_.setSelectedVoicingPresetIndex(-1); };
     panel_.onRandomize = [this] { processor_.requestRandomize(panel_.chaosSlider().getValue() / 100.0); };
     panel_.onReset = [this] { processor_.requestReset(); };
+    panel_.onPanic = [this] { processor_.requestPanic(); };
+    panel_.onAdvancedConfiguration = [this](const EngineConfig& configuration) {
+        if (!processor_.applyAdvancedConfiguration(configuration)) {
+            panel_.setStatus(processor_.lastStateError());
+            return false;
+        }
+        return true;
+    };
+    panel_.onCaptureConfiguration = [this] { return processor_.currentUserConfiguration(); };
+    panel_.onApplyUserConfiguration = [this](const UserConfiguration& configuration) {
+        if (!processor_.applyUserConfiguration(configuration)) {
+            panel_.setStatus(processor_.lastStateError());
+            return false;
+        }
+        refreshFromProcessor();
+        return true;
+    };
     panel_.onCameraChanged = [this](const CameraState& camera) {
         presentation_.camera = camera;
-        processor_.setPresentationState(presentation_);
+        (void)processor_.setPresentationState(presentation_, displayedRevision_);
         processor_.updateHostDisplay(juce::AudioProcessorListener::ChangeDetails{}.withNonParameterStateChanged(true));
     };
     panel_.onNotePaneMinimizedChanged = [this](bool minimized) {
         presentation_.notePaneMinimized = minimized;
-        processor_.setPresentationState(presentation_);
+        (void)processor_.setPresentationState(presentation_, displayedRevision_);
         processor_.updateHostDisplay(juce::AudioProcessorListener::ChangeDetails{}.withNonParameterStateChanged(true));
     };
     panel_.onNotePaneStyleChanged = [this](NotePaneStyle style) {
         presentation_.notePaneStyle = style;
-        processor_.setPresentationState(presentation_);
+        (void)processor_.setPresentationState(presentation_, displayedRevision_);
         processor_.updateHostDisplay(juce::AudioProcessorListener::ChangeDetails{}.withNonParameterStateChanged(true));
     };
     panel_.onAdvanced = [this] {
         const auto target = panel_.getLocalArea(&panel_.advancedButton(), panel_.advancedButton().getLocalBounds());
+        const juce::Component::SafePointer<ThreeBSEditor> safe(this);
         showAdvancedStateEditor(processor_.currentInitialState(), target, panel_,
-            [this](const SimulationState& editedState) {
-                processor_.requestExactState(editedState);
-                lastPlaneTilts_.fill(0.0);
-                panel_.setPlaneTilts(lastPlaneTilts_);
+            [safe](const SimulationState& editedState) {
+                if (safe == nullptr) return;
+                safe->processor_.requestExactState(editedState);
+                safe->refreshFromProcessor();
             });
     };
     panel_.onSaveConfiguration = [this] {
         fileChooser_ = std::make_unique<juce::FileChooser>(
             "Save 3bs configuration", juce::File::getSpecialLocation(
                 juce::File::userDocumentsDirectory).getChildFile("Three Body Solution.3bs"), "*.3bs");
+        const juce::Component::SafePointer<ThreeBSEditor> safe(this);
         fileChooser_->launchAsync(juce::FileBrowserComponent::saveMode
                                       | juce::FileBrowserComponent::canSelectFiles
                                       | juce::FileBrowserComponent::warnAboutOverwriting,
-            [this](const juce::FileChooser& chooser) {
+            [safe](const juce::FileChooser& chooser) {
+                if (safe == nullptr) return;
                 auto file = chooser.getResult();
                 if (file == juce::File{})
                     return;
                 file = file.withFileExtension(".3bs");
                 const auto saved = file.replaceWithText(
-                    serializeUserConfiguration(processor_.currentUserConfiguration()));
-                panel_.setStatus(saved ? "SAVED / " + file.getFileName() : "SAVE FAILED");
+                    serializeUserConfiguration(safe->processor_.currentUserConfiguration()));
+                safe->panel_.setStatus(saved ? "SAVED / " + file.getFileName() : "SAVE FAILED");
             });
     };
     panel_.onLoadConfiguration = [this] {
         fileChooser_ = std::make_unique<juce::FileChooser>(
             "Load 3bs configuration", juce::File::getSpecialLocation(
                 juce::File::userDocumentsDirectory), "*.3bs");
+        const juce::Component::SafePointer<ThreeBSEditor> safe(this);
         fileChooser_->launchAsync(juce::FileBrowserComponent::openMode
                                       | juce::FileBrowserComponent::canSelectFiles,
-            [this](const juce::FileChooser& chooser) {
+            [safe](const juce::FileChooser& chooser) {
+                if (safe == nullptr) return;
                 const auto file = chooser.getResult();
                 if (file == juce::File{})
                     return;
                 UserConfiguration configuration;
                 juce::String error;
-                if (!deserializeUserConfiguration(file.loadFileAsString(), configuration, error)) {
-                    panel_.setStatus("LOAD FAILED / " + error);
+                if (!loadUserConfiguration(file, configuration, error)) {
+                    safe->panel_.setStatus("LOAD FAILED / " + error);
                     return;
                 }
-                processor_.applyUserConfiguration(configuration);
-                presentation_ = configuration.presentation;
-                lastPlaneTilts_ = configuration.planeTilts;
-                panel_.setPresentationState(presentation_);
-                panel_.setPlaneTilts(lastPlaneTilts_);
-                panel_.setSelectedPresetIndex(configuration.presetIndex);
-                panel_.setSelectedVoicingPresetIndex(configuration.voicingPresetIndex);
-                panel_.setStatus("LOADED / " + file.getFileName());
+                if (!safe->processor_.applyUserConfiguration(configuration)) {
+                    safe->panel_.setStatus("LOAD FAILED / " + safe->processor_.lastStateError());
+                    return;
+                }
+                safe->refreshFromProcessor();
+                safe->presentation_ = configuration.presentation;
+                safe->lastPlaneTilts_ = configuration.planeTilts;
+                safe->panel_.setPresentationState(safe->presentation_);
+                safe->panel_.setPlaneTilts(safe->lastPlaneTilts_);
+                safe->panel_.setSelectedPresetIndex(configuration.presetIndex);
+                safe->panel_.setSelectedVoicingPresetIndex(configuration.voicingPresetIndex);
+                safe->panel_.setStatus("LOADED / " + file.getFileName());
             });
     };
     panel_.setMidiOutputAvailable(false);
@@ -183,6 +209,7 @@ ThreeBSEditor::ThreeBSEditor(ThreeBSProcessor& owner)
     lastPlaneTilts_ = processor_.initialPlaneTilts();
     panel_.setPlaneTilts(lastPlaneTilts_);
     panel_.setSelectedVoicingPresetIndex(processor_.currentUserConfiguration().voicingPresetIndex);
+    refreshFromProcessor();
     startTimerHz(30);
 }
 
@@ -194,7 +221,27 @@ void ThreeBSEditor::resized() {
     panel_.setBounds(getLocalBounds());
 }
 
+void ThreeBSEditor::refreshFromProcessor() {
+    const auto revision = processor_.configurationRevision();
+    const auto configuration = processor_.currentUserConfiguration();
+    presentation_ = configuration.presentation;
+    lastPlaneTilts_ = configuration.planeTilts;
+    panel_.setPresentationState(presentation_);
+    panel_.setPlaneTilts(lastPlaneTilts_);
+    panel_.setSelectedPresetIndex(configuration.presetIndex);
+    panel_.setSelectedVoicingPresetIndex(configuration.voicingPresetIndex);
+    panel_.setAdvancedConfiguration(configuration.engine);
+    displayedRevision_ = revision;
+}
+
 void ThreeBSEditor::timerCallback() {
+    if (processor_.configurationRevision() != displayedRevision_) refreshFromProcessor();
+    panel_.setAdvancedConfiguration(processor_.currentUserConfiguration().engine);
+    const auto faults = processor_.realtimeFaults();
+    if (faults != displayedFaults_) {
+        displayedFaults_ = faults;
+        if (faults != 0) panel_.setStatus("MIDI / TIMING INPUT ERROR - CHECK HOST INPUT");
+    }
     presentation_.visual.trailSeconds = static_cast<float>(panel_.trailSlider().getValue());
     presentation_.visual.bloom = static_cast<float>(panel_.bloomSlider().getValue() / 100.0);
     presentation_.camera.minimumDistance = static_cast<float>(panel_.minimumCameraDistanceSlider().getValue());
@@ -202,7 +249,7 @@ void ThreeBSEditor::timerCallback() {
     presentation_.camera.autoFrame = panel_.autoFrameButton().getToggleState();
     presentation_.camera = sanitizedCameraState(presentation_.camera);
     panel_.setPresentationState(presentation_);
-    processor_.setPresentationState(presentation_);
+    (void)processor_.setPresentationState(presentation_, displayedRevision_);
     const auto tilts = panel_.planeTilts();
     bool tiltChanged{};
     for (std::size_t body = 0; body < bodyCount; ++body)

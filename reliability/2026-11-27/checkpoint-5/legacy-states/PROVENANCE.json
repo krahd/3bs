@@ -1,0 +1,13 @@
+{
+  "producer_commit": "06066967b243e250d97da37ea0195b31f5c9521c",
+  "producer_kind": "actual prior-version executable with added capture harness",
+  "host_schema": 7,
+  "portable_schema": 3,
+  "scope": "generated compatibility fixtures; no claim these are historical user sessions",
+  "files": {
+    "edited.3bs": "7a328767747533f74386f6efce4112cff19ca8a08b31c80674fd9b19af3d1d63",
+    "edited.bin": "6eae05d43b6138664c2c7d89348cd0cdb0c9a4625ed8fa8653a4a46053d52a64",
+    "default.bin": "39f86548713dec14d1a20515f05c0c7e33569d2c61681c76ef0e13877a350e34",
+    "default.3bs": "1f816a65819dff8faae4590889c350e57f0451e9d6667d06f719d8de73ee5cd3"
+  }
+}

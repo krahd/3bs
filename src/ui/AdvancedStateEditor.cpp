@@ -2,6 +2,9 @@
 // Copyright (c) 2026 Tomas Laurenzo
 
 #include "ui/AdvancedStateEditor.h"
+#include "ui/NumericText.h"
+#include "ui/DialogLifetime.h"
+#include "core/ThreeBodySimulation.h"
 
 #include <array>
 #include <cmath>
@@ -9,6 +12,11 @@
 
 namespace threebs {
 namespace {
+
+class ExactNumberField final : public juce::TextEditor {
+public:
+    juce::String getTooltip() override { return getText(); }
+};
 
 class AdvancedStateEditor final : public juce::Component {
 public:
@@ -37,7 +45,8 @@ public:
                 source.position.z, source.velocity.x, source.velocity.y, source.velocity.z};
             for (std::size_t field = 0; field < values.size(); ++field) {
                 auto& editor = fields_[body * values.size() + field];
-                editor.setText(juce::String(values[field], 8), false);
+                editor.setText(formatExactNumber(values[field]), false);
+                editor.setCaretPosition(0);
                 editor.setInputRestrictions(0, "-+.0123456789eE");
                 editor.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff101726));
                 editor.setColour(juce::TextEditor::outlineColourId, juce::Colour(0xff2c3a52));
@@ -88,8 +97,7 @@ private:
             std::array<double, 7> values{};
             for (std::size_t field = 0; field < values.size(); ++field) {
                 const auto text = fields_[body * values.size() + field].getText().trim();
-                values[field] = text.getDoubleValue();
-                if (text.isEmpty() || !std::isfinite(values[field])) {
+                if (!parseFiniteNumber(text, values[field])) {
                     error_.setText("Every field must contain a finite number.", juce::dontSendNotification);
                     return;
                 }
@@ -102,8 +110,14 @@ private:
             result.bodies[body].position = {values[1], values[2], values[3]};
             result.bodies[body].velocity = {values[4], values[5], values[6]};
         }
-        onApply_(result);
-        dismiss();
+        if (!isValidSimulationState(result)) {
+            error_.setText("Position and velocity must stay within +/-1000000.", juce::dontSendNotification);
+            return;
+        }
+        const auto safe = juce::Component::SafePointer<AdvancedStateEditor>(this);
+        const auto callback = onApply_;
+        callback(result);
+        if (safe != nullptr) safe->dismiss();
     }
 
     void dismiss() {
@@ -118,10 +132,11 @@ private:
     juce::Label title_;
     std::array<juce::Label, 7> headings_;
     std::array<juce::Label, bodyCount> bodyLabels_;
-    std::array<juce::TextEditor, bodyCount * 7> fields_;
+    std::array<ExactNumberField, bodyCount * 7> fields_;
     juce::Label error_;
     juce::TextButton apply_{"APPLY + RESET"};
     juce::TextButton cancel_{"CANCEL"};
+    juce::TooltipWindow tooltip_{this};
 };
 
 } // namespace
@@ -129,7 +144,9 @@ private:
 void showAdvancedStateEditor(const SimulationState& state, juce::Rectangle<int> targetArea,
                              juce::Component& parent,
                              std::function<void(const SimulationState&)> onApply) {
-    auto editor = std::make_unique<AdvancedStateEditor>(state, std::move(onApply));
+    auto guard = juce::Component::SafePointer<juce::Component>(&parent);
+    auto editor = std::make_unique<AdvancedStateEditor>(state,
+        [guard, callback = std::move(onApply)](const SimulationState& candidate) { if (guard != nullptr) callback(candidate); });
     juce::DialogWindow::LaunchOptions options;
     options.dialogTitle = "SET INITIAL BODY STATE";
     options.dialogBackgroundColour = juce::Colour(0xff080d18);
@@ -138,7 +155,7 @@ void showAdvancedStateEditor(const SimulationState& state, juce::Rectangle<int> 
     options.escapeKeyTriggersCloseButton = true;
     options.useNativeTitleBar = true;
     options.resizable = false;
-    options.launchAsync();
+    bindDialogToOwner(options.launchAsync(), parent);
     juce::ignoreUnused(targetArea);
 }
 

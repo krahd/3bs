@@ -63,6 +63,7 @@ Requirements:
 - Apple silicon Mac running macOS 13 or newer
 - Xcode and its command-line tools
 - CMake 3.22 or newer
+- Python 3 for preset diagnostics and candidate packaging
 - Git with submodule support
 
 JUCE 8.0.13 is pinned as a submodule. Build and test the framework-independent
@@ -115,12 +116,27 @@ The control deck has five pages:
 
 - **System:** run state, physics, masses, deterministic randomization, and exact
   initial position/velocity editing.
-- **Voices:** per-body enable, root, scale, pitch mapping, trigger mapping, plus
-  shared chord and strum controls.
-- **Space:** density, trails, bloom, orbital-plane tilts, automatic framing, and
+- **Voices:** per-body enable, root, scale, pitch/trigger/duration mappings,
+  density and shared chord/strum controls. **Voice / System Settings** exposes
+  channel, note range, custom scales, trigger intervals, probability, velocity
+  and CC lanes, plus existing simulation settings.
+- **Space:** trails, bloom, orbital-plane tilts, automatic framing, and
   camera limits.
 - **Presets:** 24 factory systems grouped by orbital family.
-- **Settings:** portable `.3bs` save/load and standalone MIDI destination.
+- **Settings:** portable `.3bs` import/export, authored configurations and the
+  standalone MIDI destination. **Save Copy** creates a new authored file;
+  **Folder** opens its location for rename or removal.
+
+**All Notes Off** releases generated notes and cancels pending strums. Exact
+state editing preserves full numeric precision. Accepted masses above the
+coarse slider range remain active until that slider is moved. The density
+control replaces per-voice probabilities when moved; advanced probability
+settings otherwise remain independent.
+
+Standalone generation uses its own monotonic clock and continues while the
+interface is busy. A timing fault pauses generation until Reset or a fresh Run
+transition. Physical destinations are monitored for disconnection and
+reconnection; a route change cleans the old destination first.
 
 Drag the scene to orbit, scroll to zoom, click a body to follow it, and click the
 background to return to the barycenter. Double-click the background to fit all
@@ -134,12 +150,31 @@ state, and bounded queues. JUCE adapters translate host transport and MIDI for
 the plugin and standalone surfaces. Metal consumes immutable render snapshots
 and a separate note-event queue, so renderer failure is non-fatal to MIDI.
 
-Schema-v7 host state stores exact simulation vectors, musical mappings, rhythmic
+Source builds use schema-v8 host state and schema-v4 portable `.3bs` files.
+They preserve exact simulation vectors, musical mappings, meter, rhythmic
 length grids, camera and pane state, and non-automatable presentation controls.
-Schemas v1-v6 migrate with compatible defaults, and portable `.3bs` files use
-schema v3. Complete factory presets remain schema v2; dedicated voicing presets
-use their own schema v1 catalog. See
+Host schemas v1–v7 and portable schemas v1–v3 migrate with defined defaults.
+Older portable files lack meter and import as host-source 4/4; standalone uses
+the saved manual values. Existing parameter IDs and normalisation ranges are
+unchanged. Factory presets remain schema v2; voicing presets remain schema v1.
+The downloadable alpha.3 binaries predate these source changes. See
 [`STATUS.md`](STATUS.md) for diagrams, test records, and current risks.
+
+## Validation and compatibility
+
+The [reliability acceptance record](RELIABILITY-ACCEPTANCE.md) distinguishes
+automated evidence from actual DAW and hardware sessions. CI executes portable
+and native regressions, numerical diagnostics, concurrent ownership checks,
+real drawable Metal tests, UI captures and plugin validators. A runner without
+Metal or CoreMIDI reports a skip. Candidate archives include the exact commit
+and SHA-256 checksums. They are ad-hoc signed development builds.
+
+Corrections to explicit voice construction, SpeedPeak triggering, input sample
+timing and tempo-relative strums can change traces previously produced by
+defects. The solver, factory data and gravitational mapping concept are
+unchanged. State compatibility preserves authored values; it does not reproduce
+those defects. MIDI buffer capacity and final plugin teardown also depend on
+the host API and require the recorded host acceptance sessions.
 
 ## Host Routing
 
@@ -164,6 +199,8 @@ auval -v aumi Tbs1 Tmlz
 
 - [Installation and release use](doc/INSTALL.md)
 - [Operational status and architecture](STATUS.md)
+- [Reliability implementation and acceptance](RELIABILITY-ACCEPTANCE.md)
+- [Dated audit and improvement plan](AUDIT-AND-IMPROVEMENT-PLAN.md)
 - [Original project description](doc/project-initial-description.md)
 - [Historical implementation tasks](doc/)
 - [Contributor instructions](AGENTS.md)

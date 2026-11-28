@@ -5,6 +5,8 @@
 
 #include "core/Random.h"
 #include "render/CameraController.h"
+#include "render/FrameResourcePool.h"
+#include "render/NoteHistory.h"
 #include "render/TrailHistory.h"
 
 #include <BinaryData.h>
@@ -30,6 +32,8 @@ namespace threebs {
 namespace {
 
 constexpr std::size_t trailCapacity = 4096;
+constexpr std::size_t trailRenderCapacity = 8192;
+constexpr std::size_t framesInFlight = 3;
 constexpr std::size_t generatedStarCount = 12000;
 constexpr std::size_t noteHistoryCapacity = 32;
 constexpr std::size_t overlayInstanceCapacity = 512;
@@ -103,6 +107,38 @@ struct alignas(16) GlyphInstance {
     simd_float4 colour{};
 };
 
+struct FrameResources {
+    id<MTLBuffer> planets{nil};
+    id<MTLBuffer> clouds{nil};
+    id<MTLBuffer> atmospheres{nil};
+    id<MTLBuffer> trails{nil};
+    id<MTLBuffer> overlays{nil};
+    id<MTLBuffer> glyphs{nil};
+
+    bool ready() const noexcept {
+        return planets != nil && clouds != nil && atmospheres != nil
+            && trails != nil && overlays != nil && glyphs != nil;
+    }
+    void release() noexcept {
+        [planets release];
+        [clouds release];
+        [atmospheres release];
+        [trails release];
+        [overlays release];
+        [glyphs release];
+    }
+};
+
+id<MTLBuffer> makeSharedBuffer(id<MTLDevice> device, std::size_t size, const void* bytes,
+                               int failureIndex, int& allocationIndex) {
+    if (allocationIndex++ == failureIndex)
+        return nil;
+    auto buffer = [device newBufferWithLength:size options:MTLResourceStorageModeShared];
+    if (buffer != nil && bytes != nullptr)
+        std::memcpy(buffer.contents, bytes, size);
+    return buffer;
+}
+
 struct NotePaneLayout {
     double left{};
     double top{};
@@ -149,15 +185,6 @@ void formatNoteName(std::uint8_t note, char out[4]) noexcept {
     out[2] = static_cast<char>('0' + octave);
     out[3] = '\0';
 }
-
-struct NoteHistoryEntry {
-    double startTime{};
-    double endTime{};
-    std::uint8_t note{};
-    std::uint8_t velocity{};
-    bool active{};
-    bool valid{};
-};
 
 simd_float4 vector(Vec3 value, float w = 0.0F) noexcept {
     return {static_cast<float>(value.x), static_cast<float>(value.y), static_cast<float>(value.z), w};
@@ -297,9 +324,18 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
                                           static_cast<CGFloat>(cellHeight) * 0.6, nullptr);
     if (font == nullptr)
         font = CTFontCreateWithName(CFSTR("Courier"), static_cast<CGFloat>(cellHeight) * 0.6, nullptr);
+    if (font == nullptr) {
+        CGContextRelease(context);
+        return nil;
+    }
     const CGFloat ascent = CTFontGetAscent(font);
     const CGFloat descent = CTFontGetDescent(font);
     CGColorRef white = CGColorCreateGenericRGB(1.0, 1.0, 1.0, 1.0);
+    if (white == nullptr) {
+        CFRelease(font);
+        CGContextRelease(context);
+        return nil;
+    }
     const void* keys[] = {kCTFontAttributeName, kCTForegroundColorAttributeName};
     const void* values[] = {font, white};
     for (unsigned index = 0; index < 95U; ++index) {
@@ -358,7 +394,8 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
 - (instancetype)initWithView:(ThreeBSMetalView*)view
                    snapshots:(threebs::SpscQueue<threebs::RenderSnapshot, 64>*)snapshots
                   noteEvents:(threebs::NoteVisualizationQueue*)noteEvents
-                       owner:(threebs::MetalSceneComponent*)owner;
+                       owner:(threebs::MetalSceneComponent*)owner
+      failedBufferAllocation:(int)failedBufferAllocation;
 - (void)setPresentation:(const threebs::PresentationState&)state;
 - (threebs::PresentationState)presentation;
 - (void)beginCameraInteraction;
@@ -371,6 +408,8 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
 - (void)notePaneClickAtX:(double)x y:(double)y width:(double)width height:(double)height;
 - (BOOL)isReady;
 - (threebs::RendererPerformanceMetrics)performanceMetrics;
+- (void)requestFrameCapture;
+- (threebs::RendererFrameCapture)frameCapture;
 @end
 
 @implementation ThreeBSMetalView
@@ -457,11 +496,9 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     id<MTLDepthStencilState> _depthNone;
     id<MTLBuffer> _sphereVertices;
     id<MTLBuffer> _sphereIndices;
-    id<MTLBuffer> _planetInstances;
-    id<MTLBuffer> _cloudInstances;
-    id<MTLBuffer> _atmosphereInstances;
     id<MTLBuffer> _starInstances;
-    id<MTLBuffer> _trailVertices;
+    std::array<threebs::FrameResources, threebs::framesInFlight> _frames;
+    threebs::FrameResourcePool<threebs::framesInFlight> _frameOwnership;
     id<MTLTexture> _sceneTexture;
     id<MTLTexture> _depthTexture;
     id<MTLTexture> _bloomA;
@@ -475,15 +512,14 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     threebs::RenderSnapshot _latest;
     std::array<threebs::TrailHistory<threebs::trailCapacity>, threebs::bodyCount> _trails;
     std::array<threebs::PlanetVisualStyle, threebs::bodyCount> _styles;
-    std::array<threebs::TrailVertex, threebs::trailCapacity * threebs::bodyCount * 2U> _trailStaging;
-    std::array<std::array<threebs::NoteHistoryEntry, threebs::noteHistoryCapacity>, threebs::bodyCount> _noteHistory;
-    std::array<std::size_t, threebs::bodyCount> _nextNoteHistory;
+    std::array<threebs::TrailVertex, threebs::trailRenderCapacity * threebs::bodyCount * 2U> _trailStaging;
+    std::array<threebs::TrailHistory<threebs::trailCapacity>::Sample, threebs::trailRenderCapacity> _trailSamples;
+    threebs::NoteHistory<threebs::noteHistoryCapacity> _noteHistory;
     std::array<threebs::OverlayInstance, threebs::overlayInstanceCapacity> _overlayStaging;
     std::array<threebs::GlyphInstance, threebs::glyphInstanceCapacity> _glyphStaging;
     std::size_t _sphereIndexCount;
     std::size_t _starCount;
     std::uint64_t _lastSequence;
-    std::uint64_t _noteHistoryRevision;
     NSUInteger _targetWidth;
     NSUInteger _targetHeight;
     CFTimeInterval _startTime;
@@ -495,13 +531,28 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     std::atomic<double> _publishedCpuFrameMilliseconds;
     std::atomic<double> _publishedMaxCpuFrameMilliseconds;
     std::atomic<std::uint64_t> _publishedFrameCount;
+    std::atomic<std::uint64_t> _completedFrameCount;
+    std::atomic<std::uint64_t> _failedFrameCount;
+    std::atomic<std::uint64_t> _skippedFrameCount;
+    std::atomic<std::uint64_t> _maxGlyphCount;
+    std::atomic<std::uint64_t> _maxGlyphBytes;
+    std::atomic<double> _gpuFrameMilliseconds;
+    std::atomic<bool> _renderFailed;
+    id<MTLBuffer> _captureBuffer;
+    NSUInteger _captureWidth;
+    NSUInteger _captureHeight;
+    NSUInteger _captureBytesPerRow;
+    BOOL _captureRequested;
+    std::atomic<bool> _captureReady;
+    BOOL _targetAllocationFailed;
     BOOL _ready;
 }
 
 - (instancetype)initWithView:(ThreeBSMetalView*)view
                    snapshots:(threebs::SpscQueue<threebs::RenderSnapshot, 64>*)snapshots
                   noteEvents:(threebs::NoteVisualizationQueue*)noteEvents
-                       owner:(threebs::MetalSceneComponent*)owner {
+                       owner:(threebs::MetalSceneComponent*)owner
+      failedBufferAllocation:(int)failedBufferAllocation {
     self = [super init];
     if (self == nil)
         return nil;
@@ -520,6 +571,14 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     _publishedCpuFrameMilliseconds.store(0.0, std::memory_order_relaxed);
     _publishedMaxCpuFrameMilliseconds.store(0.0, std::memory_order_relaxed);
     _publishedFrameCount.store(0, std::memory_order_relaxed);
+    _completedFrameCount.store(0, std::memory_order_relaxed);
+    _failedFrameCount.store(0, std::memory_order_relaxed);
+    _skippedFrameCount.store(0, std::memory_order_relaxed);
+    _maxGlyphCount.store(0, std::memory_order_relaxed);
+    _maxGlyphBytes.store(0, std::memory_order_relaxed);
+    _gpuFrameMilliseconds.store(0.0, std::memory_order_relaxed);
+    _renderFailed.store(false, std::memory_order_relaxed);
+    _captureReady.store(false, std::memory_order_relaxed);
     _latest.bodies = {{{1.0, {-0.95, 0.2, 0.0}, {}}, {1.0, {0.95, -0.2, 0.0}, {}},
                        {1.0, {0.0, 0.0, 0.0}, {}}}};
     _camera.setState(_presentation.camera, _latest.bodies, 0.0);
@@ -633,45 +692,46 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     std::vector<std::uint32_t> indices;
     const auto sphere = threebs::makeIcosphere(indices, 4);
     _sphereIndexCount = indices.size();
-    _sphereVertices = [_device newBufferWithBytes:sphere.data()
-                                             length:sphere.size() * sizeof(threebs::SphereVertex)
-                                            options:MTLResourceStorageModeShared];
-    _sphereIndices = [_device newBufferWithBytes:indices.data()
-                                            length:indices.size() * sizeof(std::uint32_t)
-                                           options:MTLResourceStorageModeShared];
-    _planetInstances = [_device newBufferWithLength:sizeof(threebs::PlanetInstance) * threebs::bodyCount
-                                            options:MTLResourceStorageModeShared];
-    _cloudInstances = [_device newBufferWithLength:sizeof(threebs::PlanetInstance) * threebs::bodyCount
-                                           options:MTLResourceStorageModeShared];
-    _atmosphereInstances = [_device newBufferWithLength:sizeof(threebs::PlanetInstance) * threebs::bodyCount
-                                                options:MTLResourceStorageModeShared];
+    int allocationIndex{};
+    const auto buffer = [&](std::size_t size, const void* data = nullptr) {
+        return threebs::makeSharedBuffer(_device, size, data, failedBufferAllocation, allocationIndex);
+    };
+    _sphereVertices = buffer(sphere.size() * sizeof(threebs::SphereVertex), sphere.data());
+    _sphereIndices = buffer(indices.size() * sizeof(std::uint32_t), indices.data());
     const auto stars = threebs::makeStars();
     _starCount = stars.size();
-    _starInstances = [_device newBufferWithBytes:stars.data()
-                                           length:stars.size() * sizeof(threebs::StarInstance)
-                                          options:MTLResourceStorageModeShared];
-    _trailVertices = [_device newBufferWithLength:sizeof(_trailStaging)
-                                           options:MTLResourceStorageModeShared];
+    _starInstances = buffer(stars.size() * sizeof(threebs::StarInstance), stars.data());
+    for (auto& frame : _frames) {
+        frame.planets = buffer(sizeof(threebs::PlanetInstance) * threebs::bodyCount);
+        frame.clouds = buffer(sizeof(threebs::PlanetInstance) * threebs::bodyCount);
+        frame.atmospheres = buffer(sizeof(threebs::PlanetInstance) * threebs::bodyCount);
+        frame.trails = buffer(sizeof(_trailStaging));
+        frame.overlays = buffer(sizeof(_overlayStaging));
+        frame.glyphs = buffer(sizeof(_glyphStaging));
+    }
 
     _ready = _queue != nil && _backgroundPipeline != nil && _starPipeline != nil
         && _trailPipeline != nil && _planetPipeline != nil && _cloudPipeline != nil
         && _atmospherePipeline != nil && _bloomExtractPipeline != nil
         && _blurPipeline != nil && _compositePipeline != nil && _sphereVertices != nil
         && _overlayPipeline != nil && _glyphPipeline != nil && _glyphAtlas != nil
-        && _sphereIndices != nil && _starInstances != nil && _trailVertices != nil;
+        && _sphereIndices != nil && _starInstances != nil
+        && _depthWrite != nil && _depthRead != nil && _depthNone != nil
+        && std::all_of(_frames.begin(), _frames.end(), [](const auto& frame) { return frame.ready(); });
+    if (!_ready)
+        threebs::writeMetalDiagnostic("resources", @"Required renderer resource allocation failed");
     return self;
 }
 
 - (void)dealloc {
+    [_captureBuffer release];
     [_bloomB release];
     [_bloomA release];
     [_depthTexture release];
     [_sceneTexture release];
-    [_trailVertices release];
+    for (auto& frame : _frames)
+        frame.release();
     [_starInstances release];
-    [_atmosphereInstances release];
-    [_cloudInstances release];
-    [_planetInstances release];
     [_sphereIndices release];
     [_sphereVertices release];
     [_depthNone release];
@@ -694,7 +754,19 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     [super dealloc];
 }
 
-- (BOOL)isReady { return _ready; }
+- (BOOL)isReady {
+    return _ready && !_targetAllocationFailed && !_renderFailed.load(std::memory_order_acquire);
+}
+
+- (BOOL)checkEncoder:(id<MTLRenderCommandEncoder>)encoder {
+    if (encoder != nil)
+        return YES;
+    if (!_renderFailed.exchange(true, std::memory_order_acq_rel)) {
+        _failedFrameCount.fetch_add(1, std::memory_order_relaxed);
+        threebs::writeMetalDiagnostic("encoder", @"Unable to create render command encoder");
+    }
+    return NO;
+}
 
 - (void)setPresentation:(const threebs::PresentationState&)state {
     const auto now = CACurrentMediaTime() - _startTime;
@@ -785,39 +857,63 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     _targetHeight = 0;
 }
 
-- (void)ensureTargetsForView:(MTKView*)view {
+- (BOOL)ensureTargetsForView:(MTKView*)view {
     const auto width = std::max<NSUInteger>(1U, static_cast<NSUInteger>(view.drawableSize.width));
     const auto height = std::max<NSUInteger>(1U, static_cast<NSUInteger>(view.drawableSize.height));
-    if (_targetWidth == width && _targetHeight == height && _sceneTexture != nil)
-        return;
-    _targetWidth = width;
-    _targetHeight = height;
-    [_sceneTexture release];
-    [_depthTexture release];
-    [_bloomA release];
-    [_bloomB release];
+    if (_targetWidth == width && _targetHeight == height && _sceneTexture != nil
+        && _depthTexture != nil && _bloomA != nil && _bloomB != nil)
+        return YES;
     MTLTextureDescriptor* scene = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA16Float
                                                                                     width:width height:height mipmapped:NO];
     scene.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
     scene.storageMode = MTLStorageModePrivate;
-    _sceneTexture = [_device newTextureWithDescriptor:scene];
+    auto sceneTexture = [_device newTextureWithDescriptor:scene];
     MTLTextureDescriptor* depth = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float
                                                                                     width:width height:height mipmapped:NO];
     depth.usage = MTLTextureUsageRenderTarget;
     depth.storageMode = MTLStorageModePrivate;
-    _depthTexture = [_device newTextureWithDescriptor:depth];
+    auto depthTexture = [_device newTextureWithDescriptor:depth];
     const auto bloomWidth = std::max<NSUInteger>(1U, width / 2U);
     const auto bloomHeight = std::max<NSUInteger>(1U, height / 2U);
     MTLTextureDescriptor* bloom = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA16Float
                                                                                     width:bloomWidth height:bloomHeight mipmapped:NO];
     bloom.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
     bloom.storageMode = MTLStorageModePrivate;
-    _bloomA = [_device newTextureWithDescriptor:bloom];
-    _bloomB = [_device newTextureWithDescriptor:bloom];
+    auto bloomA = [_device newTextureWithDescriptor:bloom];
+    auto bloomB = [_device newTextureWithDescriptor:bloom];
+    if (sceneTexture == nil || depthTexture == nil || bloomA == nil || bloomB == nil) {
+        [sceneTexture release];
+        [depthTexture release];
+        [bloomA release];
+        [bloomB release];
+        if (!_targetAllocationFailed) {
+            _failedFrameCount.fetch_add(1, std::memory_order_relaxed);
+            threebs::writeMetalDiagnostic("targets", @"Render target allocation failed; MIDI remains available");
+        }
+        _targetAllocationFailed = YES;
+        return NO;
+    }
+    // Install an entire valid target set at once. Command buffers retain earlier
+    // sets until completion, so a resize cannot invalidate in-flight textures.
+    [_sceneTexture release];
+    [_depthTexture release];
+    [_bloomA release];
+    [_bloomB release];
+    _sceneTexture = sceneTexture;
+    _depthTexture = depthTexture;
+    _bloomA = bloomA;
+    _bloomB = bloomB;
+    _targetWidth = width;
+    _targetHeight = height;
+    _targetAllocationFailed = NO;
+    return YES;
 }
 
 - (void)drawInMTKView:(MTKView*)view {
-    if (!_ready || view.currentDrawable == nil)
+    if (!_ready || _renderFailed.load(std::memory_order_acquire))
+        return;
+    id<CAMetalDrawable> drawable = view.currentDrawable;
+    if (drawable == nil)
         return;
     const auto frameStarted = CACurrentMediaTime();
     if (_previousFrameTimestamp > 0.0) {
@@ -829,54 +925,29 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
                                             std::memory_order_relaxed);
     }
     _previousFrameTimestamp = frameStarted;
-    [self ensureTargetsForView:view];
-    if (_sceneTexture == nil || _depthTexture == nil || _bloomA == nil || _bloomB == nil)
+    if (![self ensureTargetsForView:view])
         return;
 
     const auto now = CACurrentMediaTime() - _startTime;
     threebs::RenderSnapshot incoming;
     BOOL received = NO;
-    while (_snapshots->pop(incoming)) {
+    for (std::size_t drained = 0; drained < 64U && _snapshots->pop(incoming); ++drained) {
         _latest = incoming;
         received = YES;
     }
-    if (_noteHistoryRevision != _latest.trajectoryRevision) {
-        _noteHistory = {};
-        _nextNoteHistory = {};
-        _noteHistoryRevision = _latest.trajectoryRevision;
-    }
     threebs::NoteVisualizationEvent noteEvent;
-    while (_noteEvents->pop(noteEvent)) {
-        if (noteEvent.body >= threebs::bodyCount)
-            continue;
-        auto& history = _noteHistory[noteEvent.body];
-        if (noteEvent.type == threebs::NoteVisualizationType::On) {
-            for (auto& entry : history) {
-                if (entry.valid && entry.active) {
-                    entry.endTime = std::max(now, entry.startTime + threebs::minimumNoteDisplaySeconds);
-                    entry.active = false;
-                }
-            }
-            auto& entry = history[_nextNoteHistory[noteEvent.body]];
-            entry = {now, now, noteEvent.note, noteEvent.velocity, true, true};
-            _nextNoteHistory[noteEvent.body]
-                = (_nextNoteHistory[noteEvent.body] + 1U) % threebs::noteHistoryCapacity;
-        } else {
-            for (auto& entry : history) {
-                if (entry.valid && entry.active && entry.note == noteEvent.note) {
-                    entry.endTime = std::max(now, entry.startTime + threebs::minimumNoteDisplaySeconds);
-                    entry.active = false;
-                }
-            }
-        }
-    }
+    for (std::size_t drained = 0; drained < 2048U && _noteEvents->pop(noteEvent); ++drained)
+        (void)_noteHistory.append(noteEvent);
+    _noteHistory.advance(_latest, now);
+    const auto retainedTrailSeconds = std::clamp(static_cast<double>(_presentation.visual.trailSeconds), 5.0, 60.0);
     if (received && _latest.sequence != _lastSequence) {
         _lastSequence = _latest.sequence;
         for (std::size_t body = 0; body < threebs::bodyCount; ++body)
-            _trails[body].append(_latest.bodies[body].position, now, _latest.trajectoryRevision);
+            _trails[body].append(_latest.bodies[body].position, now, _latest.trajectoryRevision,
+                                  retainedTrailSeconds);
     }
     for (auto& trail : _trails)
-        trail.prune(now, std::clamp(static_cast<double>(_presentation.visual.trailSeconds), 5.0, 60.0));
+        trail.prune(now, retainedTrailSeconds);
 
     _camera.update(now, _latest.bodies,
                    static_cast<double>(_targetWidth) / static_cast<double>(_targetHeight));
@@ -891,9 +962,15 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     uniforms.renderSettings = {_presentation.visual.bloom, _presentation.visual.starDensity,
                                _presentation.visual.extrusion, _presentation.visual.trailWidth};
 
-    auto* planets = static_cast<threebs::PlanetInstance*>(_planetInstances.contents);
-    auto* clouds = static_cast<threebs::PlanetInstance*>(_cloudInstances.contents);
-    auto* atmospheres = static_cast<threebs::PlanetInstance*>(_atmosphereInstances.contents);
+    auto lease = _frameOwnership.tryAcquire();
+    if (!lease) {
+        _skippedFrameCount.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    auto& frame = _frames[lease.index()];
+    auto* planets = static_cast<threebs::PlanetInstance*>(frame.planets.contents);
+    auto* clouds = static_cast<threebs::PlanetInstance*>(frame.clouds.contents);
+    auto* atmospheres = static_cast<threebs::PlanetInstance*>(frame.atmospheres.contents);
     for (std::size_t body = 0; body < threebs::bodyCount; ++body) {
         const auto& source = _latest.bodies[body];
         const auto& style = _styles[body];
@@ -915,21 +992,22 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
 
     std::array<NSRange, threebs::bodyCount> trailRanges{};
     std::size_t trailVertexCount{};
-    const auto trailSeconds = std::max(5.0, static_cast<double>(_presentation.visual.trailSeconds));
+    const auto trailSeconds = retainedTrailSeconds;
     for (std::size_t body = 0; body < threebs::bodyCount; ++body) {
-        const auto& trail = _trails[body];
+        const auto sampleCount = _trails[body].tessellate(_trailSamples);
         trailRanges[body].location = trailVertexCount;
-        for (std::size_t index = 0; index < trail.size(); ++index) {
-            const auto previous = trail[index == 0U ? index : index - 1U].position;
-            const auto current = trail[index].position;
-            const auto next = trail[index + 1U < trail.size() ? index + 1U : index].position;
-            const auto age = static_cast<float>(std::clamp((trail[index].time - (now - trailSeconds))
+        for (std::size_t index = 0; index < sampleCount; ++index) {
+            const auto previous = _trailSamples[index == 0U ? index : index - 1U].position;
+            const auto current = _trailSamples[index].position;
+            const auto next = _trailSamples[index + 1U < sampleCount ? index + 1U : index].position;
+            const auto age = static_cast<float>(std::clamp((_trailSamples[index].time - (now - trailSeconds))
                                                            / trailSeconds, 0.0, 1.0));
             const auto trailColour = _styles[body].colours[2];
             for (const auto side : {-1.0F, 1.0F}) {
                 auto& vertex = _trailStaging[trailVertexCount++];
                 vertex.previousSide = threebs::vector(previous, side);
                 vertex.currentAge = threebs::vector(current, age);
+                // Preserve the established thin-ribbon brightness cap.
                 vertex.nextWidth = threebs::vector(next, std::min(_presentation.visual.trailWidth, 0.95F));
                 vertex.colour = threebs::colour(trailColour, 0.72F);
             }
@@ -937,7 +1015,7 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
         trailRanges[body].length = trailVertexCount - trailRanges[body].location;
     }
     if (trailVertexCount > 0U)
-        std::memcpy(_trailVertices.contents, _trailStaging.data(),
+        std::memcpy(frame.trails.contents, _trailStaging.data(),
                     trailVertexCount * sizeof(threebs::TrailVertex));
 
     std::size_t overlayCount{};
@@ -1047,7 +1125,7 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
                 if (body > 0U)
                     appendOverlay(columnLeft - 0.5F * s, contentTop, 1.0F * s, contentHeight,
                                   simd_make_float4(0.30F, 0.37F, 0.48F, 0.25F));
-                for (const auto& entry : _noteHistory[body]) {
+                for (const auto& entry : _noteHistory.history()[body]) {
                     if (!entry.valid || noteEndTime(entry) < now - threebs::noteHistorySeconds)
                         continue;
                     const auto age = std::max(0.0, now - entry.startTime);
@@ -1085,7 +1163,7 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
                 if (body > 0U)
                     appendOverlay(contentLeft, laneTop, contentRight - contentLeft, 1.0F * s,
                                   simd_make_float4(0.30F, 0.37F, 0.48F, 0.32F));
-                for (const auto& entry : _noteHistory[body]) {
+                for (const auto& entry : _noteHistory.history()[body]) {
                     if (!entry.valid)
                         continue;
                     const auto endTime = noteEndTime(entry);
@@ -1110,7 +1188,25 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
         }
     }
 
+    const auto overlayBytes = overlayCount * sizeof(threebs::OverlayInstance);
+    const auto glyphBytes = glyphCount * sizeof(threebs::GlyphInstance);
+    if (overlayBytes > 0U)
+        std::memcpy(frame.overlays.contents, _overlayStaging.data(), overlayBytes);
+    if (glyphBytes > 0U)
+        std::memcpy(frame.glyphs.contents, _glyphStaging.data(), glyphBytes);
+    _maxGlyphCount.store(std::max(_maxGlyphCount.load(std::memory_order_relaxed),
+                                  static_cast<std::uint64_t>(glyphCount)), std::memory_order_relaxed);
+    _maxGlyphBytes.store(std::max(_maxGlyphBytes.load(std::memory_order_relaxed),
+                                  static_cast<std::uint64_t>(glyphBytes)), std::memory_order_relaxed);
+
     id<MTLCommandBuffer> command = [_queue commandBuffer];
+    if (command == nil) {
+        _renderFailed.store(true, std::memory_order_release);
+        _failedFrameCount.fetch_add(1, std::memory_order_relaxed);
+        threebs::writeMetalDiagnostic("command", @"Unable to create Metal command buffer");
+        return;
+    }
+    command.label = @"3bs scene, bloom and note history";
     MTLRenderPassDescriptor* scenePass = [MTLRenderPassDescriptor renderPassDescriptor];
     scenePass.colorAttachments[0].texture = _sceneTexture;
     scenePass.colorAttachments[0].loadAction = MTLLoadActionClear;
@@ -1121,6 +1217,8 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     scenePass.depthAttachment.storeAction = MTLStoreActionStore;
     scenePass.depthAttachment.clearDepth = 0.0;
     id<MTLRenderCommandEncoder> encoder = [command renderCommandEncoderWithDescriptor:scenePass];
+    if (![self checkEncoder:encoder])
+        return;
     [encoder setCullMode:MTLCullModeNone];
     [encoder setDepthStencilState:_depthNone];
     [encoder setRenderPipelineState:_backgroundPipeline];
@@ -1137,7 +1235,7 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
 
     [encoder setDepthStencilState:_depthRead];
     [encoder setRenderPipelineState:_trailPipeline];
-    [encoder setVertexBuffer:_trailVertices offset:0 atIndex:0];
+    [encoder setVertexBuffer:frame.trails offset:0 atIndex:0];
     [encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:1];
     for (const auto range : trailRanges) {
         if (range.length >= 4U)
@@ -1148,23 +1246,23 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     [encoder setDepthStencilState:_depthWrite];
     [encoder setRenderPipelineState:_planetPipeline];
     [encoder setVertexBuffer:_sphereVertices offset:0 atIndex:0];
-    [encoder setVertexBuffer:_planetInstances offset:0 atIndex:1];
+    [encoder setVertexBuffer:frame.planets offset:0 atIndex:1];
     [encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:2];
     [encoder setFragmentBytes:&uniforms length:sizeof(uniforms) atIndex:0];
-    [encoder setFragmentBuffer:_planetInstances offset:0 atIndex:1];
+    [encoder setFragmentBuffer:frame.planets offset:0 atIndex:1];
     [encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:_sphereIndexCount
                          indexType:MTLIndexTypeUInt32 indexBuffer:_sphereIndices indexBufferOffset:0
                      instanceCount:threebs::bodyCount];
 
     [encoder setDepthStencilState:_depthRead];
     [encoder setRenderPipelineState:_cloudPipeline];
-    [encoder setVertexBuffer:_cloudInstances offset:0 atIndex:1];
+    [encoder setVertexBuffer:frame.clouds offset:0 atIndex:1];
     [encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:_sphereIndexCount
                          indexType:MTLIndexTypeUInt32 indexBuffer:_sphereIndices indexBufferOffset:0
                      instanceCount:threebs::bodyCount];
     [encoder setCullMode:MTLCullModeFront];
     [encoder setRenderPipelineState:_atmospherePipeline];
-    [encoder setVertexBuffer:_atmosphereInstances offset:0 atIndex:1];
+    [encoder setVertexBuffer:frame.atmospheres offset:0 atIndex:1];
     [encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:_sphereIndexCount
                          indexType:MTLIndexTypeUInt32 indexBuffer:_sphereIndices indexBufferOffset:0
                      instanceCount:threebs::bodyCount];
@@ -1175,6 +1273,8 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     bloomPass.colorAttachments[0].loadAction = MTLLoadActionDontCare;
     bloomPass.colorAttachments[0].storeAction = MTLStoreActionStore;
     encoder = [command renderCommandEncoderWithDescriptor:bloomPass];
+    if (![self checkEncoder:encoder])
+        return;
     [encoder setRenderPipelineState:_bloomExtractPipeline];
     [encoder setFragmentTexture:_sceneTexture atIndex:0];
     [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
@@ -1189,6 +1289,8 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     blurPass.colorAttachments[0].loadAction = MTLLoadActionDontCare;
     blurPass.colorAttachments[0].storeAction = MTLStoreActionStore;
     encoder = [command renderCommandEncoderWithDescriptor:blurPass];
+    if (![self checkEncoder:encoder])
+        return;
     [encoder setRenderPipelineState:_blurPipeline];
     [encoder setFragmentTexture:_bloomA atIndex:0];
     [encoder setFragmentBytes:&post length:sizeof(post) atIndex:0];
@@ -1196,6 +1298,8 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     [encoder endEncoding];
     blurPass.colorAttachments[0].texture = _bloomA;
     encoder = [command renderCommandEncoderWithDescriptor:blurPass];
+    if (![self checkEncoder:encoder])
+        return;
     post.direction = {0.0F, 1.0F};
     [encoder setRenderPipelineState:_blurPipeline];
     [encoder setFragmentTexture:_bloomB atIndex:0];
@@ -1208,6 +1312,8 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
         return;
     compositePass.colorAttachments[0].loadAction = MTLLoadActionDontCare;
     encoder = [command renderCommandEncoderWithDescriptor:compositePass];
+    if (![self checkEncoder:encoder])
+        return;
     [encoder setRenderPipelineState:_compositePipeline];
     [encoder setFragmentTexture:_sceneTexture atIndex:0];
     [encoder setFragmentTexture:_bloomA atIndex:1];
@@ -1215,23 +1321,68 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
     if (overlayCount > 0U) {
         [encoder setRenderPipelineState:_overlayPipeline];
-        [encoder setVertexBytes:_overlayStaging.data()
-                         length:overlayCount * sizeof(threebs::OverlayInstance) atIndex:0];
+        [encoder setVertexBuffer:frame.overlays offset:0 atIndex:0];
         [encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:1];
         [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6
                   instanceCount:overlayCount];
     }
     if (glyphCount > 0U) {
         [encoder setRenderPipelineState:_glyphPipeline];
-        [encoder setVertexBytes:_glyphStaging.data()
-                         length:glyphCount * sizeof(threebs::GlyphInstance) atIndex:0];
+        [encoder setVertexBuffer:frame.glyphs offset:0 atIndex:0];
         [encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:1];
         [encoder setFragmentTexture:_glyphAtlas atIndex:0];
         [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6
                   instanceCount:glyphCount];
     }
     [encoder endEncoding];
-    [command presentDrawable:view.currentDrawable];
+    BOOL capturesFrame = NO;
+    if (_captureRequested) {
+        _captureRequested = NO;
+        _captureWidth = drawable.texture.width;
+        _captureHeight = drawable.texture.height;
+        _captureBytesPerRow = (_captureWidth * 4U + 255U) & ~NSUInteger(255U);
+        [_captureBuffer release];
+        _captureBuffer = [_device newBufferWithLength:_captureBytesPerRow * _captureHeight
+                                             options:MTLResourceStorageModeShared];
+        if (_captureBuffer == nil) {
+            threebs::writeMetalDiagnostic("capture", @"Frame capture allocation failed");
+        } else {
+            id<MTLBlitCommandEncoder> blit = [command blitCommandEncoder];
+            if (blit == nil) {
+                _renderFailed.store(true, std::memory_order_release);
+                _failedFrameCount.fetch_add(1, std::memory_order_relaxed);
+                threebs::writeMetalDiagnostic("capture", @"Frame capture encoder unavailable");
+                return;
+            }
+            [blit copyFromTexture:drawable.texture sourceSlice:0 sourceLevel:0
+                    sourceOrigin:MTLOriginMake(0, 0, 0)
+                      sourceSize:MTLSizeMake(_captureWidth, _captureHeight, 1)
+                        toBuffer:_captureBuffer destinationOffset:0
+          destinationBytesPerRow:_captureBytesPerRow
+        destinationBytesPerImage:_captureBytesPerRow * _captureHeight];
+            [blit endEncoding];
+            capturesFrame = YES;
+        }
+    }
+    [command presentDrawable:drawable];
+    const auto completedSlot = lease.handOff();
+    // Capturing self keeps its buffers/pool alive if an editor closes while the
+    // GPU is finishing. This callback never touches the component owner or MIDI.
+    [command addCompletedHandler:^(id<MTLCommandBuffer> completed) {
+        if (completed.status == MTLCommandBufferStatusCompleted) {
+            const auto gpuSeconds = completed.GPUEndTime - completed.GPUStartTime;
+            if (std::isfinite(gpuSeconds) && gpuSeconds >= 0.0)
+                _gpuFrameMilliseconds.store(gpuSeconds * 1000.0, std::memory_order_relaxed);
+            if (capturesFrame)
+                _captureReady.store(true, std::memory_order_release);
+            _completedFrameCount.fetch_add(1, std::memory_order_release);
+        } else {
+            _failedFrameCount.fetch_add(1, std::memory_order_release);
+            if (!_renderFailed.exchange(true, std::memory_order_acq_rel))
+                threebs::writeMetalDiagnostic("GPU command", completed.error.localizedDescription);
+        }
+        (void)_frameOwnership.complete(completedSlot);
+    }];
     [command commit];
 
     const auto cpuFrameSeconds = CACurrentMediaTime() - frameStarted;
@@ -1245,12 +1396,39 @@ id<MTLTexture> makeGlyphAtlas(id<MTLDevice> device) {
     _publishedFrameCount.fetch_add(1, std::memory_order_relaxed);
 }
 
+- (void)requestFrameCapture {
+    if (_captureRequested || (_captureBuffer != nil && !_captureReady.load(std::memory_order_acquire)))
+        return;
+    _captureReady.store(false, std::memory_order_release);
+    _captureRequested = YES;
+}
+
+- (threebs::RendererFrameCapture)frameCapture {
+    threebs::RendererFrameCapture result;
+    if (!_captureReady.load(std::memory_order_acquire) || _captureBuffer == nil)
+        return result;
+    result.width = _captureWidth;
+    result.height = _captureHeight;
+    result.bgraPixels.resize(result.width * result.height * 4U);
+    const auto* source = static_cast<const std::uint8_t*>(_captureBuffer.contents);
+    for (std::size_t row = 0; row < result.height; ++row)
+        std::memcpy(result.bgraPixels.data() + row * result.width * 4U,
+                    source + row * _captureBytesPerRow, result.width * 4U);
+    return result;
+}
+
 - (threebs::RendererPerformanceMetrics)performanceMetrics {
     return {
         _publishedFramesPerSecond.load(std::memory_order_relaxed),
         _publishedCpuFrameMilliseconds.load(std::memory_order_relaxed),
         _publishedMaxCpuFrameMilliseconds.load(std::memory_order_relaxed),
-        _publishedFrameCount.load(std::memory_order_relaxed)
+        _publishedFrameCount.load(std::memory_order_relaxed),
+        _completedFrameCount.load(std::memory_order_acquire),
+        _failedFrameCount.load(std::memory_order_acquire),
+        _skippedFrameCount.load(std::memory_order_relaxed),
+        _maxGlyphCount.load(std::memory_order_relaxed),
+        _maxGlyphBytes.load(std::memory_order_relaxed),
+        _gpuFrameMilliseconds.load(std::memory_order_relaxed)
     };
 }
 @end
@@ -1260,20 +1438,24 @@ namespace threebs {
 class MetalSceneComponent::Impl {
 public:
     Impl(MetalSceneComponent& owner, SpscQueue<RenderSnapshot, 64>& snapshots,
-         NoteVisualizationQueue& noteVisualizationEvents) {
+         NoteVisualizationQueue& noteVisualizationEvents, int failedBufferAllocation) {
         auto device = MTLCreateSystemDefaultDevice();
         if (device == nil) {
             std::fprintf(stderr, "3bs Metal device unavailable\n");
             return;
         }
         view = [[ThreeBSMetalView alloc] initWithFrame:NSMakeRect(0, 0, 800, 500) device:device];
+        [device release];
+        if (view == nil)
+            return;
         view.colorPixelFormat = MTLPixelFormatBGRA8Unorm_sRGB;
         view.clearColor = MTLClearColorMake(0.001, 0.002, 0.008, 1.0);
         view.preferredFramesPerSecond = 60;
         view.paused = NO;
         view.enableSetNeedsDisplay = NO;
         delegate = [[ThreeBSMetalDelegate alloc] initWithView:view snapshots:&snapshots
-                                                  noteEvents:&noteVisualizationEvents owner:&owner];
+                                                  noteEvents:&noteVisualizationEvents owner:&owner
+                                       failedBufferAllocation:failedBufferAllocation];
         view.sceneDelegate = delegate;
         view.delegate = delegate;
         owner.setView(static_cast<void*>(view));
@@ -1292,7 +1474,13 @@ public:
 
 MetalSceneComponent::MetalSceneComponent(SpscQueue<RenderSnapshot, 64>& snapshots,
                                          NoteVisualizationQueue& noteVisualizationEvents)
-    : impl_(std::make_unique<Impl>(*this, snapshots, noteVisualizationEvents)) {}
+    : MetalSceneComponent(snapshots, noteVisualizationEvents, -1) {}
+
+MetalSceneComponent::MetalSceneComponent(SpscQueue<RenderSnapshot, 64>& snapshots,
+                                         NoteVisualizationQueue& noteVisualizationEvents,
+                                         int failedBufferAllocation)
+    : impl_(std::make_unique<Impl>(*this, snapshots, noteVisualizationEvents,
+                                  failedBufferAllocation)) {}
 
 MetalSceneComponent::~MetalSceneComponent() {
     setView(nullptr);
@@ -1316,6 +1504,19 @@ bool MetalSceneComponent::rendererAvailable() const noexcept {
 RendererPerformanceMetrics MetalSceneComponent::performanceMetrics() const noexcept {
     if (impl_ != nullptr && impl_->delegate != nil)
         return [impl_->delegate performanceMetrics];
+    return {};
+}
+
+void MetalSceneComponent::requestFrameCapture() {
+    if (impl_ != nullptr && impl_->delegate != nil) {
+        impl_->view.framebufferOnly = NO;
+        [impl_->delegate requestFrameCapture];
+    }
+}
+
+RendererFrameCapture MetalSceneComponent::frameCapture() const {
+    if (impl_ != nullptr && impl_->delegate != nil)
+        return [impl_->delegate frameCapture];
     return {};
 }
 

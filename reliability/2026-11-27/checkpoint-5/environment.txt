@@ -1,0 +1,11 @@
+ProductName:		macOS
+ProductVersion:		15.8.2
+BuildVersion:		24H232
+Darwin iad20-eo1207-1810151e-42dd-43e5-8bac-3422ec47a13b-5A74C8CB8CDC.local 24.6.0 Darwin Kernel Version 24.6.0: Sun Oct 11 23:44:11 PDT 2026; root:xnu-11417.140.69.713.47~2/RELEASE_ARM64_VMAPPLE arm64
+Xcode 16.4
+Build version 16F6
+cmake version 3.22.6
+
+CMake suite maintained and supported by Kitware (kitware.com/cmake).
+16a16372fba7be2a6e7b81a0de73aea7bd9b5826
+ 7c9d3783b127263d72bb65fe0a7e2dc8a02a7ac2 external/JUCE (7c9d378)

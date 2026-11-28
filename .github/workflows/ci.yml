@@ -5,41 +5,165 @@ name: CI
 
 on:
   push:
+    paths-ignore:
+      - '*.md'
+      - '**/*.md'
   pull_request:
+    paths-ignore:
+      - '*.md'
+      - '**/*.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   core-tests:
-    runs-on: macos-15
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
-        with:
-          submodules: recursive
-      - name: Configure native core tests
+      - name: Install supported minimum CMake 3.22.6
+        run: bash scripts/install_ci_cmake.sh "$RUNNER_TEMP/threebs-cmake"
+      - name: Configure portable tests
         run: >-
-          cmake -S . -B build/ci-core
-          -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_OSX_ARCHITECTURES=$(uname -m)
+          cmake --preset dev -B build/ci-core
+          -DCMAKE_BUILD_TYPE=Release
           -DTHREEBS_BUILD_PLUGINS=OFF
           -DTHREEBS_BUILD_TESTS=ON
       - name: Build
         run: cmake --build build/ci-core --parallel 4
-      - name: Test
-        run: ctest --test-dir build/ci-core --output-on-failure
+      - name: Test and retain reports
+        run: ctest --test-dir build/ci-core --output-on-failure --output-junit results.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-evidence-${{ matrix.os }}
+          path: |
+            build/ci-core/results.xml
+            build/ci-core/Testing/Temporary/LastTest.log
 
-  arm64-bundles:
+  concurrency-sanitizer:
     runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Configure ThreadSanitizer
+        run: >-
+          cmake -S . -B build/ci-tsan
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-fsanitize=thread -g"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
+          -DTHREEBS_BUILD_PLUGINS=OFF -DTHREEBS_BUILD_TESTS=ON
+      - name: Build queue and ownership regressions
+        run: cmake --build build/ci-tsan --target threebs_standalone_tests threebs_core_regression_tests threebs_command_mailbox_tests threebs_renderer_data_tests --parallel 4
+      - name: Check concurrent ownership
+        run: ctest --test-dir build/ci-tsan -R 'threebs_(standalone|core_regression|command_mailbox|renderer_data)_tests' --output-on-failure
+
+  processor-concurrency-sanitizer:
+    runs-on: macos-15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
-      - name: Configure arm64 bundles
+      - name: Configure actual processor with ThreadSanitizer
         run: >-
-          cmake -S . -B build/ci-plugin
+          cmake -S . -B build/ci-processor-tsan
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-fsanitize=thread -g"
+          -DCMAKE_OBJCXX_FLAGS="-fsanitize=thread -g"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
+          -DCMAKE_OSX_ARCHITECTURES=arm64
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
+          -DTHREEBS_PROCESSOR_TEST_TIMEOUT_SECONDS=600
+          -DTHREEBS_BUILD_PLUGINS=ON -DTHREEBS_BUILD_TESTS=ON
+      - name: Build processor concurrency regression
+        run: cmake --build build/ci-processor-tsan --target threebs_processor_concurrency_tests --parallel 4
+      - name: Exercise processing, publication and state capture concurrently
+        run: ctest --test-dir build/ci-processor-tsan -R '^threebs_processor_concurrency_tests$' --output-on-failure --output-junit processor-tsan-results.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: processor-concurrency-evidence-${{ github.sha }}
+          path: |
+            build/ci-processor-tsan/processor-tsan-results.xml
+            build/ci-processor-tsan/Testing/Temporary/LastTest.log
+
+  arm64-bundles:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - name: Install supported minimum CMake 3.22.6
+        run: bash scripts/install_ci_cmake.sh "$RUNNER_TEMP/threebs-cmake"
+      - name: Record native environment
+        run: |
+          mkdir -p build/evidence
+          sw_vers > build/evidence/environment.txt
+          uname -a >> build/evidence/environment.txt
+          xcodebuild -version >> build/evidence/environment.txt
+          cmake --version >> build/evidence/environment.txt
+          git rev-parse HEAD >> build/evidence/environment.txt
+          git submodule status >> build/evidence/environment.txt
+      - name: Configure arm64 bundles and integration tests
+        run: >-
+          cmake --preset plugin-debug -B build/ci-plugin
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_OSX_ARCHITECTURES=arm64
           -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
           -DTHREEBS_BUILD_PLUGINS=ON
-          -DTHREEBS_BUILD_TESTS=OFF
+          -DTHREEBS_BUILD_TESTS=ON
           -DTHREEBS_ADHOC_SIGN=ON
-      - name: Build AU, VST3, and standalone
+      - name: Build AU, VST3, standalone and tests
         run: cmake --build build/ci-plugin --parallel 4
+      - name: Execute native integration and drawable tests
+        env:
+          MTL_DEBUG_LAYER: '1'
+          THREEBS_RENDER_CAPTURE_PATH: ${{ github.workspace }}/build/evidence/metal-frame.png
+          THREEBS_UI_CAPTURE_DIR: ${{ github.workspace }}/build/evidence/ui
+        run: ctest --test-dir build/ci-plugin --output-on-failure --output-junit native-results.xml
+      - uses: actions/checkout@v5
+        with:
+          repository: krahd/3bs
+          ref: 06066967b243e250d97da37ea0195b31f5c9521c
+          path: build/legacy-source
+          submodules: recursive
+      - name: Capture states from the exact pre-repair executable
+        run: python3 scripts/capture_legacy_states.py --source build/legacy-source --build build/legacy-build --output build/evidence/legacy-states
+      - name: Verify prior-executable state recall and immediate resave
+        run: build/ci-plugin/src/plugin/threebs_legacy_state_tests "$(pwd)/build/evidence/legacy-states"
+      - name: Validate Audio Unit
+        run: |
+          python3 -m unittest discover -s tests -p test_validate_audio_unit.py -v
+          python3 scripts/validate_audio_unit.py --component "build/ci-plugin/src/plugin/ThreeBSAU_artefacts/Release/AU/The Three Body Solution.component" --output build/evidence
+      - name: Validate VST3 with pluginval 1.0.4
+        run: |
+          set -o pipefail
+          curl --fail --location --retry 3 https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_macOS.zip -o build/pluginval.zip
+          shasum -a 256 build/pluginval.zip > build/evidence/pluginval-download.sha256
+          ditto -x -k build/pluginval.zip build/pluginval
+          build/pluginval/pluginval.app/Contents/MacOS/pluginval --strictness-level 5 --validate "$(pwd)/build/ci-plugin/src/plugin/ThreeBSVST3_artefacts/Release/VST3/The Three Body Solution.vst3" | tee build/evidence/pluginval.txt
+      - name: Thirty-minute virtual CoreMIDI timing and cleanup soak
+        timeout-minutes: 35
+        run: python3 scripts/run_standalone_soak.py --binary build/ci-plugin/src/standalone/threebs_standalone_runtime_tests --seconds 1800 --output build/evidence
+      - name: Package development candidate with provenance
+        run: python3 scripts/package_candidate.py --build build/ci-plugin --output build/candidate --commit "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-evidence-${{ github.sha }}
+          path: |
+            build/evidence
+            build/ci-plugin/native-results.xml
+            build/ci-plugin/Testing/Temporary/LastTest.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: threebs-candidate-${{ github.sha }}
+          path: build/candidate
