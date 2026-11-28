@@ -1,0 +1,66 @@
+{
+  "platform": "Linux x86_64",
+  "compiler": "g++ (Debian 14.2.0-19) 14.2.0",
+  "date": "2026-11-27",
+  "builds": [
+    {
+      "name": "core-tests",
+      "command": "g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -pthread -Isrc tests/CoreTests.cpp src/core/MusicEngine.cpp src/core/Scale.cpp src/core/ThreeBodySimulation.cpp src/render/CameraController.cpp src/render/PresentationState.cpp -o /workspace/scratch/7d9a2f2e7963/audit-core/core-tests > /workspace/scratch/7d9a2f2e7963/implementation-evidence/core/core-tests-build.log 2>&1",
+      "exit_code": 0
+    },
+    {
+      "name": "core-regressions",
+      "command": "g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -pthread -Isrc tests/CoreRegressionTests.cpp src/core/MusicEngine.cpp src/core/Scale.cpp src/core/ThreeBodySimulation.cpp -o /workspace/scratch/7d9a2f2e7963/audit-core/core-regressions > /workspace/scratch/7d9a2f2e7963/implementation-evidence/core/core-regressions-build.log 2>&1",
+      "exit_code": 0
+    },
+    {
+      "name": "numerical-tests",
+      "command": "g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -pthread -Isrc tests/NumericalTests.cpp src/core/ThreeBodySimulation.cpp -o /workspace/scratch/7d9a2f2e7963/audit-core/numerical-tests > /workspace/scratch/7d9a2f2e7963/implementation-evidence/core/numerical-tests-build.log 2>&1",
+      "exit_code": 0
+    },
+    {
+      "name": "standalone-tests",
+      "command": "g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -pthread -Isrc tests/StandaloneTests.cpp src/core/MusicEngine.cpp src/core/Scale.cpp src/core/ThreeBodySimulation.cpp -o /workspace/scratch/7d9a2f2e7963/audit-core/standalone-tests > /workspace/scratch/7d9a2f2e7963/implementation-evidence/core/standalone-tests-build.log 2>&1",
+      "exit_code": 0
+    },
+    {
+      "name": "core-realtime-profile",
+      "command": "g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -pthread -Isrc tests/CoreRealtimeProfile.cpp src/core/MusicEngine.cpp src/core/Scale.cpp src/core/ThreeBodySimulation.cpp -o /workspace/scratch/7d9a2f2e7963/audit-core/core-realtime-profile > /workspace/scratch/7d9a2f2e7963/implementation-evidence/core/core-realtime-profile-build.log 2>&1",
+      "exit_code": 0
+    }
+  ],
+  "runs": [
+    {
+      "name": "core-tests",
+      "command": "/workspace/scratch/7d9a2f2e7963/audit-core/core-tests > /workspace/scratch/7d9a2f2e7963/implementation-evidence/core/core-tests.log 2>&1",
+      "exit_code": 0
+    },
+    {
+      "name": "core-regressions",
+      "command": "/workspace/scratch/7d9a2f2e7963/audit-core/core-regressions > /workspace/scratch/7d9a2f2e7963/implementation-evidence/core/core-regressions.log 2>&1",
+      "exit_code": 0
+    },
+    {
+      "name": "standalone-tests",
+      "command": "/workspace/scratch/7d9a2f2e7963/audit-core/standalone-tests > /workspace/scratch/7d9a2f2e7963/implementation-evidence/core/standalone-tests.log 2>&1",
+      "exit_code": 0
+    },
+    {
+      "name": "numerical-presets",
+      "command": "python tests/RunNumericalPresets.py --binary /workspace/scratch/7d9a2f2e7963/audit-core/numerical-tests --presets resources/presets/factory-presets.json > /workspace/scratch/7d9a2f2e7963/implementation-evidence/core/numerical-presets.log 2>&1",
+      "exit_code": 0
+    },
+    {
+      "name": "core-realtime-profile",
+      "command": "/workspace/scratch/7d9a2f2e7963/audit-core/core-realtime-profile > /workspace/scratch/7d9a2f2e7963/implementation-evidence/core/core-realtime-profile.jsonl 2>&1",
+      "exit_code": 0
+    },
+    {
+      "name": "core-regressions-sanitized",
+      "command": "ASAN_OPTIONS=detect_leaks=0 /workspace/scratch/7d9a2f2e7963/audit-core/core-regressions-sanitized > /workspace/scratch/7d9a2f2e7963/implementation-evidence/core/core-regressions-sanitized.log 2>&1",
+      "exit_code": 0,
+      "compile_options": "-std=c++20 -O1 -g -fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=all -Wall -Wextra -Wpedantic -pthread -Isrc",
+      "limitation": "LeakSanitizer disabled because ptrace prevents its execution; leak checking unverified."
+    }
+  ]
+}

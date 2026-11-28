@@ -141,10 +141,8 @@ jobs:
         run: build/ci-plugin/src/plugin/threebs_legacy_state_tests "$(pwd)/build/evidence/legacy-states"
       - name: Validate Audio Unit
         run: |
-          set -o pipefail
-          mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
-          ditto "build/ci-plugin/src/plugin/ThreeBSAU_artefacts/Release/AU/The Three Body Solution.component" "$HOME/Library/Audio/Plug-Ins/Components/The Three Body Solution.component"
-          /usr/bin/auval -v aumi Tbs1 Tmlz | tee build/evidence/auval.txt
+          python3 -m unittest discover -s tests -p test_validate_audio_unit.py -v
+          python3 scripts/validate_audio_unit.py --component "build/ci-plugin/src/plugin/ThreeBSAU_artefacts/Release/AU/The Three Body Solution.component" --output build/evidence
       - name: Validate VST3 with pluginval 1.0.4
         run: |
           set -o pipefail

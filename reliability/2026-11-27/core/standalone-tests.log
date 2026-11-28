@@ -1,0 +1,32 @@
+PASS 30-minute absolute sample timeline has no accumulated wakeup drift
+PASS sample deadline includes fixed look-ahead exactly once
+PASS bounded worker jitter does not fault
+PASS unbounded late wakeup is detected
+PASS late recovery never schedules cancelled history in the past
+PASS destination ledger counts overlapping channel/key identities
+PASS reset/output replacement/quit cleanup targets actually delivered notes
+PASS repeated cleanup is idempotent
+PASS failed output cleanup retains every delivered note and stops at the first rejection
+PASS partial cleanup removes only note-offs accepted by the destination
+PASS partial cleanup retains the original channel/key of each unsent note-off
+PASS repeated output failure cannot forget remaining cleanup obligations
+PASS reconnection retries exactly the outstanding note-offs without resending accepted cleanup
+PASS a fully cleaned destination needs no further send attempt
+PASS saturated mailbox publishes coherent increasing revisions and final edit
+PASS runtime-style strum has one delivered note and two pending notes
+PASS epoch panic/reset contract cannot replay cancelled strum notes or strand delivered notes
+PASS runtime-style strum has one delivered note and two pending notes
+PASS epoch panic/reset contract cannot replay cancelled strum notes or strand delivered notes
+PASS unchanged controls preserve all scheduled voice epochs
+PASS physical controls preserve existing note lifetimes
+PASS disabling one voice cancels only that voice's scheduled epoch
+PASS channel reassignment cancels only the reassigned voice
+PASS independent voices establish distinct delivered note identities
+PASS per-voice destination cleanup uses the old channel and preserves unaffected notes
+PASS channel reassignment is accepted by the engine
+PASS engine reconfiguration emits only the changed voice's original-channel cleanup
+PASS mode transition invalidates every queued voicing event
+PASS enabling an open gate preserves sounding voices
+PASS gate closure invalidates every queued voice event
+PASS gate reopening does not cancel newly eligible voice epochs
+PASS global chord-frame edits invalidate the complete queued voicing

@@ -1,0 +1,2630 @@
+[
+  {
+    "preset": "eightfold-dawn",
+    "same_complete_trace": false,
+    "events_published": 304,
+    "events_half_step": 304,
+    "matching_prefix_events": 8,
+    "first_difference": {
+      "zero_based_ordinal": 8,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 45949,
+        "type": 0,
+        "channel": 2,
+        "data1": 51,
+        "data2": 66,
+        "source_body": 1
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 45924,
+        "type": 0,
+        "channel": 2,
+        "data1": 51,
+        "data2": 66,
+        "source_body": 1
+      }
+    },
+    "trace_sha256": {
+      "published": "55fb5d374e9171635c81ae282c174c28c5aacccb0dbb3d8ead80e57b64ee58fd",
+      "half_step": "82edcc46dcf111ae1c83cc4b83b14d836ceeeb898c3b934ff6556601f2d5f17f"
+    },
+    "max_final_position_or_velocity_difference": 0.00016699172202969953,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 111,
+        "notes_half_step": 111,
+        "ordinal_paired_notes": 111,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 111,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 111,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 22,
+        "notes_half_step": 22,
+        "ordinal_paired_notes": 22,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 22,
+          "changed": 11,
+          "max_samples": 25,
+          "p50_samples": 0,
+          "p95_samples": 25
+        },
+        "ordinal_offset_difference": {
+          "pairs": 22,
+          "changed": 11,
+          "max_samples": 25,
+          "p50_samples": 0,
+          "p95_samples": 25
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 19,
+        "notes_half_step": 19,
+        "ordinal_paired_notes": 19,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 19,
+          "changed": 7,
+          "max_samples": 25,
+          "p50_samples": 0,
+          "p95_samples": 25
+        },
+        "ordinal_offset_difference": {
+          "pairs": 19,
+          "changed": 7,
+          "max_samples": 25,
+          "p50_samples": 0,
+          "p95_samples": 25
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "lagrange-glass",
+    "same_complete_trace": false,
+    "events_published": 304,
+    "events_half_step": 304,
+    "matching_prefix_events": 33,
+    "first_difference": {
+      "zero_based_ordinal": 33,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 144000,
+        "type": 0,
+        "channel": 2,
+        "data1": 50,
+        "data2": 53,
+        "source_body": 1
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 144000,
+        "type": 0,
+        "channel": 2,
+        "data1": 50,
+        "data2": 52,
+        "source_body": 1
+      }
+    },
+    "trace_sha256": {
+      "published": "b1e2a0c6cd7c4e507ee2ec4a442a92dd15d7b32c350cf4a228a438279a66d29f",
+      "half_step": "fec44c0d472395a5faa3b066b980c64ed9bb0cee34e0dfe26cd4346638c60949"
+    },
+    "max_final_position_or_velocity_difference": 0.0004418417920712834,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 64,
+        "notes_half_step": 64,
+        "ordinal_paired_notes": 64,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 64,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 64,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 85,
+        "notes_half_step": 85,
+        "ordinal_paired_notes": 85,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 1,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 85,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 85,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 3,
+        "notes_half_step": 3,
+        "ordinal_paired_notes": 3,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 3,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 3,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "twin-moon-relay",
+    "same_complete_trace": false,
+    "events_published": 538,
+    "events_half_step": 538,
+    "matching_prefix_events": 7,
+    "first_difference": {
+      "zero_based_ordinal": 7,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 25391,
+        "type": 0,
+        "channel": 3,
+        "data1": 65,
+        "data2": 66,
+        "source_body": 2
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 25369,
+        "type": 0,
+        "channel": 3,
+        "data1": 65,
+        "data2": 66,
+        "source_body": 2
+      }
+    },
+    "trace_sha256": {
+      "published": "21dcf425d33188e7c53f92c0c974590aa107ddcf670a9e9eb352cc25a981c16b",
+      "half_step": "69d54d2da87eed96174d7b0145d841df7a7e1222b0afa213f77e0a2a73a4e6bc"
+    },
+    "max_final_position_or_velocity_difference": 2.088346177097958,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 60,
+        "notes_half_step": 60,
+        "ordinal_paired_notes": 60,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 8,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 60,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 60,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 180,
+        "notes_half_step": 181,
+        "ordinal_paired_notes": 180,
+        "ordinal_pitch_changes": 44,
+        "ordinal_velocity_changes": 68,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 180,
+          "changed": 118,
+          "max_samples": 30000,
+          "p50_samples": 6000,
+          "p95_samples": 18000
+        },
+        "ordinal_offset_difference": {
+          "pairs": 180,
+          "changed": 118,
+          "max_samples": 30000,
+          "p50_samples": 6000,
+          "p95_samples": 18000
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 29,
+        "notes_half_step": 28,
+        "ordinal_paired_notes": 28,
+        "ordinal_pitch_changes": 10,
+        "ordinal_velocity_changes": 14,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 28,
+          "changed": 25,
+          "max_samples": 69913,
+          "p50_samples": 3391,
+          "p95_samples": 32587
+        },
+        "ordinal_offset_difference": {
+          "pairs": 28,
+          "changed": 25,
+          "max_samples": 69913,
+          "p50_samples": 3391,
+          "p95_samples": 32587
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "quiet-periapsis",
+    "same_complete_trace": false,
+    "events_published": 24,
+    "events_half_step": 24,
+    "matching_prefix_events": 8,
+    "first_difference": {
+      "zero_based_ordinal": 8,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 699239,
+        "type": 0,
+        "channel": 3,
+        "data1": 66,
+        "data2": 65,
+        "source_body": 2
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 699184,
+        "type": 0,
+        "channel": 3,
+        "data1": 66,
+        "data2": 65,
+        "source_body": 2
+      }
+    },
+    "trace_sha256": {
+      "published": "49658235582e8d1b2217b8e644f35a99693e01fa4bd2543a8c56f081287c2d76",
+      "half_step": "9d276389826d56cecdca8a228cdbed4cd5ded200ee8a1507cd39499d76be78bf"
+    },
+    "max_final_position_or_velocity_difference": 0.00038487095353434994,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 0,
+        "notes_half_step": 0,
+        "ordinal_paired_notes": 0,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 0,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 0,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 2,
+        "notes_half_step": 2,
+        "ordinal_paired_notes": 2,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 2,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 2,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 10,
+        "notes_half_step": 10,
+        "ordinal_paired_notes": 10,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 1,
+        "ordinal_onset_difference": {
+          "pairs": 10,
+          "changed": 2,
+          "max_samples": 55,
+          "p50_samples": 0,
+          "p95_samples": 54
+        },
+        "ordinal_offset_difference": {
+          "pairs": 10,
+          "changed": 2,
+          "max_samples": 54,
+          "p50_samples": 0,
+          "p95_samples": 54
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "cyan-transit",
+    "same_complete_trace": false,
+    "events_published": 514,
+    "events_half_step": 514,
+    "matching_prefix_events": 18,
+    "first_difference": {
+      "zero_based_ordinal": 18,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 55370,
+        "type": 0,
+        "channel": 1,
+        "data1": 60,
+        "data2": 54,
+        "source_body": 0
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 55354,
+        "type": 0,
+        "channel": 1,
+        "data1": 60,
+        "data2": 54,
+        "source_body": 0
+      }
+    },
+    "trace_sha256": {
+      "published": "18a124372e30412fe39bb6c74ceeff65d6ea9637113c10546e66cd5a9c880b4f",
+      "half_step": "7f0c58e705cf2bca38b59aebafd099abc97bad34ee991987f77b3d7e759aec2c"
+    },
+    "max_final_position_or_velocity_difference": 0.019631085933469766,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 6,
+        "notes_half_step": 6,
+        "ordinal_paired_notes": 6,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 6,
+          "changed": 4,
+          "max_samples": 386,
+          "p50_samples": 16,
+          "p95_samples": 30
+        },
+        "ordinal_offset_difference": {
+          "pairs": 6,
+          "changed": 4,
+          "max_samples": 386,
+          "p50_samples": 16,
+          "p95_samples": 30
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 178,
+        "notes_half_step": 178,
+        "ordinal_paired_notes": 178,
+        "ordinal_pitch_changes": 1,
+        "ordinal_velocity_changes": 6,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 178,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 178,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 73,
+        "notes_half_step": 73,
+        "ordinal_paired_notes": 73,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 73,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 73,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "ember-conjunction",
+    "same_complete_trace": false,
+    "events_published": 254,
+    "events_half_step": 288,
+    "matching_prefix_events": 2,
+    "first_difference": {
+      "zero_based_ordinal": 2,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 14907,
+        "type": 0,
+        "channel": 1,
+        "data1": 30,
+        "data2": 53,
+        "source_body": 0
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 14884,
+        "type": 0,
+        "channel": 1,
+        "data1": 30,
+        "data2": 53,
+        "source_body": 0
+      }
+    },
+    "trace_sha256": {
+      "published": "92f7888c7f66332a5b8c596d7c5dbb40c787bc0cb4691ead13bffcfe8675d03b",
+      "half_step": "cfb108f5d88ce9cd0c719de39f796ad073d27945b93602611efcf3f6ac31f13a"
+    },
+    "max_final_position_or_velocity_difference": 6.377571401144646,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 7,
+        "notes_half_step": 23,
+        "ordinal_paired_notes": 7,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 3,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 7,
+          "changed": 6,
+          "max_samples": 647500,
+          "p50_samples": 2639,
+          "p95_samples": 187454
+        },
+        "ordinal_offset_difference": {
+          "pairs": 7,
+          "changed": 6,
+          "max_samples": 647500,
+          "p50_samples": 2639,
+          "p95_samples": 187454
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 102,
+        "notes_half_step": 102,
+        "ordinal_paired_notes": 102,
+        "ordinal_pitch_changes": 50,
+        "ordinal_velocity_changes": 58,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 102,
+          "changed": 55,
+          "max_samples": 81000,
+          "p50_samples": 9000,
+          "p95_samples": 36000
+        },
+        "ordinal_offset_difference": {
+          "pairs": 102,
+          "changed": 55,
+          "max_samples": 81000,
+          "p50_samples": 9000,
+          "p95_samples": 36000
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 18,
+        "notes_half_step": 19,
+        "ordinal_paired_notes": 18,
+        "ordinal_pitch_changes": 8,
+        "ordinal_velocity_changes": 9,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 18,
+          "changed": 14,
+          "max_samples": 185000,
+          "p50_samples": 46,
+          "p95_samples": 108773
+        },
+        "ordinal_offset_difference": {
+          "pairs": 18,
+          "changed": 14,
+          "max_samples": 185000,
+          "p50_samples": 46,
+          "p95_samples": 108773
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "violet-aphelion",
+    "same_complete_trace": true,
+    "events_published": 72,
+    "events_half_step": 72,
+    "matching_prefix_events": 72,
+    "first_difference": null,
+    "trace_sha256": {
+      "published": "c621c3893f06b868148483882c55ade6812511d296ac1d1541cedf7c5e7d183b",
+      "half_step": "c621c3893f06b868148483882c55ade6812511d296ac1d1541cedf7c5e7d183b"
+    },
+    "max_final_position_or_velocity_difference": 2.347805416827351e-06,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 0,
+        "notes_half_step": 0,
+        "ordinal_paired_notes": 0,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 0,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 0,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 35,
+        "notes_half_step": 35,
+        "ordinal_paired_notes": 35,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 35,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 35,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 1,
+        "notes_half_step": 1,
+        "ordinal_paired_notes": 1,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 1,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 1,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "red-shift-study",
+    "same_complete_trace": false,
+    "events_published": 478,
+    "events_half_step": 464,
+    "matching_prefix_events": 4,
+    "first_difference": {
+      "zero_based_ordinal": 4,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 11740,
+        "type": 0,
+        "channel": 3,
+        "data1": 60,
+        "data2": 61,
+        "source_body": 2
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 11722,
+        "type": 0,
+        "channel": 3,
+        "data1": 60,
+        "data2": 61,
+        "source_body": 2
+      }
+    },
+    "trace_sha256": {
+      "published": "0a061fb9d03475331326d7a4f07a378cd432a90de909ddf50c1b0f2bdf327413",
+      "half_step": "d3fe28263d19ad1581f193017810f351d269d83cec84367c3942cb403ddd763e"
+    },
+    "max_final_position_or_velocity_difference": 1.8401329254575096,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 196,
+        "notes_half_step": 196,
+        "ordinal_paired_notes": 196,
+        "ordinal_pitch_changes": 124,
+        "ordinal_velocity_changes": 126,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 196,
+          "changed": 58,
+          "max_samples": 12000,
+          "p50_samples": 0,
+          "p95_samples": 6000
+        },
+        "ordinal_offset_difference": {
+          "pairs": 196,
+          "changed": 58,
+          "max_samples": 12000,
+          "p50_samples": 0,
+          "p95_samples": 6000
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 15,
+        "notes_half_step": 16,
+        "ordinal_paired_notes": 15,
+        "ordinal_pitch_changes": 7,
+        "ordinal_velocity_changes": 8,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 15,
+          "changed": 12,
+          "max_samples": 312408,
+          "p50_samples": 2259,
+          "p95_samples": 311149
+        },
+        "ordinal_offset_difference": {
+          "pairs": 15,
+          "changed": 12,
+          "max_samples": 312408,
+          "p50_samples": 2259,
+          "p95_samples": 311149
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 28,
+        "notes_half_step": 20,
+        "ordinal_paired_notes": 20,
+        "ordinal_pitch_changes": 5,
+        "ordinal_velocity_changes": 6,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 20,
+          "changed": 17,
+          "max_samples": 150296,
+          "p50_samples": 166,
+          "p95_samples": 136000
+        },
+        "ordinal_offset_difference": {
+          "pairs": 20,
+          "changed": 17,
+          "max_samples": 150296,
+          "p50_samples": 166,
+          "p95_samples": 136000
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "golden-barycenter",
+    "same_complete_trace": false,
+    "events_published": 658,
+    "events_half_step": 658,
+    "matching_prefix_events": 302,
+    "first_difference": {
+      "zero_based_ordinal": 302,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 678000,
+        "type": 0,
+        "channel": 3,
+        "data1": 57,
+        "data2": 57,
+        "source_body": 2
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 678000,
+        "type": 0,
+        "channel": 3,
+        "data1": 57,
+        "data2": 56,
+        "source_body": 2
+      }
+    },
+    "trace_sha256": {
+      "published": "10bd042c045e80790f52e546a2f94756649fa9127692e3432f0ad4c7710a9af1",
+      "half_step": "6fed7e694ed19b8b3dfafb98020328646a8ab8c53a953bf05b6f6c005664181a"
+    },
+    "max_final_position_or_velocity_difference": 0.000409487507438125,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 60,
+        "notes_half_step": 60,
+        "ordinal_paired_notes": 60,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 60,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 60,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 96,
+        "notes_half_step": 96,
+        "ordinal_paired_notes": 96,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 96,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 96,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 173,
+        "notes_half_step": 173,
+        "ordinal_paired_notes": 173,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 1,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 173,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 173,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "black-sun-threads",
+    "same_complete_trace": false,
+    "events_published": 34,
+    "events_half_step": 34,
+    "matching_prefix_events": 2,
+    "first_difference": {
+      "zero_based_ordinal": 2,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 23203,
+        "type": 0,
+        "channel": 2,
+        "data1": 48,
+        "data2": 65,
+        "source_body": 1
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 23164,
+        "type": 0,
+        "channel": 2,
+        "data1": 48,
+        "data2": 65,
+        "source_body": 1
+      }
+    },
+    "trace_sha256": {
+      "published": "1cdd78e51a60a47564907b1e7f3a98fefd159c2dc0c1ebd568d47deaaa0901a6",
+      "half_step": "d52be40ec43a70adb168f0f1200e537e5b1e53811929526b60573c0ea955fbfd"
+    },
+    "max_final_position_or_velocity_difference": 0.052922980612757166,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 4,
+        "notes_half_step": 4,
+        "ordinal_paired_notes": 4,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 1,
+        "ordinal_onset_difference": {
+          "pairs": 4,
+          "changed": 3,
+          "max_samples": 352,
+          "p50_samples": 117,
+          "p95_samples": 234
+        },
+        "ordinal_offset_difference": {
+          "pairs": 4,
+          "changed": 2,
+          "max_samples": 234,
+          "p50_samples": 0,
+          "p95_samples": 117
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 11,
+        "notes_half_step": 11,
+        "ordinal_paired_notes": 11,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 11,
+          "changed": 9,
+          "max_samples": 195,
+          "p50_samples": 78,
+          "p95_samples": 195
+        },
+        "ordinal_offset_difference": {
+          "pairs": 11,
+          "changed": 9,
+          "max_samples": 195,
+          "p50_samples": 78,
+          "p95_samples": 195
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 2,
+        "notes_half_step": 2,
+        "ordinal_paired_notes": 2,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 2,
+          "changed": 1,
+          "max_samples": 117,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 2,
+          "changed": 1,
+          "max_samples": 117,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "orbital-ink",
+    "same_complete_trace": false,
+    "events_published": 166,
+    "events_half_step": 166,
+    "matching_prefix_events": 33,
+    "first_difference": {
+      "zero_based_ordinal": 33,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 291158,
+        "type": 0,
+        "channel": 2,
+        "data1": 51,
+        "data2": 50,
+        "source_body": 1
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 291128,
+        "type": 0,
+        "channel": 2,
+        "data1": 51,
+        "data2": 50,
+        "source_body": 1
+      }
+    },
+    "trace_sha256": {
+      "published": "e9fe9832c67e16fde0179cccf8743d3d09c523f5aae5fb6845084a0c8615dee7",
+      "half_step": "ed71f328d0bf9979a7396c8e1f249e99e1a4b626bad7282a78a54b9d193ffb16"
+    },
+    "max_final_position_or_velocity_difference": 9.781670341819946e-05,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 76,
+        "notes_half_step": 76,
+        "ordinal_paired_notes": 76,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 76,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 76,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 3,
+        "notes_half_step": 3,
+        "ordinal_paired_notes": 3,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 3,
+          "changed": 2,
+          "max_samples": 30,
+          "p50_samples": 30,
+          "p95_samples": 30
+        },
+        "ordinal_offset_difference": {
+          "pairs": 3,
+          "changed": 2,
+          "max_samples": 30,
+          "p50_samples": 30,
+          "p95_samples": 30
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 4,
+        "notes_half_step": 4,
+        "ordinal_paired_notes": 4,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 4,
+          "changed": 1,
+          "max_samples": 31,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 4,
+          "changed": 1,
+          "max_samples": 31,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "slingshot-cadence",
+    "same_complete_trace": false,
+    "events_published": 552,
+    "events_half_step": 514,
+    "matching_prefix_events": 1,
+    "first_difference": {
+      "zero_based_ordinal": 1,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 7637,
+        "type": 0,
+        "channel": 1,
+        "data1": 27,
+        "data2": 54,
+        "source_body": 0
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 7623,
+        "type": 0,
+        "channel": 1,
+        "data1": 27,
+        "data2": 54,
+        "source_body": 0
+      }
+    },
+    "trace_sha256": {
+      "published": "caa59532ce0e6ad66154fdcd9e29764768cc5e46c304c5f29ee26523be776ddf",
+      "half_step": "70b90c0058cc5c25e0e499f38c75a4f8339262309776e421cc963023631950b4"
+    },
+    "max_final_position_or_velocity_difference": 6.867358995380127,
+    "published_policy_respawns": [
+      0,
+      1
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 3,
+        "notes_half_step": 1,
+        "ordinal_paired_notes": 1,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 1,
+          "changed": 1,
+          "max_samples": 14,
+          "p50_samples": 14,
+          "p95_samples": 14
+        },
+        "ordinal_offset_difference": {
+          "pairs": 1,
+          "changed": 1,
+          "max_samples": 14,
+          "p50_samples": 14,
+          "p95_samples": 14
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 238,
+        "notes_half_step": 239,
+        "ordinal_paired_notes": 238,
+        "ordinal_pitch_changes": 133,
+        "ordinal_velocity_changes": 157,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 238,
+          "changed": 107,
+          "max_samples": 22500,
+          "p50_samples": 0,
+          "p95_samples": 13500
+        },
+        "ordinal_offset_difference": {
+          "pairs": 238,
+          "changed": 107,
+          "max_samples": 22500,
+          "p50_samples": 0,
+          "p95_samples": 13500
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 35,
+        "notes_half_step": 17,
+        "ordinal_paired_notes": 17,
+        "ordinal_pitch_changes": 12,
+        "ordinal_velocity_changes": 11,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 2,
+        "ordinal_onset_difference": {
+          "pairs": 17,
+          "changed": 16,
+          "max_samples": 324862,
+          "p50_samples": 9725,
+          "p95_samples": 317074
+        },
+        "ordinal_offset_difference": {
+          "pairs": 17,
+          "changed": 16,
+          "max_samples": 324207,
+          "p50_samples": 9725,
+          "p95_samples": 317074
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "pale-resonance",
+    "same_complete_trace": false,
+    "events_published": 82,
+    "events_half_step": 82,
+    "matching_prefix_events": 22,
+    "first_difference": {
+      "zero_based_ordinal": 22,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 389078,
+        "type": 0,
+        "channel": 2,
+        "data1": 43,
+        "data2": 64,
+        "source_body": 1
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 389013,
+        "type": 0,
+        "channel": 2,
+        "data1": 43,
+        "data2": 64,
+        "source_body": 1
+      }
+    },
+    "trace_sha256": {
+      "published": "5b08e932297b58555b6254d3b1d559021e32a26fd5502ca732d923745ae1553b",
+      "half_step": "2c360dca23f381de7c191e5ab50acb57003ebde4c74e7c68cb7d438f2d0a1104"
+    },
+    "max_final_position_or_velocity_difference": 4.077801398713998e-05,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 5,
+        "notes_half_step": 5,
+        "ordinal_paired_notes": 5,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 5,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 5,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 5,
+        "notes_half_step": 5,
+        "ordinal_paired_notes": 5,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 5,
+          "changed": 3,
+          "max_samples": 66,
+          "p50_samples": 65,
+          "p95_samples": 66
+        },
+        "ordinal_offset_difference": {
+          "pairs": 5,
+          "changed": 3,
+          "max_samples": 66,
+          "p50_samples": 65,
+          "p95_samples": 66
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 31,
+        "notes_half_step": 31,
+        "ordinal_paired_notes": 31,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 31,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 31,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "magenta-eclipse",
+    "same_complete_trace": false,
+    "events_published": 718,
+    "events_half_step": 720,
+    "matching_prefix_events": 10,
+    "first_difference": {
+      "zero_based_ordinal": 10,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 14072,
+        "type": 0,
+        "channel": 3,
+        "data1": 77,
+        "data2": 82,
+        "source_body": 2
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 14052,
+        "type": 0,
+        "channel": 3,
+        "data1": 77,
+        "data2": 82,
+        "source_body": 2
+      }
+    },
+    "trace_sha256": {
+      "published": "f04ad6d6118ce6583d5ee22e295a2aeda9fc6250d1e9bea8ee3d3f0d925f6113",
+      "half_step": "eeddf3ea6ea8e2efa8541d6516a4d72e5f51c6e80535b8f5991d646d76707aac"
+    },
+    "max_final_position_or_velocity_difference": 2.4443705296244285,
+    "published_policy_respawns": [
+      1,
+      1
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 120,
+        "notes_half_step": 120,
+        "ordinal_paired_notes": 120,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 66,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 120,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 120,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 195,
+        "notes_half_step": 194,
+        "ordinal_paired_notes": 194,
+        "ordinal_pitch_changes": 42,
+        "ordinal_velocity_changes": 113,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 194,
+          "changed": 102,
+          "max_samples": 18000,
+          "p50_samples": 6000,
+          "p95_samples": 18000
+        },
+        "ordinal_offset_difference": {
+          "pairs": 194,
+          "changed": 102,
+          "max_samples": 18000,
+          "p50_samples": 6000,
+          "p95_samples": 18000
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 44,
+        "notes_half_step": 46,
+        "ordinal_paired_notes": 44,
+        "ordinal_pitch_changes": 6,
+        "ordinal_velocity_changes": 10,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 1,
+        "ordinal_onset_difference": {
+          "pairs": 44,
+          "changed": 41,
+          "max_samples": 669476,
+          "p50_samples": 242,
+          "p95_samples": 1008
+        },
+        "ordinal_offset_difference": {
+          "pairs": 44,
+          "changed": 40,
+          "max_samples": 669476,
+          "p50_samples": 242,
+          "p95_samples": 1008
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "three-cold-lights",
+    "same_complete_trace": true,
+    "events_published": 524,
+    "events_half_step": 524,
+    "matching_prefix_events": 524,
+    "first_difference": null,
+    "trace_sha256": {
+      "published": "a40702e04f79b9ec52b6a713307fafd5262ba67f455fd5d047a0f78c4435a0d4",
+      "half_step": "a40702e04f79b9ec52b6a713307fafd5262ba67f455fd5d047a0f78c4435a0d4"
+    },
+    "max_final_position_or_velocity_difference": 0.0001698433644979573,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 67,
+        "notes_half_step": 67,
+        "ordinal_paired_notes": 67,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 67,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 67,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 85,
+        "notes_half_step": 85,
+        "ordinal_paired_notes": 85,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 85,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 85,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 110,
+        "notes_half_step": 110,
+        "ordinal_paired_notes": 110,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 110,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 110,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "blue-giant-clock",
+    "same_complete_trace": false,
+    "events_published": 646,
+    "events_half_step": 646,
+    "matching_prefix_events": 83,
+    "first_difference": {
+      "zero_based_ordinal": 83,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 180000,
+        "type": 0,
+        "channel": 2,
+        "data1": 41,
+        "data2": 68,
+        "source_body": 1
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 180000,
+        "type": 0,
+        "channel": 2,
+        "data1": 41,
+        "data2": 67,
+        "source_body": 1
+      }
+    },
+    "trace_sha256": {
+      "published": "dc7064f99e8f3cb7effd83727b2fcd2acc31ed95a82fb41218f4de728b66a0e7",
+      "half_step": "327d42af2cb5b16b7fb089afb92c2aee0313075d3addfec7751ac13bda70990f"
+    },
+    "max_final_position_or_velocity_difference": 4.924940511950653,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 60,
+        "notes_half_step": 60,
+        "ordinal_paired_notes": 60,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 22,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 60,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 60,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 132,
+        "notes_half_step": 132,
+        "ordinal_paired_notes": 132,
+        "ordinal_pitch_changes": 49,
+        "ordinal_velocity_changes": 70,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 132,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 132,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 131,
+        "notes_half_step": 131,
+        "ordinal_paired_notes": 131,
+        "ordinal_pitch_changes": 74,
+        "ordinal_velocity_changes": 80,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 131,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 131,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "perihelion-dust",
+    "same_complete_trace": false,
+    "events_published": 598,
+    "events_half_step": 588,
+    "matching_prefix_events": 4,
+    "first_difference": {
+      "zero_based_ordinal": 4,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 18209,
+        "type": 0,
+        "channel": 2,
+        "data1": 60,
+        "data2": 58,
+        "source_body": 1
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 18192,
+        "type": 0,
+        "channel": 2,
+        "data1": 60,
+        "data2": 58,
+        "source_body": 1
+      }
+    },
+    "trace_sha256": {
+      "published": "8d04e7cad2154f1419b9e4bb22cf42623150b3d9a980f046a5145b90e7d4beb1",
+      "half_step": "849a5cc87dc64c1902fe3291661e35c6d9ea9bf90c9fdb278479206e3c46eba0"
+    },
+    "max_final_position_or_velocity_difference": 11.948884263218412,
+    "published_policy_respawns": [
+      1,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 28,
+        "notes_half_step": 26,
+        "ordinal_paired_notes": 26,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 8,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 1,
+        "ordinal_onset_difference": {
+          "pairs": 26,
+          "changed": 21,
+          "max_samples": 116030,
+          "p50_samples": 101,
+          "p95_samples": 100743
+        },
+        "ordinal_offset_difference": {
+          "pairs": 26,
+          "changed": 21,
+          "max_samples": 114046,
+          "p50_samples": 101,
+          "p95_samples": 100743
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 20,
+        "notes_half_step": 13,
+        "ordinal_paired_notes": 13,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 8,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 13,
+          "changed": 10,
+          "max_samples": 408496,
+          "p50_samples": 128665,
+          "p95_samples": 386672
+        },
+        "ordinal_offset_difference": {
+          "pairs": 13,
+          "changed": 10,
+          "max_samples": 408496,
+          "p50_samples": 128665,
+          "p95_samples": 386672
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 251,
+        "notes_half_step": 255,
+        "ordinal_paired_notes": 251,
+        "ordinal_pitch_changes": 115,
+        "ordinal_velocity_changes": 123,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 251,
+          "changed": 104,
+          "max_samples": 36000,
+          "p50_samples": 0,
+          "p95_samples": 18000
+        },
+        "ordinal_offset_difference": {
+          "pairs": 251,
+          "changed": 104,
+          "max_samples": 36000,
+          "p50_samples": 0,
+          "p95_samples": 18000
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "silent-conjunction",
+    "same_complete_trace": false,
+    "events_published": 24,
+    "events_half_step": 24,
+    "matching_prefix_events": 0,
+    "first_difference": {
+      "zero_based_ordinal": 0,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 99,
+        "type": 0,
+        "channel": 1,
+        "data1": 27,
+        "data2": 55,
+        "source_body": 0
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 49,
+        "type": 0,
+        "channel": 1,
+        "data1": 27,
+        "data2": 55,
+        "source_body": 0
+      }
+    },
+    "trace_sha256": {
+      "published": "f0909864169a5e50657a13599ff0fa2010ae41044d97d5412c4339ea2ae05261",
+      "half_step": "ea82fa218fb6b4011869710c470b4aaefef401caa791ad92cc3d89ab83cd4a4d"
+    },
+    "max_final_position_or_velocity_difference": 0.007323465244583622,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 7,
+        "notes_half_step": 7,
+        "ordinal_paired_notes": 7,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 7,
+          "changed": 6,
+          "max_samples": 250,
+          "p50_samples": 50,
+          "p95_samples": 100
+        },
+        "ordinal_offset_difference": {
+          "pairs": 7,
+          "changed": 6,
+          "max_samples": 250,
+          "p50_samples": 50,
+          "p95_samples": 100
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 5,
+        "notes_half_step": 5,
+        "ordinal_paired_notes": 5,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 5,
+          "changed": 4,
+          "max_samples": 100,
+          "p50_samples": 50,
+          "p95_samples": 50
+        },
+        "ordinal_offset_difference": {
+          "pairs": 5,
+          "changed": 4,
+          "max_samples": 100,
+          "p50_samples": 50,
+          "p95_samples": 50
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 0,
+        "notes_half_step": 0,
+        "ordinal_paired_notes": 0,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 0,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 0,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "iron-triangle",
+    "same_complete_trace": false,
+    "events_published": 518,
+    "events_half_step": 518,
+    "matching_prefix_events": 384,
+    "first_difference": {
+      "zero_based_ordinal": 384,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 1081230,
+        "type": 0,
+        "channel": 3,
+        "data1": 61,
+        "data2": 62,
+        "source_body": 2
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 1081173,
+        "type": 0,
+        "channel": 3,
+        "data1": 61,
+        "data2": 62,
+        "source_body": 2
+      }
+    },
+    "trace_sha256": {
+      "published": "fa5a6eadb13e1129b34d848ebc1ccbdbdd4ad98b33bf046418c226a7652f0ef0",
+      "half_step": "fcab8b2d2956b1b4edb0277d13c98ba85c0814acf503ea4cd2d57478e6883d5b"
+    },
+    "max_final_position_or_velocity_difference": 1.7452213082536667,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 120,
+        "notes_half_step": 120,
+        "ordinal_paired_notes": 120,
+        "ordinal_pitch_changes": 4,
+        "ordinal_velocity_changes": 17,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 120,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 120,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 134,
+        "notes_half_step": 134,
+        "ordinal_paired_notes": 134,
+        "ordinal_pitch_changes": 3,
+        "ordinal_velocity_changes": 18,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 134,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 134,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 5,
+        "notes_half_step": 5,
+        "ordinal_paired_notes": 5,
+        "ordinal_pitch_changes": 1,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 5,
+          "changed": 3,
+          "max_samples": 3443,
+          "p50_samples": 57,
+          "p95_samples": 365
+        },
+        "ordinal_offset_difference": {
+          "pairs": 5,
+          "changed": 3,
+          "max_samples": 3443,
+          "p50_samples": 57,
+          "p95_samples": 365
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "solar-kite",
+    "same_complete_trace": false,
+    "events_published": 258,
+    "events_half_step": 262,
+    "matching_prefix_events": 12,
+    "first_difference": {
+      "zero_based_ordinal": 12,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 64444,
+        "type": 0,
+        "channel": 3,
+        "data1": 76,
+        "data2": 85,
+        "source_body": 2
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 64416,
+        "type": 0,
+        "channel": 3,
+        "data1": 76,
+        "data2": 85,
+        "source_body": 2
+      }
+    },
+    "trace_sha256": {
+      "published": "2cfe11c923d63e1f955808842fc50f3eb2beb4850e1520d282baed769cc87fee",
+      "half_step": "b2eb6e961f83518c7beee2642906f1cf05656839e3b70d0a872f46ad6d6f33ac"
+    },
+    "max_final_position_or_velocity_difference": 1.3050268351534557,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 12,
+        "notes_half_step": 12,
+        "ordinal_paired_notes": 12,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 12,
+          "changed": 6,
+          "max_samples": 9667,
+          "p50_samples": 0,
+          "p95_samples": 917
+        },
+        "ordinal_offset_difference": {
+          "pairs": 12,
+          "changed": 6,
+          "max_samples": 9667,
+          "p50_samples": 0,
+          "p95_samples": 917
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 90,
+        "notes_half_step": 94,
+        "ordinal_paired_notes": 90,
+        "ordinal_pitch_changes": 9,
+        "ordinal_velocity_changes": 27,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 90,
+          "changed": 9,
+          "max_samples": 60000,
+          "p50_samples": 0,
+          "p95_samples": 36000
+        },
+        "ordinal_offset_difference": {
+          "pairs": 90,
+          "changed": 9,
+          "max_samples": 60000,
+          "p50_samples": 0,
+          "p95_samples": 36000
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 27,
+        "notes_half_step": 25,
+        "ordinal_paired_notes": 25,
+        "ordinal_pitch_changes": 5,
+        "ordinal_velocity_changes": 9,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 1,
+        "ordinal_onset_difference": {
+          "pairs": 25,
+          "changed": 21,
+          "max_samples": 132389,
+          "p50_samples": 111,
+          "p95_samples": 2861
+        },
+        "ordinal_offset_difference": {
+          "pairs": 25,
+          "changed": 21,
+          "max_samples": 132389,
+          "p50_samples": 111,
+          "p95_samples": 2861
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "gravity-well",
+    "same_complete_trace": false,
+    "events_published": 38,
+    "events_half_step": 34,
+    "matching_prefix_events": 0,
+    "first_difference": {
+      "zero_based_ordinal": 0,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 21810,
+        "type": 0,
+        "channel": 1,
+        "data1": 18,
+        "data2": 54,
+        "source_body": 0
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 21767,
+        "type": 0,
+        "channel": 1,
+        "data1": 18,
+        "data2": 54,
+        "source_body": 0
+      }
+    },
+    "trace_sha256": {
+      "published": "75f1c419e13d4ae757b1716c29b757bd94728c5a76bc1f3747a43659ae0004ec",
+      "half_step": "cc43b65e4c95570aad87c829b12980dc5f3203c2471b1cc9aee43628f8b1b9aa"
+    },
+    "max_final_position_or_velocity_difference": 3.589222911712206,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 3,
+        "notes_half_step": 2,
+        "ordinal_paired_notes": 2,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 2,
+          "changed": 1,
+          "max_samples": 43,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 2,
+          "changed": 1,
+          "max_samples": 43,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 3,
+        "notes_half_step": 2,
+        "ordinal_paired_notes": 2,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 2,
+          "changed": 2,
+          "max_samples": 1724,
+          "p50_samples": 43,
+          "p95_samples": 43
+        },
+        "ordinal_offset_difference": {
+          "pairs": 2,
+          "changed": 2,
+          "max_samples": 1724,
+          "p50_samples": 43,
+          "p95_samples": 43
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 13,
+        "notes_half_step": 13,
+        "ordinal_paired_notes": 13,
+        "ordinal_pitch_changes": 6,
+        "ordinal_velocity_changes": 7,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 2,
+        "ordinal_onset_difference": {
+          "pairs": 13,
+          "changed": 12,
+          "max_samples": 44439,
+          "p50_samples": 905,
+          "p95_samples": 35129
+        },
+        "ordinal_offset_difference": {
+          "pairs": 13,
+          "changed": 12,
+          "max_samples": 44439,
+          "p50_samples": 377,
+          "p95_samples": 35129
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "spiral-archive",
+    "same_complete_trace": false,
+    "events_published": 132,
+    "events_half_step": 132,
+    "matching_prefix_events": 4,
+    "first_difference": {
+      "zero_based_ordinal": 4,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 48000,
+        "type": 0,
+        "channel": 1,
+        "data1": 43,
+        "data2": 65,
+        "source_body": 0
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 48000,
+        "type": 0,
+        "channel": 1,
+        "data1": 41,
+        "data2": 65,
+        "source_body": 0
+      }
+    },
+    "trace_sha256": {
+      "published": "6ca0e3092e8cf86bf44cef97dc85227d6bde46383dec5fff46fb052a6bbbf685",
+      "half_step": "8871f3f234bfbc89570198d8d26703626b23ce9fd3f792ecf6a496bba8df29e4"
+    },
+    "max_final_position_or_velocity_difference": 0.011450743145017688,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 54,
+        "notes_half_step": 54,
+        "ordinal_paired_notes": 54,
+        "ordinal_pitch_changes": 1,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 54,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 54,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 7,
+        "notes_half_step": 7,
+        "ordinal_paired_notes": 7,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 7,
+          "changed": 4,
+          "max_samples": 38,
+          "p50_samples": 38,
+          "p95_samples": 38
+        },
+        "ordinal_offset_difference": {
+          "pairs": 7,
+          "changed": 4,
+          "max_samples": 38,
+          "p50_samples": 38,
+          "p95_samples": 38
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 5,
+        "notes_half_step": 5,
+        "ordinal_paired_notes": 5,
+        "ordinal_pitch_changes": 1,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 5,
+          "changed": 3,
+          "max_samples": 75,
+          "p50_samples": 37,
+          "p95_samples": 38
+        },
+        "ordinal_offset_difference": {
+          "pairs": 5,
+          "changed": 3,
+          "max_samples": 75,
+          "p50_samples": 37,
+          "p95_samples": 38
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "unstable-crown",
+    "same_complete_trace": false,
+    "events_published": 508,
+    "events_half_step": 530,
+    "matching_prefix_events": 2,
+    "first_difference": {
+      "zero_based_ordinal": 2,
+      "published": {
+        "phase": "performance",
+        "absolute_sample": 11185,
+        "type": 0,
+        "channel": 1,
+        "data1": 26,
+        "data2": 55,
+        "source_body": 0
+      },
+      "half_step": {
+        "phase": "performance",
+        "absolute_sample": 11169,
+        "type": 0,
+        "channel": 1,
+        "data1": 26,
+        "data2": 55,
+        "source_body": 0
+      }
+    },
+    "trace_sha256": {
+      "published": "d54e87d27883178aa84e1253506da090c6eeb5b84a96e695aa8516f66555aec5",
+      "half_step": "7f1a0ba5722d1f3fedd4d81f1a566e86ed43f0f9c1ac25362ba4952e687f9f61"
+    },
+    "max_final_position_or_velocity_difference": 1.9975633778365443,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 9,
+        "notes_half_step": 11,
+        "ordinal_paired_notes": 9,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 5,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 1,
+        "ordinal_onset_difference": {
+          "pairs": 9,
+          "changed": 9,
+          "max_samples": 236891,
+          "p50_samples": 11394,
+          "p95_samples": 215112
+        },
+        "ordinal_offset_difference": {
+          "pairs": 9,
+          "changed": 9,
+          "max_samples": 236891,
+          "p50_samples": 11394,
+          "p95_samples": 215112
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 191,
+        "notes_half_step": 195,
+        "ordinal_paired_notes": 191,
+        "ordinal_pitch_changes": 121,
+        "ordinal_velocity_changes": 135,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 191,
+          "changed": 128,
+          "max_samples": 42000,
+          "p50_samples": 12000,
+          "p95_samples": 24000
+        },
+        "ordinal_offset_difference": {
+          "pairs": 191,
+          "changed": 128,
+          "max_samples": 42000,
+          "p50_samples": 12000,
+          "p95_samples": 24000
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 54,
+        "notes_half_step": 59,
+        "ordinal_paired_notes": 54,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 40,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 2,
+        "ordinal_onset_difference": {
+          "pairs": 54,
+          "changed": 53,
+          "max_samples": 143991,
+          "p50_samples": 46667,
+          "p95_samples": 107036
+        },
+        "ordinal_offset_difference": {
+          "pairs": 54,
+          "changed": 53,
+          "max_samples": 143991,
+          "p50_samples": 46667,
+          "p95_samples": 107036
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  },
+  {
+    "preset": "white-noon",
+    "same_complete_trace": true,
+    "events_published": 494,
+    "events_half_step": 494,
+    "matching_prefix_events": 494,
+    "first_difference": null,
+    "trace_sha256": {
+      "published": "d60b4039f2a8ae2ea45edd9d30f336b1853863d09743964420a7bac1100134e6",
+      "half_step": "d60b4039f2a8ae2ea45edd9d30f336b1853863d09743964420a7bac1100134e6"
+    },
+    "max_final_position_or_velocity_difference": 0.0025687225511848545,
+    "published_policy_respawns": [
+      0,
+      0
+    ],
+    "voices": [
+      {
+        "body": 0,
+        "notes_published": 112,
+        "notes_half_step": 112,
+        "ordinal_paired_notes": 112,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 112,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 112,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 1,
+        "notes_published": 135,
+        "notes_half_step": 135,
+        "ordinal_paired_notes": 135,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 135,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 135,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      },
+      {
+        "body": 2,
+        "notes_published": 0,
+        "notes_half_step": 0,
+        "ordinal_paired_notes": 0,
+        "ordinal_pitch_changes": 0,
+        "ordinal_velocity_changes": 0,
+        "ordinal_channel_changes": 0,
+        "ordinal_duration_changes": 0,
+        "ordinal_onset_difference": {
+          "pairs": 0,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        },
+        "ordinal_offset_difference": {
+          "pairs": 0,
+          "changed": 0,
+          "max_samples": 0,
+          "p50_samples": 0,
+          "p95_samples": 0
+        }
+      }
+    ],
+    "cleanup_passed_both": true
+  }
+]

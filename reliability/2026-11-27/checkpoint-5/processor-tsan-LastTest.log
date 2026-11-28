@@ -1,0 +1,20 @@
+Start testing: Nov 28 00:17 UTC
+----------------------------------------------------------
+16/18 Testing: threebs_processor_concurrency_tests
+16/18 Test: threebs_processor_concurrency_tests
+Command: "/Users/runner/work/3bs/3bs/build/ci-processor-tsan/src/plugin/threebs_processor_concurrency_tests"
+Directory: /Users/runner/work/3bs/3bs/build/ci-processor-tsan/src/plugin
+"threebs_processor_concurrency_tests" start time: Nov 28 00:17 UTC
+Output:
+----------------------------------------------------------
+JUCE v8.0.13
+processor concurrency publications=384 save_restore_pairs=768 callbacks=63919 notes=4896 snapshots=37521 errors=0 final_ack=1 timed_out=0 deadline_seconds=600
+<end of output>
+Test time = 171.67 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_processor_concurrency_tests" end time: Nov 28 00:20 UTC
+"threebs_processor_concurrency_tests" time elapsed: 00:02:51
+----------------------------------------------------------
+
+End testing: Nov 28 00:20 UTC

@@ -1,0 +1,462 @@
+Start testing: Nov 28 00:28 UTC
+----------------------------------------------------------
+1/18 Testing: threebs_core_tests
+1/18 Test: threebs_core_tests
+Command: "/Users/runner/work/3bs/3bs/build/ci-plugin/threebs_core_tests"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin
+"threebs_core_tests" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+PASS testPcgSequence
+PASS testDeterministicSimulation
+PASS testEnergyAndSoftening
+PASS testConstrainedSystems
+PASS testInitialPlaneTilts
+PASS testSingleBodyRespawn
+PASS testScales
+PASS testBlockSizeIndependentMidi
+PASS testNoteCleanup
+PASS testPerVoiceGeneration
+PASS testChordAndStrumModes
+PASS testSnapshotQueue
+PASS testNoteVisualizationQueue
+PASS testCameraTargetAndHitTesting
+PASS testCameraMotion
+PASS testCameraAutoFraming
+PASS testCameraSanitization
+PASS testTrailHistory
+PASS testPresentationMigration
+PASS testOctaveTranspose
+PASS testDurationMapping
+PASS testGlobalChordFrame
+PASS testStrumBeatUnit
+PASS testBarAutoReset
+All core tests passed
+<end of output>
+Test time =   0.31 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_core_tests" end time: Nov 28 00:28 UTC
+"threebs_core_tests" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/18 Testing: threebs_core_regression_tests
+2/18 Test: threebs_core_regression_tests
+Command: "/Users/runner/work/3bs/3bs/build/ci-plugin/threebs_core_regression_tests"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin
+"threebs_core_regression_tests" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+PASS configuration and sounding identity
+PASS pending transition cancellation
+PASS streaming and partition invariance
+PASS physical speed extrema
+PASS strum tempo and sample-rate changes
+PASS internal reset event revisions
+PASS invalid candidate rejection
+<end of output>
+Test time =   0.50 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_core_regression_tests" end time: Nov 28 00:28 UTC
+"threebs_core_regression_tests" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/18 Testing: threebs_numerical_tests
+3/18 Test: threebs_numerical_tests
+Command: "/Users/runner/work/3bs/3bs/build/ci-plugin/threebs_numerical_tests"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin
+"threebs_numerical_tests" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+{"check":"softened_equilateral_convergence","position_errors":[4.33231273435e-05,1.08308947417e-05,2.70773073456e-06],"refinement_ratios":[3.9999583023,3.99998958665],"passed":true}
+{"check":"extreme_configuration_work_bound","steps":128,"truncated_advances":1,"passed":true}
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_numerical_tests" end time: Nov 28 00:28 UTC
+"threebs_numerical_tests" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/18 Testing: threebs_numerical_presets
+4/18 Test: threebs_numerical_presets
+Command: "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11" "/Users/runner/work/3bs/3bs/tests/RunNumericalPresets.py" "--binary" "/Users/runner/work/3bs/3bs/build/ci-plugin/threebs_numerical_tests" "--presets" "/Users/runner/work/3bs/3bs/resources/presets/factory-presets.json"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin
+"threebs_numerical_presets" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+{"check":"softened_equilateral_convergence","position_errors":[4.33231273435e-05,1.08308947417e-05,2.70773073456e-06],"refinement_ratios":[3.9999583023,3.99998958665],"passed":true}
+{"check":"extreme_configuration_work_bound","steps":128,"truncated_advances":1,"passed":true}
+{"preset":"eightfold-dawn","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":5.47851498528e-06,"half_step_energy_excursion":1.36971083165e-06,"relative_angular_momentum_excursion":1.17273035786e-14,"minimum_sampled_separation":0.583719646719,"repeat_max_state_difference":0,"half_step_final_state_difference":0.00016699172129,"published_policy_respawns":0,"passed":true}
+{"preset":"lagrange-glass","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.000914511833523,"half_step_energy_excursion":0.000228835097674,"relative_angular_momentum_excursion":3.26587100639e-15,"minimum_sampled_separation":0.14766052887,"repeat_max_state_difference":0,"half_step_final_state_difference":0.000441841792451,"published_policy_respawns":0,"passed":true}
+{"preset":"twin-moon-relay","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":5.17685551044e-05,"half_step_energy_excursion":1.2991875206e-05,"relative_angular_momentum_excursion":1.09411764618e-14,"minimum_sampled_separation":0.104664972818,"repeat_max_state_difference":0,"half_step_final_state_difference":2.08834617408,"published_policy_respawns":0,"passed":true}
+{"preset":"quiet-periapsis","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":9.7012664213e-07,"half_step_energy_excursion":2.42700633923e-07,"relative_angular_momentum_excursion":5.56179910046e-15,"minimum_sampled_separation":0.23173402253,"repeat_max_state_difference":0,"half_step_final_state_difference":0.000384870953399,"published_policy_respawns":0,"passed":true}
+{"preset":"cyan-transit","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.00222216787644,"half_step_energy_excursion":0.000595932794515,"relative_angular_momentum_excursion":7.05554459174e-15,"minimum_sampled_separation":0.127463770543,"repeat_max_state_difference":0,"half_step_final_state_difference":0.0196310859958,"published_policy_respawns":0,"passed":true}
+{"preset":"ember-conjunction","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.0161174636907,"half_step_energy_excursion":0.0124610865185,"relative_angular_momentum_excursion":7.04003603065e-15,"minimum_sampled_separation":0.0601321010489,"repeat_max_state_difference":0,"half_step_final_state_difference":6.37814294834,"published_policy_respawns":0,"passed":true}
+{"preset":"violet-aphelion","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":6.99247725833e-08,"half_step_energy_excursion":1.74811893294e-08,"relative_angular_momentum_excursion":5.56984833105e-15,"minimum_sampled_separation":1.98236556204,"repeat_max_state_difference":0,"half_step_final_state_difference":2.34780541601e-06,"published_policy_respawns":0,"passed":true}
+{"preset":"red-shift-study","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.0419048938566,"half_step_energy_excursion":0.00227388452953,"relative_angular_momentum_excursion":1.08281743446e-14,"minimum_sampled_separation":0.0119518296301,"repeat_max_state_difference":0,"half_step_final_state_difference":1.84003385556,"published_policy_respawns":0,"passed":true}
+{"preset":"golden-barycenter","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":2.88526745833e-05,"half_step_energy_excursion":7.22062961915e-06,"relative_angular_momentum_excursion":8.7521814702e-15,"minimum_sampled_separation":0.400463807268,"repeat_max_state_difference":0,"half_step_final_state_difference":0.000409487506354,"published_policy_respawns":0,"passed":true}
+{"preset":"black-sun-threads","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.000241447321953,"half_step_energy_excursion":6.03306516097e-05,"relative_angular_momentum_excursion":6.58501558496e-15,"minimum_sampled_separation":0.0729575798556,"repeat_max_state_difference":0,"half_step_final_state_difference":0.0529229807215,"published_policy_respawns":0,"passed":true}
+{"preset":"orbital-ink","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":1.32164518785e-06,"half_step_energy_excursion":3.3041738623e-07,"relative_angular_momentum_excursion":5.05475213065e-15,"minimum_sampled_separation":0.730345756436,"repeat_max_state_difference":0,"half_step_final_state_difference":9.78167032619e-05,"published_policy_respawns":0,"passed":true}
+{"preset":"slingshot-cadence","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.00171114989688,"half_step_energy_excursion":0.000272326680049,"relative_angular_momentum_excursion":2.95168482083e-14,"minimum_sampled_separation":0.12339966454,"repeat_max_state_difference":0,"half_step_final_state_difference":11.1383649907,"published_policy_respawns":0,"passed":true}
+{"preset":"pale-resonance","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":1.92170891118e-05,"half_step_energy_excursion":4.80476943276e-06,"relative_angular_momentum_excursion":6.83926120963e-15,"minimum_sampled_separation":0.452393438859,"repeat_max_state_difference":0,"half_step_final_state_difference":4.07780136498e-05,"published_policy_respawns":0,"passed":true}
+{"preset":"magenta-eclipse","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.000551480111751,"half_step_energy_excursion":0.000141028278459,"relative_angular_momentum_excursion":1.8234417165e-14,"minimum_sampled_separation":0.146400525874,"repeat_max_state_difference":0,"half_step_final_state_difference":41.0981065776,"published_policy_respawns":1,"passed":true}
+{"preset":"three-cold-lights","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.000179304916438,"half_step_energy_excursion":4.49686044391e-05,"relative_angular_momentum_excursion":3.9219257372e-15,"minimum_sampled_separation":0.208540228838,"repeat_max_state_difference":0,"half_step_final_state_difference":0.000169843364502,"published_policy_respawns":0,"passed":true}
+{"preset":"blue-giant-clock","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.00592786830321,"half_step_energy_excursion":0.000625139723519,"relative_angular_momentum_excursion":6.99950263237e-15,"minimum_sampled_separation":0.0320519100594,"repeat_max_state_difference":0,"half_step_final_state_difference":4.92489125297,"published_policy_respawns":0,"passed":true}
+{"preset":"perihelion-dust","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.00571237623971,"half_step_energy_excursion":0.00141995066481,"relative_angular_momentum_excursion":1.77892318887e-14,"minimum_sampled_separation":0.0576192510599,"repeat_max_state_difference":0,"half_step_final_state_difference":7.72187934196,"published_policy_respawns":1,"passed":true}
+{"preset":"silent-conjunction","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.0141985710591,"half_step_energy_excursion":0.00355166462203,"relative_angular_momentum_excursion":9.00489997984e-15,"minimum_sampled_separation":0.071132902126,"repeat_max_state_difference":0,"half_step_final_state_difference":0.00732346524333,"published_policy_respawns":0,"passed":true}
+{"preset":"iron-triangle","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.0115568408237,"half_step_energy_excursion":0.00274200028148,"relative_angular_momentum_excursion":1.33803993702e-14,"minimum_sampled_separation":0.0789150756874,"repeat_max_state_difference":0,"half_step_final_state_difference":1.7452213088,"published_policy_respawns":0,"passed":true}
+{"preset":"solar-kite","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.000593574264778,"half_step_energy_excursion":0.000567165043647,"relative_angular_momentum_excursion":6.52362751808e-15,"minimum_sampled_separation":0.0488074956691,"repeat_max_state_difference":0,"half_step_final_state_difference":1.30502684152,"published_policy_respawns":0,"passed":true}
+{"preset":"gravity-well","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.00140756859824,"half_step_energy_excursion":0.00030252428769,"relative_angular_momentum_excursion":7.75535660273e-15,"minimum_sampled_separation":0.109410036628,"repeat_max_state_difference":0,"half_step_final_state_difference":3.58922291176,"published_policy_respawns":0,"passed":true}
+{"preset":"spiral-archive","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.0326064808364,"half_step_energy_excursion":0.00823985200397,"relative_angular_momentum_excursion":8.78390935704e-15,"minimum_sampled_separation":0.0791914831086,"repeat_max_state_difference":0,"half_step_final_state_difference":0.0114507431479,"published_policy_respawns":0,"passed":true}
+{"preset":"unstable-crown","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.00578755728708,"half_step_energy_excursion":0.00144812181378,"relative_angular_momentum_excursion":1.8764242851e-14,"minimum_sampled_separation":0.0424491174092,"repeat_max_state_difference":0,"half_step_final_state_difference":2.19041339755,"published_policy_respawns":0,"passed":true}
+{"preset":"white-noon","beat_units":60,"sampled_every_beats":0.01,"conservative_energy_excursion":0.004753755736,"half_step_energy_excursion":0.00116432826996,"relative_angular_momentum_excursion":1.69380770344e-14,"minimum_sampled_separation":0.0887424428771,"repeat_max_state_difference":0,"half_step_final_state_difference":0.00256872255145,"published_policy_respawns":0,"passed":true}
+<end of output>
+Test time =   0.62 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_numerical_presets" end time: Nov 28 00:28 UTC
+"threebs_numerical_presets" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/18 Testing: threebs_core_realtime_profile
+5/18 Test: threebs_core_realtime_profile
+Command: "/Users/runner/work/3bs/3bs/build/ci-plugin/threebs_core_realtime_profile"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin
+"threebs_core_realtime_profile" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+{"mode":0,"sample_rate":44100,"block_size":64,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":45.209,"p95_us":47.833,"p99_us":62.333,"max_us":392.25,"budget_us":1451.2472,"overruns":0,"passed":true}
+{"mode":0,"sample_rate":44100,"block_size":512,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":105.209,"p95_us":109.708,"p99_us":114.25,"max_us":237,"budget_us":11609.977,"overruns":0,"passed":true}
+{"mode":0,"sample_rate":48000,"block_size":64,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":13.291,"p95_us":14.042,"p99_us":14.625,"max_us":17.083,"budget_us":1333.3333,"overruns":0,"passed":true}
+{"mode":0,"sample_rate":48000,"block_size":512,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":105.709,"p95_us":157.541,"p99_us":243.5,"max_us":266.083,"budget_us":10666.667,"overruns":0,"passed":true}
+{"mode":0,"sample_rate":96000,"block_size":64,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":13.125,"p95_us":19.041,"p99_us":55,"max_us":67.542,"budget_us":666.66667,"overruns":0,"passed":true}
+{"mode":0,"sample_rate":96000,"block_size":512,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":100.417,"p95_us":109.916,"p99_us":134.791,"max_us":277.041,"budget_us":5333.3333,"overruns":0,"passed":true}
+{"mode":0,"sample_rate":48000,"block_size":16384,"transitions":false,"measured_blocks":32,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":3343.916,"p95_us":5499.583,"p99_us":6454.459,"max_us":9267.75,"budget_us":341333.33,"overruns":0,"passed":true}
+{"mode":0,"sample_rate":48000,"block_size":512,"transitions":true,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":115.791,"p95_us":119.25,"p99_us":120.417,"max_us":122.541,"budget_us":10666.667,"overruns":0,"passed":true}
+{"mode":1,"sample_rate":44100,"block_size":64,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":12.833,"p95_us":13.209,"p99_us":13.583,"max_us":20.833,"budget_us":1451.2472,"overruns":0,"passed":true}
+{"mode":1,"sample_rate":44100,"block_size":512,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":103.459,"p95_us":257.209,"p99_us":543.959,"max_us":954.708,"budget_us":11609.977,"overruns":0,"passed":true}
+{"mode":1,"sample_rate":48000,"block_size":64,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":13,"p95_us":16.458,"p99_us":235.917,"max_us":400.917,"budget_us":1333.3333,"overruns":0,"passed":true}
+{"mode":1,"sample_rate":48000,"block_size":512,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":102.292,"p95_us":112.208,"p99_us":122.833,"max_us":159.791,"budget_us":10666.667,"overruns":0,"passed":true}
+{"mode":1,"sample_rate":96000,"block_size":64,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":12.333,"p95_us":13.167,"p99_us":15.875,"max_us":18.25,"budget_us":666.66667,"overruns":0,"passed":true}
+{"mode":1,"sample_rate":96000,"block_size":512,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":99.917,"p95_us":110.708,"p99_us":145.5,"max_us":184.291,"budget_us":5333.3333,"overruns":0,"passed":true}
+{"mode":1,"sample_rate":48000,"block_size":16384,"transitions":false,"measured_blocks":32,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":3402.167,"p95_us":6806.041,"p99_us":7370.542,"max_us":9932.125,"budget_us":341333.33,"overruns":0,"passed":true}
+{"mode":1,"sample_rate":48000,"block_size":512,"transitions":true,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":117.791,"p95_us":506.25,"p99_us":5822.25,"max_us":17894,"budget_us":10666.667,"overruns":2,"passed":true}
+{"mode":2,"sample_rate":44100,"block_size":64,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":13.375,"p95_us":17.75,"p99_us":48.042,"max_us":50.167,"budget_us":1451.2472,"overruns":0,"passed":true}
+{"mode":2,"sample_rate":44100,"block_size":512,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":104.083,"p95_us":209.417,"p99_us":252.458,"max_us":445.583,"budget_us":11609.977,"overruns":0,"passed":true}
+{"mode":2,"sample_rate":48000,"block_size":64,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":12.958,"p95_us":13.667,"p99_us":15.25,"max_us":16.167,"budget_us":1333.3333,"overruns":0,"passed":true}
+{"mode":2,"sample_rate":48000,"block_size":512,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":103.166,"p95_us":116.208,"p99_us":150.791,"max_us":168,"budget_us":10666.667,"overruns":0,"passed":true}
+{"mode":2,"sample_rate":96000,"block_size":64,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":12.417,"p95_us":13.292,"p99_us":27.917,"max_us":132.208,"budget_us":666.66667,"overruns":0,"passed":true}
+{"mode":2,"sample_rate":96000,"block_size":512,"transitions":false,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":99.167,"p95_us":175.625,"p99_us":343.417,"max_us":348.041,"budget_us":5333.3333,"overruns":0,"passed":true}
+{"mode":2,"sample_rate":48000,"block_size":16384,"transitions":false,"measured_blocks":32,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":3297,"p95_us":6019.083,"p99_us":8874,"max_us":11011.208,"budget_us":341333.33,"overruns":0,"passed":true}
+{"mode":2,"sample_rate":48000,"block_size":512,"transitions":true,"measured_blocks":128,"cold_cpp_allocations":0,"cold_cpp_frees":0,"warm_cpp_allocations":0,"warm_cpp_frees":0,"p50_us":117.541,"p95_us":132.084,"p99_us":384,"max_us":1050.542,"budget_us":10666.667,"overruns":0,"passed":true}
+<end of output>
+Test time =   1.55 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_core_realtime_profile" end time: Nov 28 00:28 UTC
+"threebs_core_realtime_profile" time elapsed: 00:00:01
+----------------------------------------------------------
+
+6/18 Testing: threebs_input_key_ledger_tests
+6/18 Test: threebs_input_key_ledger_tests
+Command: "/Users/runner/work/3bs/3bs/build/ci-plugin/threebs_input_key_ledger_tests"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin
+"threebs_input_key_ledger_tests" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+input ledger random_events=100000 dense_releases=32768 scan_reference_us=23801.8 linked_ledger_us=16.125 (portable diagnostic; not a native callback deadline)
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_input_key_ledger_tests" end time: Nov 28 00:28 UTC
+"threebs_input_key_ledger_tests" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/18 Testing: threebs_command_mailbox_tests
+7/18 Test: threebs_command_mailbox_tests
+Command: "/Users/runner/work/3bs/3bs/build/ci-plugin/threebs_command_mailbox_tests"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin
+"threebs_command_mailbox_tests" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+mailbox publications=250000 consumed=35435 final=251024 coherent=1
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_command_mailbox_tests" end time: Nov 28 00:28 UTC
+"threebs_command_mailbox_tests" time elapsed: 00:00:00
+----------------------------------------------------------
+
+8/18 Testing: threebs_standalone_tests
+8/18 Test: threebs_standalone_tests
+Command: "/Users/runner/work/3bs/3bs/build/ci-plugin/threebs_standalone_tests"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin
+"threebs_standalone_tests" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+PASS 30-minute absolute sample timeline has no accumulated wakeup drift
+PASS sample deadline includes fixed look-ahead exactly once
+PASS bounded worker jitter does not fault
+PASS unbounded late wakeup is detected
+PASS late recovery never schedules cancelled history in the past
+PASS destination ledger counts overlapping channel/key identities
+PASS reset/output replacement/quit cleanup targets actually delivered notes
+PASS repeated cleanup is idempotent
+PASS failed output cleanup retains every delivered note and stops at the first rejection
+PASS partial cleanup removes only note-offs accepted by the destination
+PASS partial cleanup retains the original channel/key of each unsent note-off
+PASS repeated output failure cannot forget remaining cleanup obligations
+PASS reconnection retries exactly the outstanding note-offs without resending accepted cleanup
+PASS a fully cleaned destination needs no further send attempt
+PASS saturated mailbox publishes coherent increasing revisions and final edit
+PASS runtime-style strum has one delivered note and two pending notes
+PASS epoch panic/reset contract cannot replay cancelled strum notes or strand delivered notes
+PASS runtime-style strum has one delivered note and two pending notes
+PASS epoch panic/reset contract cannot replay cancelled strum notes or strand delivered notes
+PASS unchanged controls preserve all scheduled voice epochs
+PASS physical controls preserve existing note lifetimes
+PASS disabling one voice cancels only that voice's scheduled epoch
+PASS channel reassignment cancels only the reassigned voice
+PASS independent voices establish distinct delivered note identities
+PASS per-voice destination cleanup uses the old channel and preserves unaffected notes
+PASS channel reassignment is accepted by the engine
+PASS engine reconfiguration emits only the changed voice's original-channel cleanup
+PASS mode transition invalidates every queued voicing event
+PASS enabling an open gate preserves sounding voices
+PASS gate closure invalidates every queued voice event
+PASS gate reopening does not cancel newly eligible voice epochs
+PASS global chord-frame edits invalidate the complete queued voicing
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_standalone_tests" end time: Nov 28 00:28 UTC
+"threebs_standalone_tests" time elapsed: 00:00:00
+----------------------------------------------------------
+
+9/18 Testing: threebs_renderer_data_tests
+9/18 Test: threebs_renderer_data_tests
+Command: "/Users/runner/work/3bs/3bs/build/ci-plugin/threebs_renderer_data_tests"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin
+"threebs_renderer_data_tests" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+Renderer ownership, trails and note timeline tests passed
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_renderer_data_tests" end time: Nov 28 00:28 UTC
+"threebs_renderer_data_tests" time elapsed: 00:00:00
+----------------------------------------------------------
+
+10/18 Testing: threebs_factory_presets
+10/18 Test: threebs_factory_presets
+Command: "/Users/runner/work/_temp/threebs-cmake/CMake.app/Contents/bin/cmake" "-DPRESET_FILE=/Users/runner/work/3bs/3bs/resources/presets/factory-presets.json" "-P" "/Users/runner/work/3bs/3bs/tests/ValidatePresets.cmake"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin
+"threebs_factory_presets" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+-- Validated 24 factory presets (schema v2)
+<end of output>
+Test time =   0.35 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_factory_presets" end time: Nov 28 00:28 UTC
+"threebs_factory_presets" time elapsed: 00:00:00
+----------------------------------------------------------
+
+11/18 Testing: threebs_voicing_presets
+11/18 Test: threebs_voicing_presets
+Command: "/Users/runner/work/_temp/threebs-cmake/CMake.app/Contents/bin/cmake" "-DPRESET_FILE=/Users/runner/work/3bs/3bs/resources/presets/voicing-presets.json" "-P" "/Users/runner/work/3bs/3bs/tests/ValidateVoicingPresets.cmake"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin
+"threebs_voicing_presets" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.24 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_voicing_presets" end time: Nov 28 00:28 UTC
+"threebs_voicing_presets" time elapsed: 00:00:00
+----------------------------------------------------------
+
+12/18 Testing: threebs_star_catalog
+12/18 Test: threebs_star_catalog
+Command: "/Users/runner/work/_temp/threebs-cmake/CMake.app/Contents/bin/cmake" "-DSTAR_FILE=/Users/runner/work/3bs/3bs/resources/stars/hyg-v41-mag65.csv" "-P" "/Users/runner/work/3bs/3bs/tests/ValidateStarCatalog.cmake"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin
+"threebs_star_catalog" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+-- Validated 8921 HYG star catalogue rows
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_star_catalog" end time: Nov 28 00:28 UTC
+"threebs_star_catalog" time elapsed: 00:00:00
+----------------------------------------------------------
+
+13/18 Testing: threebs_ui_smoke
+13/18 Test: threebs_ui_smoke
+Command: "/Users/runner/work/3bs/3bs/build/ci-plugin/src/render/threebs_ui_smoke_artefacts/Release/3bs UI Acceptance.app/Contents/MacOS/3bs UI Acceptance"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin/src/render
+"threebs_ui_smoke" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+2026-11-28 00:28:06.248 3bs UI Acceptance[18063:46875] Metal API Validation Enabled
+UI acceptance passed: 15 page/size layouts, all voicing modes/units, keyboard focus, presentation, strict numeric parsing, dialog validation and owner-close races
+<end of output>
+Test time =  13.03 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_ui_smoke" end time: Nov 28 00:28 UTC
+"threebs_ui_smoke" time elapsed: 00:00:13
+----------------------------------------------------------
+
+14/18 Testing: threebs_metal_smoke
+14/18 Test: threebs_metal_smoke
+Command: "/Users/runner/work/3bs/3bs/build/ci-plugin/src/render/threebs_metal_smoke"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin/src/render
+"threebs_metal_smoke" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+2026-11-28 00:28:18.805 threebs_metal_smoke[18311:47900] Metal API Validation Enabled
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+3bs Metal resources: Required renderer resource allocation failed
+Metal drawable integration passed: 27 completed frames, 13824 glyph bytes, zero GPU errors; all 21 allocation failures handled
+<end of output>
+Test time =   1.76 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_metal_smoke" end time: Nov 28 00:28 UTC
+"threebs_metal_smoke" time elapsed: 00:00:01
+----------------------------------------------------------
+
+15/18 Testing: threebs_plugin_tests
+15/18 Test: threebs_plugin_tests
+Command: "/Users/runner/work/3bs/3bs/build/ci-plugin/src/plugin/threebs_plugin_tests"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin/src/plugin
+"threebs_plugin_tests" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+2026-11-28 00:28:20.953 threebs_plugin_tests[18332:48050] Metal API Validation Enabled
+All plugin reliability regressions passed
+All plugin tests passed
+<end of output>
+Test time =   1.95 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_plugin_tests" end time: Nov 28 00:28 UTC
+"threebs_plugin_tests" time elapsed: 00:00:01
+----------------------------------------------------------
+
+16/18 Testing: threebs_processor_concurrency_tests
+16/18 Test: threebs_processor_concurrency_tests
+Command: "/Users/runner/work/3bs/3bs/build/ci-plugin/src/plugin/threebs_processor_concurrency_tests"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin/src/plugin
+"threebs_processor_concurrency_tests" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+processor concurrency publications=384 save_restore_pairs=768 callbacks=34132 notes=3111 snapshots=27201 errors=0 final_ack=1 timed_out=0 deadline_seconds=20
+<end of output>
+Test time =   2.73 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_processor_concurrency_tests" end time: Nov 28 00:28 UTC
+"threebs_processor_concurrency_tests" time elapsed: 00:00:02
+----------------------------------------------------------
+
+17/18 Testing: threebs_realtime_profile
+17/18 Test: threebs_realtime_profile
+Command: "/Users/runner/work/3bs/3bs/build/ci-plugin/src/plugin/threebs_realtime_profile"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin/src/plugin
+"threebs_realtime_profile" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+cold-command-consumption blocks=1 frames=512 cpp_allocations=0 c_allocations=0 frees=0 average_us=198.041 maximum_us=198.041
+short-input-and-long-sysex blocks=128 frames=128 cpp_allocations=0 c_allocations=0 frees=0 average_us=26.7698 maximum_us=155.791
+dense-input-releases blocks=4 frames=64 cpp_allocations=0 c_allocations=0 frees=0 average_us=241.5 maximum_us=262.042
+steady-state blocks=2048 frames=512 cpp_allocations=0 c_allocations=0 frees=0 average_us=109.072 maximum_us=913.625
+reset-with-input blocks=1 frames=64 cpp_allocations=0 c_allocations=0 frees=0 average_us=17.916 maximum_us=17.916
+state-replacement-large-block blocks=4 frames=16384 cpp_allocations=0 c_allocations=0 frees=0 average_us=3116.49 maximum_us=3135
+bypass-cleanup blocks=1 frames=512 cpp_allocations=0 c_allocations=0 frees=0 average_us=1.625 maximum_us=1.625
+panic-cleanup blocks=1 frames=512 cpp_allocations=0 c_allocations=0 frees=0 average_us=103.584 maximum_us=103.584
+callbacks=2188 average_us=109.945 maximum_us=3135 (mixed sizes; timing diagnostic only)
+<end of output>
+Test time =   1.75 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_realtime_profile" end time: Nov 28 00:28 UTC
+"threebs_realtime_profile" time elapsed: 00:00:01
+----------------------------------------------------------
+
+18/18 Testing: threebs_standalone_runtime_tests
+18/18 Test: threebs_standalone_runtime_tests
+Command: "/Users/runner/work/3bs/3bs/build/ci-plugin/src/standalone/threebs_standalone_runtime_tests"
+Directory: /Users/runner/work/3bs/3bs/build/ci-plugin/src/standalone
+"threebs_standalone_runtime_tests" start time: Nov 28 00:28 UTC
+Output:
+----------------------------------------------------------
+CoreMIDI error, line 1778 - ffffffce
+CoreMIDI error, line 1778 - ffffffce
+CoreMIDI error, line 1778 - ffffffce
+CoreMIDI error, line 1778 - ffffffce
+PASS test runs on the JUCE message thread
+PASS runtime accepts its virtual output route
+PASS worker creates the virtual CoreMIDI output
+PASS loopback connects only to the test-created virtual source
+PASS CoreMIDI loopback receives the three generated voice notes
+PASS MIDI generation continues while the message thread is stalled
+PASS captured note count covers the complete elapsed stall interval
+PASS captured MIDI period does not accumulate message-thread timing drift
+PASS worker remains within its explicit lateness and overrun contract
+PASS reset cleans the previous delivered identities before restarting voices
+PASS panic terminates CoreMIDI-delivered notes before their natural endings
+PASS panic cannot replay cancelled pending output
+PASS reset resumes generation after panic
+PASS stop terminates the original destination's active notes
+PASS stopped runtime does not deliver queued note-ons
+PASS resume establishes notes before output replacement
+PASS virtual output replacement is accepted
+PASS output replacement cleans notes on the old virtual source
+PASS loopback reconnects only to the newly created replacement source
+PASS replacement destination receives only its own new note generation
+PASS runtime destruction flushes the delivered-note ledger before closing output
+PASS reset, routing and shutdown leave no duplicate or stranded captured notes
+PASS loopback capture observes balanced identities without dropped events
+PASS all transition scenarios complete without worker overruns
+PASS all live transition scenarios complete without rejected CoreMIDI sends
+{"standalone_runtime":{"stress_seconds":2,"measured_stress_seconds":2.08995,"stress_voice1_note_ons":17,"excluded_initial_onsets":1,"initial_to_grid_interval_seconds":0.105732,"measured_period_intervals":16,"captured_note_ons":66,"period_drift_seconds":-0.00210979,"max_interval_error_seconds":0.00573604,"max_delivery_lateness_ms":7.677,"delivery_lateness_p50_ms":3,"delivery_lateness_p95_ms":7.4,"delivery_lateness_p99_ms":7.7,"delivered_events":117,"output_failures_before_destructor":0,"overruns":0,"visual_drops_during_stall":83,"failures":0}}
+<end of output>
+Test time =   4.31 sec
+----------------------------------------------------------
+Test Passed.
+"threebs_standalone_runtime_tests" end time: Nov 28 00:28 UTC
+"threebs_standalone_runtime_tests" time elapsed: 00:00:04
+----------------------------------------------------------
+
+End testing: Nov 28 00:28 UTC

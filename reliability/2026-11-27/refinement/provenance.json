@@ -1,0 +1,156 @@
+{
+  "declared_source_revision": "449f126e6cdea64214374bb0280fa8d16b6d0a82",
+  "timestamp_utc": "2026-11-28T00:36:17.958072+00:00",
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "machine": "x86_64",
+  "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "compiler": "g++ (Debian 14.2.0-19) 14.2.0\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+  "build_command": [
+    "g++",
+    "-std=c++20",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Wpedantic",
+    "-Wshadow",
+    "-I",
+    "/workspace/scratch/7d9a2f2e7963/3bs/src",
+    "-I",
+    "/workspace/scratch/7d9a2f2e7963/implementation-evidence/refinement",
+    "/workspace/scratch/7d9a2f2e7963/implementation-evidence/refinement/Refinement.cpp",
+    "/workspace/scratch/7d9a2f2e7963/3bs/src/core/MusicEngine.cpp",
+    "/workspace/scratch/7d9a2f2e7963/3bs/src/core/ThreeBodySimulation.cpp",
+    "/workspace/scratch/7d9a2f2e7963/3bs/src/core/Scale.cpp",
+    "-o",
+    "/workspace/scratch/7d9a2f2e7963/implementation-evidence/refinement/refinement"
+  ],
+  "run_command": [
+    "/workspace/scratch/7d9a2f2e7963/implementation-evidence/refinement/refinement",
+    "/workspace/scratch/7d9a2f2e7963/implementation-evidence/refinement"
+  ],
+  "product_sources": {
+    "src/core/Math.h": {
+      "sha256": "b5a1a67ff037390eb088890b258556b73edaf27cccdc21113ed5899e1e987d23",
+      "git_blob_sha1": "817c9c066dfd656a2ea1aff696268fef05cefbe5"
+    },
+    "src/core/MusicEngine.cpp": {
+      "sha256": "7a62a178fb3c40c5ea8beb3690c44c89cda475d6abc2cdcfafc168270d420c53",
+      "git_blob_sha1": "6f681906bf258201ab983903086a59d869cb10ed"
+    },
+    "src/core/MusicEngine.h": {
+      "sha256": "2bca289862bad6a4ed9c32b951567f11bd30373db19c37b3da028f1b5f4a8aa1",
+      "git_blob_sha1": "dc96dae67dd8c654be737ca14b30f969834d2dd6"
+    },
+    "src/core/Random.h": {
+      "sha256": "f7ccb7235b5d70c23681d70eeb50bb60bb82eaf7a8e469655afe0d6b4d51f27e",
+      "git_blob_sha1": "6be2cacb34431e8d054e9167d9554b997ba3c042"
+    },
+    "src/core/Scale.cpp": {
+      "sha256": "9e91538eeb9f5c9e5d22e5daf7abfe98da9448289f89741feaa781030f2571db",
+      "git_blob_sha1": "2d77b3b76dd44823f2bf190d9e156ceb373ac18a"
+    },
+    "src/core/Scale.h": {
+      "sha256": "12055e0af660439dce9dd6d0577b0bf158409834265cf3a7d47414af9d4568a3",
+      "git_blob_sha1": "a0988ef7fff70e3233df7dc18f766c2d06f8a9c2"
+    },
+    "src/core/SnapshotQueue.h": {
+      "sha256": "c65931911e7af4e8f989b6526f0222e3a8c06df49be057e7cdcf5e7164fd5d07",
+      "git_blob_sha1": "3ae183f27f10ecc1e4f135b68140b1213f491ab6"
+    },
+    "src/core/ThreeBodySimulation.cpp": {
+      "sha256": "9792fd7375118809beac2c0e43be2da9640dd9d39e42b7f518359ab46f44daa5",
+      "git_blob_sha1": "e2b728681b940dfe7ca85869d106d1fac58b6e12"
+    },
+    "src/core/ThreeBodySimulation.h": {
+      "sha256": "388cf2cc9b257338451e42f6bbe3769991de006f206e20aa8a24706e3054f14a",
+      "git_blob_sha1": "287917cc0c1f9e1968ad43a93ba7ff178551d98c"
+    },
+    "src/core/Types.h": {
+      "sha256": "2d9c138d9475e2e29dcf2153aa6720e017c09de30d467cfff518a60600f3f4d4",
+      "git_blob_sha1": "56c3fdbe8d6c37e68b07b230ef1688c117db0516"
+    },
+    "src/ui/PresetCatalog.cpp": {
+      "sha256": "887fad8252e1e96cd2872247a50a68c533e7813a0209c660b0b36b0635e1f1a3",
+      "git_blob_sha1": "74837a5437aaf8682fd76d1fc8595147021e2f29"
+    },
+    "src/ui/PresetCatalog.h": {
+      "sha256": "1ccdd3350dde8c787fb60f1a5e2dc2c082da3a4198d834d89be2e7ec246da10d",
+      "git_blob_sha1": "4c95873ef89dd6c54d6a70c6dfda4065d2eec343"
+    },
+    "resources/presets/factory-presets.json": {
+      "sha256": "fbdd97d5819d57183e2c9ce81808dc273dc8938f01e9e843dff898df1f5a1ed2",
+      "git_blob_sha1": "6085ae38bd7bca4436b472a9b7122351e4c90a4b"
+    }
+  },
+  "generator_sha256": "06145c872e63681b5a26af594b14af15d9dbd9eb249c15d9f90852c3316ec412",
+  "harness_sha256": "fcbb27f18e0a1aad648e4da0c5b4818a586c8f51594c773e89dd8b7cff4167b5",
+  "generated_header_sha256": "cf5901f23d5b614bba08abc58d4316c88720b48f3a9e6d8fec97fe06a2093710",
+  "measurement": {
+    "beats": 60,
+    "tempo_bpm": 120,
+    "sample_rate": 48000,
+    "block_samples": 512,
+    "samples": 1440000,
+    "steps": [
+      0.0020833333333333333,
+      0.0010416666666666667
+    ],
+    "candidate_runs": 48
+  },
+  "elapsed_seconds_including_build": 23.490727013999276,
+  "build_exit_code": 0,
+  "run_exit_code": 0,
+  "compiled_field_mapping_validation": "passed for all 24 presets and 72 voices",
+  "unchanged_product_source_digests": true,
+  "binary_sha256": "d04db9e4f149ab60a1d4601b51ff1cfabca61843696c0c4dc98ac95702d3b29c",
+  "output_sha256": {
+    "traces/black-sun-threads.half-step.csv": "d52be40ec43a70adb168f0f1200e537e5b1e53811929526b60573c0ea955fbfd",
+    "traces/black-sun-threads.published.csv": "1cdd78e51a60a47564907b1e7f3a98fefd159c2dc0c1ebd568d47deaaa0901a6",
+    "traces/blue-giant-clock.half-step.csv": "327d42af2cb5b16b7fb089afb92c2aee0313075d3addfec7751ac13bda70990f",
+    "traces/blue-giant-clock.published.csv": "dc7064f99e8f3cb7effd83727b2fcd2acc31ed95a82fb41218f4de728b66a0e7",
+    "traces/cyan-transit.half-step.csv": "7f0c58e705cf2bca38b59aebafd099abc97bad34ee991987f77b3d7e759aec2c",
+    "traces/cyan-transit.published.csv": "18a124372e30412fe39bb6c74ceeff65d6ea9637113c10546e66cd5a9c880b4f",
+    "traces/eightfold-dawn.half-step.csv": "82edcc46dcf111ae1c83cc4b83b14d836ceeeb898c3b934ff6556601f2d5f17f",
+    "traces/eightfold-dawn.published.csv": "55fb5d374e9171635c81ae282c174c28c5aacccb0dbb3d8ead80e57b64ee58fd",
+    "traces/ember-conjunction.half-step.csv": "cfb108f5d88ce9cd0c719de39f796ad073d27945b93602611efcf3f6ac31f13a",
+    "traces/ember-conjunction.published.csv": "92f7888c7f66332a5b8c596d7c5dbb40c787bc0cb4691ead13bffcfe8675d03b",
+    "traces/golden-barycenter.half-step.csv": "6fed7e694ed19b8b3dfafb98020328646a8ab8c53a953bf05b6f6c005664181a",
+    "traces/golden-barycenter.published.csv": "10bd042c045e80790f52e546a2f94756649fa9127692e3432f0ad4c7710a9af1",
+    "traces/gravity-well.half-step.csv": "cc43b65e4c95570aad87c829b12980dc5f3203c2471b1cc9aee43628f8b1b9aa",
+    "traces/gravity-well.published.csv": "75f1c419e13d4ae757b1716c29b757bd94728c5a76bc1f3747a43659ae0004ec",
+    "traces/iron-triangle.half-step.csv": "fcab8b2d2956b1b4edb0277d13c98ba85c0814acf503ea4cd2d57478e6883d5b",
+    "traces/iron-triangle.published.csv": "fa5a6eadb13e1129b34d848ebc1ccbdbdd4ad98b33bf046418c226a7652f0ef0",
+    "traces/lagrange-glass.half-step.csv": "fec44c0d472395a5faa3b066b980c64ed9bb0cee34e0dfe26cd4346638c60949",
+    "traces/lagrange-glass.published.csv": "b1e2a0c6cd7c4e507ee2ec4a442a92dd15d7b32c350cf4a228a438279a66d29f",
+    "traces/magenta-eclipse.half-step.csv": "eeddf3ea6ea8e2efa8541d6516a4d72e5f51c6e80535b8f5991d646d76707aac",
+    "traces/magenta-eclipse.published.csv": "f04ad6d6118ce6583d5ee22e295a2aeda9fc6250d1e9bea8ee3d3f0d925f6113",
+    "traces/orbital-ink.half-step.csv": "ed71f328d0bf9979a7396c8e1f249e99e1a4b626bad7282a78a54b9d193ffb16",
+    "traces/orbital-ink.published.csv": "e9fe9832c67e16fde0179cccf8743d3d09c523f5aae5fb6845084a0c8615dee7",
+    "traces/pale-resonance.half-step.csv": "2c360dca23f381de7c191e5ab50acb57003ebde4c74e7c68cb7d438f2d0a1104",
+    "traces/pale-resonance.published.csv": "5b08e932297b58555b6254d3b1d559021e32a26fd5502ca732d923745ae1553b",
+    "traces/perihelion-dust.half-step.csv": "849a5cc87dc64c1902fe3291661e35c6d9ea9bf90c9fdb278479206e3c46eba0",
+    "traces/perihelion-dust.published.csv": "8d04e7cad2154f1419b9e4bb22cf42623150b3d9a980f046a5145b90e7d4beb1",
+    "traces/quiet-periapsis.half-step.csv": "9d276389826d56cecdca8a228cdbed4cd5ded200ee8a1507cd39499d76be78bf",
+    "traces/quiet-periapsis.published.csv": "49658235582e8d1b2217b8e644f35a99693e01fa4bd2543a8c56f081287c2d76",
+    "traces/red-shift-study.half-step.csv": "d3fe28263d19ad1581f193017810f351d269d83cec84367c3942cb403ddd763e",
+    "traces/red-shift-study.published.csv": "0a061fb9d03475331326d7a4f07a378cd432a90de909ddf50c1b0f2bdf327413",
+    "traces/silent-conjunction.half-step.csv": "ea82fa218fb6b4011869710c470b4aaefef401caa791ad92cc3d89ab83cd4a4d",
+    "traces/silent-conjunction.published.csv": "f0909864169a5e50657a13599ff0fa2010ae41044d97d5412c4339ea2ae05261",
+    "traces/slingshot-cadence.half-step.csv": "70b90c0058cc5c25e0e499f38c75a4f8339262309776e421cc963023631950b4",
+    "traces/slingshot-cadence.published.csv": "caa59532ce0e6ad66154fdcd9e29764768cc5e46c304c5f29ee26523be776ddf",
+    "traces/solar-kite.half-step.csv": "b2eb6e961f83518c7beee2642906f1cf05656839e3b70d0a872f46ad6d6f33ac",
+    "traces/solar-kite.published.csv": "2cfe11c923d63e1f955808842fc50f3eb2beb4850e1520d282baed769cc87fee",
+    "traces/spiral-archive.half-step.csv": "8871f3f234bfbc89570198d8d26703626b23ce9fd3f792ecf6a496bba8df29e4",
+    "traces/spiral-archive.published.csv": "6ca0e3092e8cf86bf44cef97dc85227d6bde46383dec5fff46fb052a6bbbf685",
+    "traces/three-cold-lights.half-step.csv": "a40702e04f79b9ec52b6a713307fafd5262ba67f455fd5d047a0f78c4435a0d4",
+    "traces/three-cold-lights.published.csv": "a40702e04f79b9ec52b6a713307fafd5262ba67f455fd5d047a0f78c4435a0d4",
+    "traces/twin-moon-relay.half-step.csv": "69d54d2da87eed96174d7b0145d841df7a7e1222b0afa213f77e0a2a73a4e6bc",
+    "traces/twin-moon-relay.published.csv": "21dcf425d33188e7c53f92c0c974590aa107ddcf670a9e9eb352cc25a981c16b",
+    "traces/unstable-crown.half-step.csv": "7f1a0ba5722d1f3fedd4d81f1a566e86ed43f0f9c1ac25362ba4952e687f9f61",
+    "traces/unstable-crown.published.csv": "d54e87d27883178aa84e1253506da090c6eeb5b84a96e695aa8516f66555aec5",
+    "traces/violet-aphelion.half-step.csv": "c621c3893f06b868148483882c55ade6812511d296ac1d1541cedf7c5e7d183b",
+    "traces/violet-aphelion.published.csv": "c621c3893f06b868148483882c55ade6812511d296ac1d1541cedf7c5e7d183b",
+    "traces/white-noon.half-step.csv": "d60b4039f2a8ae2ea45edd9d30f336b1853863d09743964420a7bac1100134e6",
+    "traces/white-noon.published.csv": "d60b4039f2a8ae2ea45edd9d30f336b1853863d09743964420a7bac1100134e6"
+  }
+}

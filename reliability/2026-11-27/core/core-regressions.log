@@ -1,0 +1,7 @@
+PASS configuration and sounding identity
+PASS pending transition cancellation
+PASS streaming and partition invariance
+PASS physical speed extrema
+PASS strum tempo and sample-rate changes
+PASS internal reset event revisions
+PASS invalid candidate rejection

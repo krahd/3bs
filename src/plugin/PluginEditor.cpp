@@ -240,7 +240,7 @@ void ThreeBSEditor::timerCallback() {
     const auto faults = processor_.realtimeFaults();
     if (faults != displayedFaults_) {
         displayedFaults_ = faults;
-        if (faults != 0) panel_.setStatus("MIDI / TIMING INPUT ERROR — CHECK HOST INPUT");
+        if (faults != 0) panel_.setStatus("MIDI / TIMING INPUT ERROR - CHECK HOST INPUT");
     }
     presentation_.visual.trailSeconds = static_cast<float>(panel_.trailSlider().getValue());
     presentation_.visual.bloom = static_cast<float>(panel_.bloomSlider().getValue() / 100.0);

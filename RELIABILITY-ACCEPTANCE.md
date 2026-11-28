@@ -54,6 +54,26 @@ The five advanced-dialog captures also exposed implicit non-ASCII punctuation
 and initially scrolled numeric fields; those presentation repairs are awaiting
 native re-execution. No tolerance or configuration bound was weakened.
 
+Checkpoint `449f126e6cdea64214374bb0280fa8d16b6d0a82` passed both 12-entry
+portable suites with CMake 3.22.6, queue/ownership TSan and actual-processor TSan
+in [run 46086793103](https://github.com/krahd/3bs/actions/runs/46086793103).
+The latter completed all 384 publications and 768 save/restore pairs in
+171.67 seconds, with 63,919 callbacks, 4,896 notes, 37,521 snapshots, zero errors
+and final revision acknowledgement. Release compilation and the native
+integration step also passed, including exact subnormal recall. A final text
+check found the same implicit non-ASCII constructor issue in the error-only
+plugin timing notification. Its ASCII-only repair is being included before the
+remaining validator/soak/package gates. The actual pre-repair executable
+produced default and edited host-7/portable-3 files, and both passed current
+recall and immediate resave. AU validation then failed before opening the
+component because the runner could not find its registration. A bounded
+CI-only metadata/signature/discovery check now precedes authoritative auval;
+that repair, pluginval, the long soak and candidate packaging require execution.
+The separate native core profile recorded two deadline overruns in the Chord
+transition case; the actual processor profile recorded zero C/C++ allocations
+or frees in all 2,188 callbacks. Timing observations are retained with their
+individual sample counts and budgets, not generalised to every host.
+
 ## Implemented contracts
 
 - Core MIDI uses an allocation-free event sink; bounded diagnostic collectors
@@ -117,6 +137,17 @@ MIDI buffer. Pending cleanup is delivered on the next valid callback; final
 teardown without a further callback depends on the host terminating notes.
 Logic/Ableton teardown sessions therefore remain necessary. Standalone owns
 its output and performs its cleanup before closing that destination.
+
+## Factory musical refinement
+
+The [reproducible diagnostic](reliability/2026-11-27/refinement/REPORT.md)
+compares all 24 actual factory systems at the published step and half that
+step, each for 60 beats at 120 BPM / 48 kHz. All 48 runs had finite state,
+bounded work, valid MIDI and empty final receiving ledgers. Full traces differ
+in 21 of 24 systems; per-voice counts differ in 9 and ordinal-paired pitch in
+13. Ordinal pairing after changed trigger counts is descriptive, not a causal
+note match or jitter measurement. Published-policy respawns remain part of
+those music runs. The original fixed step, presets and solver remain intact.
 
 ## Required native sessions
 
